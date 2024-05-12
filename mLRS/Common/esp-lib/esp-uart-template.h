@@ -32,18 +32,21 @@ typedef enum {
 #ifdef UART$_USE_SERIAL
 #ifdef ESP32
   #define UART$_SERIAL_NO       UART_NUM_0
+  #define UART$_SERIAL_NO_LL    UART0
 #elif
   #define UART$_SERIAL_NO       Serial
 #endif
 #elif defined UART$_USE_SERIAL1
 #ifdef ESP32
   #define UART$_SERIAL_NO       UART_NUM_1
+  #define UART$_SERIAL_NO_LL    UART1
 #elif
   #define UART$_SERIAL_NO       Serial1
 #endif
 #elif defined UART$_USE_SERIAL2
 #ifdef ESP32
   #define UART$_SERIAL_NO       UART_NUM_2
+  #define UART$_SERIAL_NO_LL    UART2
 #endif
 #else
   #error UART$_SERIAL_NO must be defined!
@@ -54,6 +57,20 @@ typedef enum {
 #endif
 #ifndef UART$_RXBUFSIZE
   #define UART$_RXBUFSIZE       256 // MUST be 2^N
+#endif
+
+#ifdef UART$_USE_TX_ISR
+  #define UART$_TXBUFSIZEMASK  (UART$_TXBUFSIZE-1)
+
+  volatile char uart$_txbuf[UART$_TXBUFSIZE];
+  volatile uint16_t uart$_txwritepos; // pos at which the last byte was stored
+  volatile uint16_t uart$_txreadpos; // pos at which the next byte is to be fetched
+
+  #define UART$_RXBUFSIZEMASK  (UART$_RXBUFSIZE-1)
+
+  volatile char uart$_rxbuf[UART$_RXBUFSIZE];
+  volatile uint16_t uart$_rxwritepos; // pos at which the last byte was stored
+  volatile uint16_t uart$_rxreadpos; // pos at which the next byte is to be fetched
 #endif
 
 
@@ -122,6 +139,23 @@ IRAM_ATTR uint16_t uart$_rx_available(void)
 #endif
 }
 
+IRAM_ATTR void uart$_intr_handle(void *arg)   // UART ISR
+{
+    uint32_t uart_intr_status = UART$_SERIAL_NO_LL.int_st.val;
+
+    if (uart_intr_status & UART_INTR_RXFIFO_FULL || uart_intr_status & UART_INTR_RXFIFO_TOUT) {
+        char d = UART$_SERIAL_NO_LL.fifo.rw_byte;
+        UART_RX_CALLBACK_FULL(d);
+        uart_clear_intr_status(UART$_SERIAL_NO, UART_RXFIFO_FULL_INT_CLR | UART_RXFIFO_TOUT_INT_CLR);
+    }
+    
+}
+
+IRAM_ATTR void uart$_rx_enableisr(FunctionalState flag)
+{
+    // Do we need to disable the ISR in a half duplex situation?
+}
+
 
 //-------------------------------------------------------
 // INIT routines
@@ -180,6 +214,19 @@ void _uart$_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
 }
 
 
+void _uart$_initit_halfduplex(void)
+{
+    uart_intr_config_t uart_intr = {
+        .intr_enable_mask = UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT | UART_INTR_TX_DONE,  // FIFO Full, FIFO Timeout, TX Done
+        .rx_timeout_thresh = 1,  // 1 symbol ~ 11 bits
+        .rxfifo_full_thresh = 1,  // interrupt every byte
+    };
+
+    ESP_ERROR_CHECK(uart_isr_free(UART$_SERIAL_NO));  // Diasble the 'built-in' ISR
+    ESP_ERROR_CHECK(uart_isr_register(UART$_SERIAL_NO, uart$_intr_handle, NULL, ESP_INTR_FLAG_IRAM, NULL));
+    ESP_ERROR_CHECK(uart_intr_config(UART$_SERIAL_NO, &uart_intr));   // Configure the new interrupt
+}
+
 void uart$_setbaudrate(uint32_t baud)
 {
 #ifdef ESP32
@@ -220,6 +267,13 @@ void uart$_init_isroff(void)
     UART$_SERIAL_NO.end();
 #endif
     _uart$_initit(UART$_BAUD, XUART_PARITY_NO, UART_STOPBIT_1);
+}
+
+void uart$_init_halfduplex(void)
+{
+    ESP_ERROR_CHECK(uart_driver_delete(UART$_SERIAL_NO));
+    _uart$_initit(UART$_BAUD, XUART_PARITY_NO, UART_STOPBIT_1);
+    _uart$_initit_halfduplex();
 }
 
 

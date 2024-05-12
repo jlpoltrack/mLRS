@@ -63,7 +63,11 @@ void (*uart_tc_callback_ptr)(void) = &uart_tc_callback_dummy;
 #define UART_RX_CALLBACK_FULL(c)    (*uart_rx_callback_ptr)(c)
 #define UART_TC_CALLBACK()          (*uart_tc_callback_ptr)()
 
+#ifdef ESP32
+#include "../Common/esp-lib/esp-uart.h"
+#else
 #include "../modules/stm32ll-lib/src/stdstm32-uart.h"
+#endif
 
 // not available in stdstm32-uart.h, used for half-duplex mode
 void uart_tx_putc_totxbuf(char c)
@@ -78,7 +82,7 @@ void uart_tx_putc_totxbuf(char c)
 // not available in stdstm32-uart.h, used for half-duplex mode
 void uart_tx_start(void)
 {
-    LL_USART_EnableIT_TXE(UART_UARTx); // initiates transmitting
+    //LL_USART_EnableIT_TXE(UART_UARTx); // initiates transmitting
 }
 
 // not available in stdstm32-uart.h, used for full-duplex mode
@@ -178,7 +182,11 @@ void tPin5BridgeBase::Init(void)
     JRPIN5_TX_OE_DISABLED;
 #endif
 
+#ifdef ESP32
+    uart_init_halfduplex();
+#else
     uart_init_isroff();
+#endif
 
 // internal peripheral inverter method, needs a diode from Tx to Rx
 #if defined JRPIN5_RX_TX_INVERT_INTERNAL
@@ -230,6 +238,11 @@ void tPin5BridgeBase::Init(void)
     gpio_init_af(UART_RX_IO, IO_MODE_INPUT_PD, UART_IO_AF, IO_SPEED_VERYFAST); // Rx pin is now rx
     gpio_init(UART_TX_IO, IO_MODE_INPUT_ANALOG, IO_SPEED_VERYFAST); // disable Tx pin
 #endif
+#if defined JRPIN5_ESP32
+    gpio_matrix_in((gpio_num_t)UART_USE_TX_IO, U1RXD_IN_IDX, true);
+    gpio_pulldown_en((gpio_num_t)UART_USE_TX_IO);
+    gpio_pullup_dis((gpio_num_t)UART_USE_TX_IO);
+#endif
 
     pin5_tx_enable(false); // also enables rx isr
 
@@ -279,6 +292,13 @@ void tPin5BridgeBase::pin5_tx_enable(bool enable_flag)
         gpio_change_af(UART_TX_IO, IO_MODE_OUTPUT_ALTERNATE_PP, UART_IO_AF, IO_SPEED_VERYFAST); // Tx pin is now tx
         gpio_change(UART_RX_IO, IO_MODE_INPUT_ANALOG, IO_SPEED_VERYFAST); // disable Rx pin
 #endif
+#if defined JRPIN5_ESP32
+        ESP_ERROR_CHECK(gpio_set_level((gpio_num_t)UART_USE_TX_IO, 0));
+        ESP_ERROR_CHECK(gpio_set_direction((gpio_num_t)UART_USE_TX_IO, GPIO_MODE_OUTPUT));
+        constexpr uint8_t MATRIX_DETACH_IN_LOW = 0x30; // routes 0 to matrix slot
+        gpio_matrix_in(MATRIX_DETACH_IN_LOW, U1RXD_IN_IDX, false); // Disconnect RX from all pads
+        gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, true, false);
+#endif
 
     } else {
 #if defined JRPIN5_TX_OE
@@ -303,6 +323,11 @@ void tPin5BridgeBase::pin5_tx_enable(bool enable_flag)
         gpio_change_af(UART_RX_IO, IO_MODE_INPUT_PD, UART_IO_AF, IO_SPEED_VERYFAST); // Rx pin is now rx
         gpio_change(UART_TX_IO, IO_MODE_INPUT_ANALOG, IO_SPEED_VERYFAST); // disable Tx pin
 #endif
+#if defined JRPIN5_ESP32
+    gpio_matrix_in((gpio_num_t)UART_USE_TX_IO, U1RXD_IN_IDX, true);
+    gpio_pulldown_en((gpio_num_t)UART_USE_TX_IO);
+    gpio_pullup_dis((gpio_num_t)UART_USE_TX_IO);
+#endif
 
         uart_rx_enableisr(ENABLE);
     }
@@ -315,6 +340,8 @@ void tPin5BridgeBase::pin5_tx_enable(bool enable_flag)
 void tPin5BridgeBase::uart_rx_callback(uint8_t c)
 {
     parse_nextchar(c);
+
+    /*
 
     if (state < STATE_TRANSMIT_START) return; // we are in receiving
 
@@ -330,6 +357,7 @@ void tPin5BridgeBase::uart_rx_callback(uint8_t c)
     } else {
         state = STATE_IDLE;
     }
+    */
 }
 
 
@@ -364,8 +392,10 @@ void tPin5BridgeBase::CheckAndRescue(void)
 #endif
             state = STATE_IDLE;
             pin5_tx_enable(false);
+#ifndef ESP32
             LL_USART_DisableIT_TC(UART_UARTx);
             LL_USART_ClearFlag_TC(UART_UARTx);
+#endif
         }
     }
 }

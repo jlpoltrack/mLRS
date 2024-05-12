@@ -53,34 +53,31 @@
 */
 
 
-//#define DEVICE_HAS_JRPIN5
-//#define DEVICE_HAS_IN
+#define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_SERIAL_OR_COM // board has UART which is shared between Serial or Com, selected by e.g. a switch
-//#define DEVICE_HAS_NO_SERIAL
-//#define DEVICE_HAS_NO_COM
-#define DEVICE_HAS_NO_DEBUG
-
 #define DEVICE_HAS_I2C_DISPLAY_ROT180
 #define DEVICE_HAS_FIVEWAY
 #define DEVICE_HAS_FAN_ONOFF
+#define DEVICE_HAS_NO_DEBUG
 
 
 //-- UARTS
-// UARTB = serial port
-// UARTC or USB = COM (CLI)
-// UARTD = serial2 BT/ESP port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
-// UARTF = debug port
+// UARTB = serial port or COM (CLI)
+// UARTC = --
+// UART = JR bay pin5 (SPORT)
 
 #define UARTB_USE_SERIAL // serial, is on P1/P3
 #define UARTB_BAUD                TX_SERIAL_BAUDRATE
 #define UARTB_TXBUFSIZE           TX_COM_TXBUFSIZE      // 1024
 #define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE   // 2048
 
-#define UARTF_USE_SERIAL // debug
-#define UARTF_BAUD                115200
-#define UARTF_TXBUFSIZE           0 // ?? // 512
+#define UART_USE_SERIAL1 // JR pin5, MBridge
+#define UART_BAUD                 400000
+#define UART_USE_TX_IO            IO_P13
+#define UART_USE_TX_ISR
+#define UART_USE_RX_IO            IO_P13
+
+#define JRPIN5_ESP32
 
 
 //-- SX1: SX12xx & SPI
