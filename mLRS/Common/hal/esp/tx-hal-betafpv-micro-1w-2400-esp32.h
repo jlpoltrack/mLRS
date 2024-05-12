@@ -75,13 +75,8 @@
 
 #define UARTB_USE_SERIAL // serial, is on P1/P3
 #define UARTB_BAUD                TX_SERIAL_BAUDRATE
-#define UARTB_TXBUFSIZE           1024 // TX_SERIAL_TXBUFSIZE
-#define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
-
-#define UARTC_USE_SERIAL // com USB/CLI, is on P1/P3
-#define UARTC_BAUD                115200
-#define UARTC_TXBUFSIZE           0 // ?? // TX_COM_TXBUFSIZE
-#define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
+#define UARTB_TXBUFSIZE           TX_COM_TXBUFSIZE      // 1024
+#define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE   // 2048
 
 #define UARTF_USE_SERIAL // debug
 #define UARTF_BAUD                115200

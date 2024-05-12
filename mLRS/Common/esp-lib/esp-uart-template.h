@@ -15,14 +15,15 @@
 #define ESPLIB_UART_ENUMS
 
 typedef enum {
-    XUART_PARITY_NO     = 0,
-    XUART_PARITY_EVEN   = 0x2,
-    XUART_PARITY_ODD    = 0x3,
+    XUART_PARITY_NO = 0,
+    XUART_PARITY_EVEN,
+    XUART_PARITY_ODD,
 } UARTPARITYENUM;
 
 typedef enum {
-    UART_STOPBIT_1      = 0x1,
-    UART_STOPBIT_2      = 0x3,
+//    UART_STOPBIT_0_5 = 0, // not supported by ESP
+    UART_STOPBIT_1 = 0,
+    UART_STOPBIT_2,
 } UARTSTOPBITENUM;
 
 #endif
@@ -132,12 +133,31 @@ IRAM_ATTR uint16_t uart$_rx_available(void)
 void _uart$_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbits)
 {
 #ifdef ESP32
+
+    uart_parity_t _parity = UART_PARITY_DISABLE;
+    switch (parity) {
+        case XUART_PARITY_NO:
+            _parity = UART_PARITY_DISABLE; break;
+        case XUART_PARITY_EVEN:
+            _parity = UART_PARITY_EVEN; break;        
+        case XUART_PARITY_ODD:
+            _parity = UART_PARITY_ODD; break;
+    }
+
+    uart_stop_bits_t _stopbits = UART_STOP_BITS_1;
+    switch (parity) {
+        case UART_STOPBIT_1:
+            _stopbits = UART_STOP_BITS_1; break;
+        case UART_STOPBIT_2:
+            _stopbits = UART_STOP_BITS_2; break;        
+    }
+
     uart_config_t uart_config = {
-        .baud_rate = (int)baud,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,             // Fix This
-        .stop_bits = UART_STOP_BITS_1,             // Fix This
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
+        .baud_rate  = (int)baud,
+        .data_bits  = UART_DATA_8_BITS,
+        .parity     = _parity,
+        .stop_bits  = _stopbits,
+        .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE
     };
 
     ESP_ERROR_CHECK(uart_param_config(UART$_SERIAL_NO, &uart_config));
@@ -145,12 +165,13 @@ void _uart$_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
 #if defined UART$_USE_TX_IO || defined UART$_USE_RX_IO // both need to be defined
     ESP_ERROR_CHECK(uart_set_pin(UART$_SERIAL_NO, UART$_USE_TX_IO, UART$_USE_RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 #else
-    ESP_ERROR_CHECK(uart_set_pin(UART$_SERIAL_NO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));  // Fix this
+    ESP_ERROR_CHECK(uart_set_pin(UART$_SERIAL_NO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 #endif
 
-    ESP_ERROR_CHECK(uart_driver_install(UART$_SERIAL_NO, UART$_RXBUFSIZE, UART$_TXBUFSIZE, 0, NULL, 0));  // Rx Buf Size needs to be > 128
-    ESP_ERROR_CHECK(uart_set_rx_full_threshold(UART$_SERIAL_NO, 8));
-    ESP_ERROR_CHECK(uart_set_rx_timeout(UART$_SERIAL_NO, 1));
+    ESP_ERROR_CHECK(uart_driver_install(UART$_SERIAL_NO, UART$_RXBUFSIZE, UART$_TXBUFSIZE, 0, NULL, 0));  // rx buf size needs to be > 128
+    ESP_ERROR_CHECK(uart_set_rx_full_threshold(UART$_SERIAL_NO, 8)); // default is 120 which is too much, buffer only 128 bytes
+    ESP_ERROR_CHECK(uart_set_rx_timeout(UART$_SERIAL_NO, 1));        // wait for 1 symbol (~11 bits) to trigger Rx ISR, default 2
+
 
 #elif defined ESP8266
     UART$_SERIAL_NO.setRxBufferSize(UART$_RXBUFSIZE);
