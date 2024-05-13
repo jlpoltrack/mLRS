@@ -145,7 +145,7 @@ void _uartc_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
     }
 
     uart_stop_bits_t _stopbits = UART_STOP_BITS_1;
-    switch (parity) {
+    switch (stopbits) {
         case UART_STOPBIT_1:
             _stopbits = UART_STOP_BITS_1; break;
         case UART_STOPBIT_2:
