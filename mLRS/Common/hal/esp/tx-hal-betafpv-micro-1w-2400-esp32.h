@@ -60,9 +60,10 @@
 //#define DEVICE_HAS_NO_COM
 #define DEVICE_HAS_NO_DEBUG
 
-#define DEVICE_HAS_I2C_DISPLAY_ROT180
+//#define DEVICE_HAS_I2C_DISPLAY_ROT180
+#define DEVICE_HAS_I2C_DISPLAY
 #define DEVICE_HAS_FIVEWAY
-#define DEVICE_HAS_FAN_ONOFF
+//#define DEVICE_HAS_FAN_ONOFF
 
 
 //-- UARTS
@@ -75,7 +76,8 @@
 
 #define UARTB_USE_SERIAL // serial, is on P1/P3
 #define UARTB_BAUD                TX_SERIAL_BAUDRATE
-#define UARTB_TXBUFSIZE           1024 // TX_SERIAL_TXBUFSIZE
+//#define UARTB_TXBUFSIZE           1024 // TX_SERIAL_TXBUFSIZE
+#define UARTB_TXBUFSIZE           0 // TX_SERIAL_TXBUFSIZE
 #define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
 #define UARTC_USE_SERIAL // com USB/CLI, is on P1/P3
@@ -150,7 +152,7 @@ IRAM_ATTR bool button_pressed(void) { return false; }
 
 //-- LEDs
 #include <NeoPixelBus.h>
-#define LED_RED                   IO_P16
+#define LED_RED                   IO_P15
 bool ledRedState;
 bool ledGreenState;
 bool ledBlueState;
@@ -229,19 +231,19 @@ IRAM_ATTR void led_blue_toggle(void)
 
 //-- Display I2C
 
-#define I2C_SDA_IO                IO_P22
-#define I2C_SCL_IO                IO_P32
+#define I2C_SDA_IO                IO_P32
+#define I2C_SCL_IO                IO_P33
 #define I2C_CLOCKSPEED            1000000L  // fix - rather too much, but helps with LQ, ESP32 max speed
 #define I2C_BUFFER_SIZE           1024
 
 
 //-- 5 Way Switch
 
-#define FIVEWAY_ADC_IO            IO_P25
-#define KEY_UP_THRESH             2800 // tom: 2839 // ow: 2966 
-#define KEY_DOWN_THRESH           2200 // tom: 2191 // ow: 2282
-#define KEY_LEFT_THRESH           1650 // tom: 1616 // ow: 1685
-#define KEY_RIGHT_THRESH          3600 // tom: 3511 // ow: 3712
+#define FIVEWAY_ADC_IO            IO_P35
+#define KEY_UP_THRESH             870 // tom: 2839 // ow: 2966 
+#define KEY_DOWN_THRESH           600 // tom: 2191 // ow: 2282
+#define KEY_LEFT_THRESH           230 // tom: 1616 // ow: 1685
+#define KEY_RIGHT_THRESH          70 // tom: 3511 // ow: 3712
 #define KEY_CENTER_THRESH         0
 
 #if defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180 || defined DEVICE_HAS_FIVEWAY
@@ -256,11 +258,11 @@ IRAM_ATTR uint16_t fiveway_adc_read(void)
 IRAM_ATTR uint8_t fiveway_read(void)
 {
     int16_t adc = analogRead(FIVEWAY_ADC_IO);
-    if (adc > (KEY_CENTER_THRESH-250) && adc < (KEY_CENTER_THRESH+250)) return (1 << KEY_CENTER); // 0
-    if (adc > (KEY_LEFT_THRESH-250) && adc < (KEY_LEFT_THRESH+250)) return (1 << KEY_LEFT); 
-    if (adc > (KEY_DOWN_THRESH-250) && adc < (KEY_DOWN_THRESH+250)) return (1 << KEY_DOWN);
-    if (adc > (KEY_UP_THRESH-250) && adc < (KEY_UP_THRESH+250)) return (1 << KEY_UP);
-    if (adc > (KEY_RIGHT_THRESH-250) && adc < (KEY_RIGHT_THRESH+250)) return (1 << KEY_RIGHT);
+    if (adc > (KEY_CENTER_THRESH-25) && adc < (KEY_CENTER_THRESH+25)) return (1 << KEY_CENTER); // 0
+    if (adc > (KEY_LEFT_THRESH-100) && adc < (KEY_LEFT_THRESH+100)) return (1 << KEY_LEFT); 
+    if (adc > (KEY_DOWN_THRESH-25) && adc < (KEY_DOWN_THRESH+25)) return (1 << KEY_DOWN);
+    if (adc > (KEY_UP_THRESH-100) && adc < (KEY_UP_THRESH+100)) return (1 << KEY_UP);
+    if (adc > (KEY_RIGHT_THRESH-25) && adc < (KEY_RIGHT_THRESH+25)) return (1 << KEY_RIGHT);
     return 0;
 }
 #endif
