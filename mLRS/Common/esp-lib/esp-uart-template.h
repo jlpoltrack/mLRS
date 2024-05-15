@@ -9,6 +9,7 @@
 #define ESPLIB_UART$_H
 
 #include "driver/uart.h"
+#include "esp_check.h"
 #include "hal/uart_ll.h"
 
 #ifndef ESPLIB_UART_ENUMS
@@ -21,7 +22,6 @@ typedef enum {
 } UARTPARITYENUM;
 
 typedef enum {
-//    UART_STOPBIT_0_5 = 0, // not supported by ESP
     UART_STOPBIT_1 = 0,
     UART_STOPBIT_2,
 } UARTSTOPBITENUM;
@@ -32,22 +32,26 @@ typedef enum {
 #ifdef UART$_USE_SERIAL
 #ifdef ESP32
   #define UART$_SERIAL_NO       UART_NUM_0
+  #define UART$_SERIAL_NO_LL    UART0
 #elif
   #define UART$_SERIAL_NO       Serial
 #endif
 #elif defined UART$_USE_SERIAL1
 #ifdef ESP32
   #define UART$_SERIAL_NO       UART_NUM_1
+  #define UART$_SERIAL_NO_LL    UART1
 #elif
   #define UART$_SERIAL_NO       Serial1
 #endif
 #elif defined UART$_USE_SERIAL2
 #ifdef ESP32
   #define UART$_SERIAL_NO       UART_NUM_2
+  #define UART$_SERIAL_NO_LL    UART2
 #endif
 #else
   #error UART$_SERIAL_NO must be defined!
 #endif
+
 
 #ifndef UART$_TXBUFSIZE
   #define UART$_TXBUFSIZE       256 // MUST be 2^N
@@ -56,7 +60,54 @@ typedef enum {
   #define UART$_RXBUFSIZE       256 // MUST be 2^N
 #endif
 
+#ifdef UART$_USE_TX_ISR
+  #define UART$_TXBUFSIZEMASK  (UART$_TXBUFSIZE-1)
 
+  volatile char uart$_txbuf[UART$_TXBUFSIZE];
+  volatile uint16_t uart$_txwritepos; // pos at which the last byte was stored
+  volatile uint16_t uart$_txreadpos; // pos at which the next byte is to be fetched
+
+  #define UART$_RXBUFSIZEMASK  (UART$_RXBUFSIZE-1)
+
+  volatile char uart$_rxbuf[UART$_RXBUFSIZE];
+  volatile uint16_t uart$_rxwritepos; // pos at which the last byte was stored
+  volatile uint16_t uart$_rxreadpos; // pos at which the next byte is to be fetched
+#endif
+
+
+//-------------------------------------------------------
+// ISR routine
+//-------------------------------------------------------
+static void IRAM_ATTR uart_intr_handle(void *arg)   // UART ISR
+{
+  uint32_t uart_intr_status = UART$_SERIAL_NO_LL.int_st.val;
+
+  if (uart_intr_status & UART_INTR_RXFIFO_FULL || uart_intr_status & UART_INTR_RXFIFO_TOUT)  // The interrupt was from one of the Rx interrupts
+  {
+    uint8_t usart_dr = UART$_SERIAL_NO_LL.fifo.rw_byte;  // Read a byte, can also use UART0.status.rxfifo_cnt in a loop
+
+    uint16_t next = (uart$_rxwritepos + 1) & UART$_RXBUFSIZEMASK;
+    if (uart$_rxreadpos != next) { // fifo not full
+      uart$_rxbuf[next] = usart_dr;
+      uart$_rxwritepos = next;
+      uart_clear_intr_status(UART$_SERIAL_NO, UART_RXFIFO_FULL_INT_CLR | UART_RXFIFO_TOUT_INT_CLR);  // Clear the Interrupt Status
+    }
+    
+  }
+
+  if (uart_intr_status & UART_INTR_TX_DONE) {
+    if (uart$_txwritepos != uart$_txreadpos) { // fifo not empty
+      uart$_txreadpos = (uart$_txreadpos + 1) & UART$_TXBUFSIZEMASK;
+      uart_tx_chars(UART$_SERIAL_NO, (const char*) uart$_txbuf[uart$_txreadpos], 1);  // write the byte
+      uart_clear_intr_status(UART$_SERIAL_NO, UART_TX_DONE_INT_CLR);  // clear the interrupt status
+    }
+  }
+}
+
+
+//-------------------------------------------------------
+// TX routines
+//-------------------------------------------------------
 IRAM_ATTR void uart$_putbuf(uint8_t* buf, uint16_t len)
 {
 #ifdef ESP32
@@ -160,6 +211,13 @@ void _uart$_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
         .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE
     };
 
+    uart_intr_config_t uart_intr = {
+        .intr_enable_mask = UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT | UART_INTR_TX_DONE,  // FIFO Full, FIFO Timeout, TX Done
+        .rx_timeout_thresh = 1,  // 1 symbols ~ 11 bits
+        .txfifo_empty_intr_thresh = 10,  // we don't use - doesn't matter
+        .rxfifo_full_thresh = 1,  // interrupt every byte
+  };
+
     ESP_ERROR_CHECK(uart_param_config(UART$_SERIAL_NO, &uart_config));
 
 #if defined UART$_USE_TX_IO || defined UART$_USE_RX_IO // both need to be defined
@@ -169,8 +227,9 @@ void _uart$_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
 #endif
 
     ESP_ERROR_CHECK(uart_driver_install(UART$_SERIAL_NO, UART$_RXBUFSIZE, UART$_TXBUFSIZE, 0, NULL, 0));  // rx buf size needs to be > 128
-    ESP_ERROR_CHECK(uart_set_rx_full_threshold(UART$_SERIAL_NO, 8)); // default is 120 which is too much, buffer only 128 bytes
-    ESP_ERROR_CHECK(uart_set_rx_timeout(UART$_SERIAL_NO, 1));        // wait for 1 symbol (~11 bits) to trigger Rx ISR, default 2
+    ESP_ERROR_CHECK(uart_isr_free(UART$_SERIAL_NO));  // diasble the 'built-in' ISR
+    ESP_ERROR_CHECK(uart_isr_register(UART$_SERIAL_NO, uart_intr_handle, NULL, ESP_INTR_FLAG_IRAM, NULL));  // register our ISR
+    ESP_ERROR_CHECK(uart_intr_config(UART$_SERIAL_NO, &uart_intr)); // configure the ISR conditions
 
 
 #elif defined ESP8266
