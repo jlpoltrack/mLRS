@@ -96,33 +96,46 @@ static void IRAM_ATTR uart_intr_handle(void *arg)   // UART ISR
   }
 
   if (uart_intr_status & UART_INTR_TX_DONE) {
-    if (uart_txwritepos != uart_txreadpos) { // fifo not empty
+    /* if (uart_txwritepos != uart_txreadpos) { // fifo not empty
       uart_txreadpos = (uart_txreadpos + 1) & UART_TXBUFSIZEMASK;
-      uart_tx_chars(UART_SERIAL_NO, (const char*) uart_txbuf[uart_txreadpos], 1);  // write the byte
-      uart_clear_intr_status(UART_SERIAL_NO, UART_TX_DONE_INT_CLR);  // clear the interrupt status
-    }
+      uart_tx_chars(UART_SERIAL_NO, (const char*)&uart_txbuf[uart_txreadpos], 1);  // write the byte
+    } */
+    uart_clear_intr_status(UART_SERIAL_NO, UART_TX_DONE_INT_CLR);  // clear the interrupt status
   }
 }
 
 
-
-
+//-------------------------------------------------------
+// TX routines
+//-------------------------------------------------------
 IRAM_ATTR void uart_putbuf(uint8_t* buf, uint16_t len)
 {
 #ifdef ESP32
-    uart_write_bytes(UART_SERIAL_NO, (uint8_t*)buf, len);
+    uart_tx_chars(UART_SERIAL_NO, (const char*)buf, len);  // Fix this
 #elif
     UART_SERIAL_NO.write((uint8_t*)buf, len);
 #endif
 }
 
+IRAM_ATTR void uart_tx_flush(void)
+{
+#ifdef ESP32
+    uart_wait_tx_done(UART_SERIAL_NO, 100);  // Fix this // 100 ms - what should be used?
+#elif
+    UART_SERIAL_NO.flush();
+#endif
+}
 
+
+//-------------------------------------------------------
+// RX routines
+//-------------------------------------------------------
 IRAM_ATTR char uart_getc(void)
 {
 #ifdef ESP32
-    uint8_t c = 0;
-    uart_read_bytes(UART_SERIAL_NO, &c, 1, 0);
-    return (char)c;
+    while (uart_rxwritepos == uart_rxreadpos) {};
+    uart_rxreadpos = (uart_rxreadpos + 1) & UART_RXBUFSIZEMASK;
+    return uart_rxbuf[uart_rxreadpos];
 #elif
     return (char)UART_SERIAL_NO.read();
 #endif
@@ -132,19 +145,9 @@ IRAM_ATTR char uart_getc(void)
 IRAM_ATTR void uart_rx_flush(void)
 {
 #ifdef ESP32
-    uart_flush(UART_SERIAL_NO);
+    uart_rxwritepos = uart_rxreadpos = 0;
 #elif
     while (UART_SERIAL_NO.available() > 0) UART_SERIAL_NO.read();
-#endif
-}
-
-
-IRAM_ATTR void uart_tx_flush(void)
-{
-#ifdef ESP32
-    uart_wait_tx_done(UART_SERIAL_NO, 100);  // 100 ms - what should be used?
-#elif
-    UART_SERIAL_NO.flush();
 #endif
 }
 
@@ -152,9 +155,9 @@ IRAM_ATTR void uart_tx_flush(void)
 IRAM_ATTR uint16_t uart_rx_bytesavailable(void)
 {
 #ifdef ESP32
-    uint32_t bytesAvailable = 0;
-    uart_get_buffered_data_len(UART_SERIAL_NO, &bytesAvailable);
-    return (uint16_t)bytesAvailable;
+    int16_t d;
+    d = (int16_t)uart_rxwritepos - (int16_t)uart_rxreadpos;
+    return (d < 0) ? d + (UART_RXBUFSIZEMASK + 1) : d;
 #elif
     return (UART_SERIAL_NO.available() > 0) ? UART_SERIAL_NO.available() : 0;
 #endif
@@ -164,9 +167,8 @@ IRAM_ATTR uint16_t uart_rx_bytesavailable(void)
 IRAM_ATTR uint16_t uart_rx_available(void)
 {
 #ifdef ESP32
-    uint32_t bytesAvailable = 0;
-    uart_get_buffered_data_len(UART_SERIAL_NO, &bytesAvailable);
-    return ((uint16_t)bytesAvailable > 0) ? 1 : 0;
+    if (uart_rxwritepos == uart_rxreadpos) return 0; // fifo empty
+    return 1;
 #elif
     return (UART_SERIAL_NO.available() > 0) ? 1 : 0;
 #endif

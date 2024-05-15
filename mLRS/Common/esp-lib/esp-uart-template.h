@@ -78,7 +78,7 @@ typedef enum {
 //-------------------------------------------------------
 // ISR routine
 //-------------------------------------------------------
-static void IRAM_ATTR uart_intr_handle(void *arg)   // UART ISR
+static void IRAM_ATTR uart$_intr_handle(void *arg)   // UART ISR
 {
   uint32_t uart_intr_status = UART$_SERIAL_NO_LL.int_st.val;
 
@@ -96,11 +96,11 @@ static void IRAM_ATTR uart_intr_handle(void *arg)   // UART ISR
   }
 
   if (uart_intr_status & UART_INTR_TX_DONE) {
-    if (uart$_txwritepos != uart$_txreadpos) { // fifo not empty
+    /* if (uart$_txwritepos != uart$_txreadpos) { // fifo not empty
       uart$_txreadpos = (uart$_txreadpos + 1) & UART$_TXBUFSIZEMASK;
-      uart_tx_chars(UART$_SERIAL_NO, (const char*) uart$_txbuf[uart$_txreadpos], 1);  // write the byte
-      uart_clear_intr_status(UART$_SERIAL_NO, UART_TX_DONE_INT_CLR);  // clear the interrupt status
-    }
+      uart_tx_chars(UART$_SERIAL_NO, (const char*)&uart$_txbuf[uart$_txreadpos], 1);  // write the byte
+    } */
+    uart_clear_intr_status(UART$_SERIAL_NO, UART_TX_DONE_INT_CLR);  // clear the interrupt status
   }
 }
 
@@ -111,19 +111,31 @@ static void IRAM_ATTR uart_intr_handle(void *arg)   // UART ISR
 IRAM_ATTR void uart$_putbuf(uint8_t* buf, uint16_t len)
 {
 #ifdef ESP32
-    uart_write_bytes(UART$_SERIAL_NO, (uint8_t*)buf, len);
+    uart_tx_chars(UART$_SERIAL_NO, (const char*)buf, len);  // Fix this
 #elif
     UART$_SERIAL_NO.write((uint8_t*)buf, len);
 #endif
 }
 
+IRAM_ATTR void uart$_tx_flush(void)
+{
+#ifdef ESP32
+    uart_wait_tx_done(UART$_SERIAL_NO, 100);  // Fix this // 100 ms - what should be used?
+#elif
+    UART$_SERIAL_NO.flush();
+#endif
+}
 
+
+//-------------------------------------------------------
+// RX routines
+//-------------------------------------------------------
 IRAM_ATTR char uart$_getc(void)
 {
 #ifdef ESP32
-    uint8_t c = 0;
-    uart_read_bytes(UART$_SERIAL_NO, &c, 1, 0);
-    return (char)c;
+    while (uart$_rxwritepos == uart$_rxreadpos) {};
+    uart$_rxreadpos = (uart$_rxreadpos + 1) & UART$_RXBUFSIZEMASK;
+    return uart$_rxbuf[uart$_rxreadpos];
 #elif
     return (char)UART$_SERIAL_NO.read();
 #endif
@@ -133,19 +145,9 @@ IRAM_ATTR char uart$_getc(void)
 IRAM_ATTR void uart$_rx_flush(void)
 {
 #ifdef ESP32
-    uart_flush(UART$_SERIAL_NO);
+    uart$_rxwritepos = uart$_rxreadpos = 0;
 #elif
     while (UART$_SERIAL_NO.available() > 0) UART$_SERIAL_NO.read();
-#endif
-}
-
-
-IRAM_ATTR void uart$_tx_flush(void)
-{
-#ifdef ESP32
-    uart_wait_tx_done(UART$_SERIAL_NO, 100);  // 100 ms - what should be used?
-#elif
-    UART$_SERIAL_NO.flush();
 #endif
 }
 
@@ -153,9 +155,9 @@ IRAM_ATTR void uart$_tx_flush(void)
 IRAM_ATTR uint16_t uart$_rx_bytesavailable(void)
 {
 #ifdef ESP32
-    uint32_t bytesAvailable = 0;
-    uart_get_buffered_data_len(UART$_SERIAL_NO, &bytesAvailable);
-    return (uint16_t)bytesAvailable;
+    int16_t d;
+    d = (int16_t)uart$_rxwritepos - (int16_t)uart$_rxreadpos;
+    return (d < 0) ? d + (UART$_RXBUFSIZEMASK + 1) : d;
 #elif
     return (UART$_SERIAL_NO.available() > 0) ? UART$_SERIAL_NO.available() : 0;
 #endif
@@ -165,9 +167,8 @@ IRAM_ATTR uint16_t uart$_rx_bytesavailable(void)
 IRAM_ATTR uint16_t uart$_rx_available(void)
 {
 #ifdef ESP32
-    uint32_t bytesAvailable = 0;
-    uart_get_buffered_data_len(UART$_SERIAL_NO, &bytesAvailable);
-    return ((uint16_t)bytesAvailable > 0) ? 1 : 0;
+    if (uart$_rxwritepos == uart$_rxreadpos) return 0; // fifo empty
+    return 1;
 #elif
     return (UART$_SERIAL_NO.available() > 0) ? 1 : 0;
 #endif
@@ -212,7 +213,8 @@ void _uart$_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
     };
 
     uart_intr_config_t uart_intr = {
-        .intr_enable_mask = UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT | UART_INTR_TX_DONE,  // FIFO Full, FIFO Timeout, TX Done
+        //.intr_enable_mask = UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT | UART_INTR_TX_DONE,  // FIFO Full, FIFO Timeout, TX Done
+        .intr_enable_mask = UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT,  // FIFO Full, FIFO Timeout, TX Done
         .rx_timeout_thresh = 1,  // 1 symbols ~ 11 bits
         .txfifo_empty_intr_thresh = 10,  // we don't use - doesn't matter
         .rxfifo_full_thresh = 1,  // interrupt every byte
@@ -228,7 +230,7 @@ void _uart$_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
 
     ESP_ERROR_CHECK(uart_driver_install(UART$_SERIAL_NO, UART$_RXBUFSIZE, UART$_TXBUFSIZE, 0, NULL, 0));  // rx buf size needs to be > 128
     ESP_ERROR_CHECK(uart_isr_free(UART$_SERIAL_NO));  // diasble the 'built-in' ISR
-    ESP_ERROR_CHECK(uart_isr_register(UART$_SERIAL_NO, uart_intr_handle, NULL, ESP_INTR_FLAG_IRAM, NULL));  // register our ISR
+    ESP_ERROR_CHECK(uart_isr_register(UART$_SERIAL_NO, uart$_intr_handle, NULL, ESP_INTR_FLAG_IRAM, NULL));  // register our ISR
     ESP_ERROR_CHECK(uart_intr_config(UART$_SERIAL_NO, &uart_intr)); // configure the ISR conditions
 
 

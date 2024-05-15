@@ -78,7 +78,7 @@ typedef enum {
 //-------------------------------------------------------
 // ISR routine
 //-------------------------------------------------------
-static void IRAM_ATTR uart_intr_handle(void *arg)   // UART ISR
+static void IRAM_ATTR uartf_intr_handle(void *arg)   // UART ISR
 {
   uint32_t uart_intr_status = UARTF_SERIAL_NO_LL.int_st.val;
 
@@ -96,33 +96,46 @@ static void IRAM_ATTR uart_intr_handle(void *arg)   // UART ISR
   }
 
   if (uart_intr_status & UART_INTR_TX_DONE) {
-    if (uartf_txwritepos != uartf_txreadpos) { // fifo not empty
+    /* if (uartf_txwritepos != uartf_txreadpos) { // fifo not empty
       uartf_txreadpos = (uartf_txreadpos + 1) & UARTF_TXBUFSIZEMASK;
-      uart_tx_chars(UARTF_SERIAL_NO, (const char*) uartf_txbuf[uartf_txreadpos], 1);  // write the byte
-      uart_clear_intr_status(UARTF_SERIAL_NO, UART_TX_DONE_INT_CLR);  // clear the interrupt status
-    }
+      uart_tx_chars(UARTF_SERIAL_NO, (const char*)&uartf_txbuf[uartf_txreadpos], 1);  // write the byte
+    } */
+    uart_clear_intr_status(UARTF_SERIAL_NO, UART_TX_DONE_INT_CLR);  // clear the interrupt status
   }
 }
 
 
-
-
+//-------------------------------------------------------
+// TX routines
+//-------------------------------------------------------
 IRAM_ATTR void uartf_putbuf(uint8_t* buf, uint16_t len)
 {
 #ifdef ESP32
-    uart_write_bytes(UARTF_SERIAL_NO, (uint8_t*)buf, len);
+    uart_tx_chars(UARTF_SERIAL_NO, (const char*)buf, len);  // Fix this
 #elif
     UARTF_SERIAL_NO.write((uint8_t*)buf, len);
 #endif
 }
 
+IRAM_ATTR void uartf_tx_flush(void)
+{
+#ifdef ESP32
+    uart_wait_tx_done(UARTF_SERIAL_NO, 100);  // Fix this // 100 ms - what should be used?
+#elif
+    UARTF_SERIAL_NO.flush();
+#endif
+}
 
+
+//-------------------------------------------------------
+// RX routines
+//-------------------------------------------------------
 IRAM_ATTR char uartf_getc(void)
 {
 #ifdef ESP32
-    uint8_t c = 0;
-    uart_read_bytes(UARTF_SERIAL_NO, &c, 1, 0);
-    return (char)c;
+    while (uartf_rxwritepos == uartf_rxreadpos) {};
+    uartf_rxreadpos = (uartf_rxreadpos + 1) & UARTF_RXBUFSIZEMASK;
+    return uartf_rxbuf[uartf_rxreadpos];
 #elif
     return (char)UARTF_SERIAL_NO.read();
 #endif
@@ -132,19 +145,9 @@ IRAM_ATTR char uartf_getc(void)
 IRAM_ATTR void uartf_rx_flush(void)
 {
 #ifdef ESP32
-    uart_flush(UARTF_SERIAL_NO);
+    uartf_rxwritepos = uartf_rxreadpos = 0;
 #elif
     while (UARTF_SERIAL_NO.available() > 0) UARTF_SERIAL_NO.read();
-#endif
-}
-
-
-IRAM_ATTR void uartf_tx_flush(void)
-{
-#ifdef ESP32
-    uart_wait_tx_done(UARTF_SERIAL_NO, 100);  // 100 ms - what should be used?
-#elif
-    UARTF_SERIAL_NO.flush();
 #endif
 }
 
@@ -152,9 +155,9 @@ IRAM_ATTR void uartf_tx_flush(void)
 IRAM_ATTR uint16_t uartf_rx_bytesavailable(void)
 {
 #ifdef ESP32
-    uint32_t bytesAvailable = 0;
-    uart_get_buffered_data_len(UARTF_SERIAL_NO, &bytesAvailable);
-    return (uint16_t)bytesAvailable;
+    int16_t d;
+    d = (int16_t)uartf_rxwritepos - (int16_t)uartf_rxreadpos;
+    return (d < 0) ? d + (UARTF_RXBUFSIZEMASK + 1) : d;
 #elif
     return (UARTF_SERIAL_NO.available() > 0) ? UARTF_SERIAL_NO.available() : 0;
 #endif
@@ -164,9 +167,8 @@ IRAM_ATTR uint16_t uartf_rx_bytesavailable(void)
 IRAM_ATTR uint16_t uartf_rx_available(void)
 {
 #ifdef ESP32
-    uint32_t bytesAvailable = 0;
-    uart_get_buffered_data_len(UARTF_SERIAL_NO, &bytesAvailable);
-    return ((uint16_t)bytesAvailable > 0) ? 1 : 0;
+    if (uartf_rxwritepos == uartf_rxreadpos) return 0; // fifo empty
+    return 1;
 #elif
     return (UARTF_SERIAL_NO.available() > 0) ? 1 : 0;
 #endif
@@ -227,7 +229,7 @@ void _uartf_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
 
     ESP_ERROR_CHECK(uart_driver_install(UARTF_SERIAL_NO, UARTF_RXBUFSIZE, UARTF_TXBUFSIZE, 0, NULL, 0));  // rx buf size needs to be > 128
     ESP_ERROR_CHECK(uart_isr_free(UARTF_SERIAL_NO));  // diasble the 'built-in' ISR
-    ESP_ERROR_CHECK(uart_isr_register(UARTF_SERIAL_NO, uart_intr_handle, NULL, ESP_INTR_FLAG_IRAM, NULL));  // register our ISR
+    ESP_ERROR_CHECK(uart_isr_register(UARTF_SERIAL_NO, uartf_intr_handle, NULL, ESP_INTR_FLAG_IRAM, NULL));  // register our ISR
     ESP_ERROR_CHECK(uart_intr_config(UARTF_SERIAL_NO, &uart_intr)); // configure the ISR conditions
 
 
