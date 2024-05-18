@@ -51,6 +51,35 @@ class tRxMsp
     bool inject_rc_channels;
     uint16_t rc_chan[16]; // holds the rc data in MSP format
 
+    // to inject MSP requests if there are no requests from a gcs
+    uint32_t tick_tlast_ms;
+
+    #define MSP_TELM_COUNT  5
+
+    const uint16_t telm_function[MSP_TELM_COUNT] = {
+        MSP_INAV_STATUS,
+        MSP_ATTITUDE,
+        MSP_INAV_ANALOG,
+        MSP_RAW_GPS,
+        MSP_ALTITUDE,
+    };
+
+    typedef struct {
+        uint8_t rate;
+        uint8_t cnt;
+        uint32_t tlast_ms; // time of last request received form a gcs
+    } tMspTelm;
+    tMspTelm telm[MSP_TELM_COUNT];
+
+    const uint8_t telm_freq[MSP_TELM_COUNT] = {
+        2,  // 2 Hz = 5*100 ms, MSP_INAV_STATUS
+        5,  // 5 Hz = 2*100 ms, MSP_ATTITUDE
+        1,  // 1 Hz = 10*100 ms, MSP_INAV_ANALOG
+        2,  // 2 Hz = 5*100 ms, MSP_RAW_GPS
+        2,  // 2 Hz = 5*100 ms, MSP_ALTITUDE
+    };
+
+    // miscellaneous
     uint8_t _buf[MSP_BUF_SIZE]; // temporary working buffer, to not burden stack
 };
 
@@ -64,6 +93,13 @@ void tRxMsp::Init(void)
     fifo_link_out.Init();
 
     inject_rc_channels = false;
+
+    tick_tlast_ms = 0;
+    for (uint8_t n = 0; n < MSP_TELM_COUNT; n ++) {
+        telm[n].rate = (telm_freq[n] > 0) ? 10 / telm_freq[n] : 0; // 0 = off, do not send
+        telm[n].cnt = 0;
+        telm[n].tlast_ms = 0;
+    }
 }
 
 
@@ -110,7 +146,6 @@ void tRxMsp::Do(void)
 #endif
 
                 fifo_link_out.PutBuf(_buf, len);
-
 /*
 dbg.puts("\n");
 dbg.putc(msp_msg_ser_in.type);
@@ -127,12 +162,33 @@ dbg.puts(u16toBCD_s(msp_msg_ser_in.len));
 
     if (inject_rc_channels) { // give it priority // && serial.tx_is_empty()) // check available size!?
         inject_rc_channels = false;
-        switch (Setup.Rx.SendRcChannels) {
-        case SEND_RC_CHANNELS_RCCHANNELSOVERRIDE:
-        case SEND_RC_CHANNELS_RADIORCCHANNELS: {
-            uint16_t len = msp_generate_frame_buf(_buf, MSP_TYPE_REQUEST, MSP_SET_RAW_RC, (uint8_t*)rc_chan, 32);
-            serial.putbuf(_buf, len);
-            return; }
+        uint16_t len = msp_generate_frame_buf(_buf, MSP_TYPE_REQUEST, MSP_SET_RAW_RC, (uint8_t*)rc_chan, 32);
+        serial.putbuf(_buf, len);
+        return;
+    }
+
+    // inject msp requests for telemetry data as needed
+
+    uint32_t tnow_ms = millis32();
+
+    // generate 10 ms ticks
+    bool ticked = false;
+    if ((tnow_ms - tick_tlast_ms) >= 100) {
+        tick_tlast_ms = tnow_ms;
+        ticked = true;
+    }
+
+    // send scheduler
+    if (ticked) {
+//dbg.puts("\nSend ");
+        for (uint8_t n = 0; n < MSP_TELM_COUNT; n++) {
+            if (telm[n].rate == 0) continue;
+            INCc(telm[n].cnt, telm[n].rate);
+            if (!telm[n].cnt && (tnow_ms - telm[n].tlast_ms) >= 1500) { // we want to send and did not got a request recently
+                uint16_t len = msp_generate_request_to_frame_buf(_buf, MSP_TYPE_REQUEST, telm_function[n]);
+                serial.putbuf(_buf, len);
+//dbg.puts(u16toHEX_s(telm_function[n]));dbg.puts(" ");
+            }
         }
     }
 }
@@ -155,6 +211,13 @@ void tRxMsp::putc(char c)
         uint16_t len = msp_msg_to_frame_buf(_buf, &msp_msg_link_in);
         serial.putbuf(_buf, len);
 
+        if (msp_msg_link_in.type == MSP_TYPE_REQUEST) { // this is a request from a gcs
+            for (uint8_t n = 0; n < MSP_TELM_COUNT; n++) {
+                if (msp_msg_link_in.function == telm_function[n]) { // to indicate we got this request from a gcs
+                    telm[n].tlast_ms = millis32();
+                }
+            }
+        }
 /*
 dbg.puts("\n");
 dbg.putc(msp_msg_link_in.type);
