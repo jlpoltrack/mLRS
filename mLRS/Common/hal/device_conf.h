@@ -71,7 +71,7 @@ The default selection of frequency bands can be overruled by feature defines.
 
 
 #ifdef TX_R9M_868_F103C8
-  #define DEVICE_NAME "Frsky R9M"
+  #define DEVICE_NAME "Frsky R9M Geo"
   #define DEVICE_IS_TRANSMITTER
   #define DEVICE_HAS_SX127x
   #define FREQUENCY_BAND_868_MHZ

@@ -48,7 +48,7 @@
 #define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
 #define UART_USE_UART3_PB10PB11 // JR pin5, MBridge
-#define UART_BAUD                 400000
+#define UART_BAUD                 115200
 #define UART_USE_TX
 #define UART_TXBUFSIZE            512
 #define UART_USE_TX_ISR
