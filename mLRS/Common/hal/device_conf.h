@@ -189,8 +189,8 @@ The default selection of frequency bands can be overruled by feature defines.
 #ifdef TX_DIY_E28DUAL_BOARD02_F103CB
   #define DEVICE_NAME "DIY DualE28 F103CB"
   #define DEVICE_IS_TRANSMITTER
-  #define DEVICE_HAS_SX128x
-  #define FREQUENCY_BAND_2P4_GHZ
+  #define DEVICE_HAS_SX127x
+  #define FREQUENCY_BAND_915_MHZ_FCC
 #endif
 
 #ifdef TX_DIY_E28_G431KB
