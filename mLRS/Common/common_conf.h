@@ -123,9 +123,9 @@
 #define FHSS_NUM_BAND_866_MHZ_IN              3 // 3 since 1 is needed for bind
 #define FHSS_NUM_BAND_2P4_GHZ_19HZ_MODE       12 // was 24, but a cycle takes then 1.3 sec! would need long disconnect
 #define FHSS_NUM_BAND_2P4_GHZ_31HZ_MODE       18
-#define FHSS_NUM_BAND_2P4_GHZ                 24
+#define FHSS_NUM_BAND_2P4_GHZ                 50
 
-#define FRAME_TX_RX_LEN                 91 // we currently only support equal len
+#define FRAME_TX_RX_LEN                 60 // we currently only support equal len
 
 #define CONNECT_TMO_MS                  1250 // time to disconnect, was 500, then 750 to better handle 19 Hz mode, now 1250
 

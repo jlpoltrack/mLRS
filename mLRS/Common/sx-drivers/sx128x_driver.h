@@ -41,42 +41,42 @@ typedef struct
 const tSxLoraConfiguration Sx128xLoraConfiguration[] = {
     { .SpreadingFactor = SX1280_LORA_SF5,
       .Bandwidth = SX1280_LORA_BW_800,
-      .CodingRate = SX1280_LORA_CR_LI_4_5,
+      .CodingRate = SX1280_LORA_CR_LI_4_7,
       .PreambleLength = 12,
       .HeaderType = SX1280_LORA_HEADER_DISABLE,
       .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX1280_LORA_CRC_DISABLE,
       .InvertIQ = SX1280_LORA_IQ_NORMAL,
-      .TimeOverAir = 7892,
+      .TimeOverAir = 8286,
       .ReceiverSensitivity = -105,
     },
     { .SpreadingFactor = SX1280_LORA_SF6,
       .Bandwidth = SX1280_LORA_BW_800,
-      .CodingRate = SX1280_LORA_CR_LI_4_5,
+      .CodingRate = SX1280_LORA_CR_LI_4_7,
       .PreambleLength = 12,
       .HeaderType = SX1280_LORA_HEADER_DISABLE,
       .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX1280_LORA_CRC_DISABLE,
       .InvertIQ = SX1280_LORA_IQ_NORMAL,
-      .TimeOverAir = 13418,
+      .TimeOverAir = 14050,
       .ReceiverSensitivity = -108,
     },
     { .SpreadingFactor = SX1280_LORA_SF7,
       .Bandwidth = SX1280_LORA_BW_800,
-      .CodingRate = SX1280_LORA_CR_LI_4_5,
+      .CodingRate = SX1280_LORA_CR_LI_4_7,
       .PreambleLength = 12,
       .HeaderType = SX1280_LORA_HEADER_DISABLE,
       .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX1280_LORA_CRC_DISABLE,
       .InvertIQ = SX1280_LORA_IQ_NORMAL,
-      .TimeOverAir = 23527,
+      .TimeOverAir = 24631,
       .ReceiverSensitivity = -112,
     }
 };
 
 
 const tSxFlrcConfiguration Sx128xFlrcConfiguration[] = {
-    { .Bandwidth = SX1280_FLRC_BR_0_650_BW_0_6,
+    { .Bandwidth = SX1280_FLRC_BR_0_520_BW_0_6,
       .CodingRate = SX1280_FLRC_CR_1_2,
       .Bt = SX1280_FLRC_BT_1,
       .AGCPreambleLength = SX1280_FLRC_PREAMBLE_LENGTH_32_BITS,
@@ -86,7 +86,7 @@ const tSxFlrcConfiguration Sx128xFlrcConfiguration[] = {
       .PayloadLength = FRAME_TX_RX_LEN,
       .CrcLength = SX1280_FLRC_CRC_DISABLE,
       .CrcSeed = 27368, // CrcSeed is 'j', 'p'. Not used.
-      .TimeOverAir = 2383,
+      .TimeOverAir = 1620,
       .ReceiverSensitivity = -104,
     }
 };

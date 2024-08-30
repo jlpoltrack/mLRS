@@ -15,7 +15,7 @@
 
 
 #ifndef PACKED
-  #define PACKED(__Declaration__)  __Declaration__ __attribute__((packed)) // that's for __GNUC__
+	#define PACKED(__Declaration__)  __Declaration__ __attribute__((packed)) //that's for __GNUC__
 #endif
 
 
@@ -49,8 +49,8 @@ typedef struct
 #define FRAME_TX_RX_HEADER_LEN  7
 #define FRAME_TX_RCDATA1_LEN    6
 #define FRAME_TX_RCDATA2_LEN    10
-#define FRAME_TX_PAYLOAD_LEN    64 // 82 - 10-6(rcdata) - 2(crc) = 64
-#define FRAME_RX_PAYLOAD_LEN    82
+#define FRAME_TX_PAYLOAD_LEN    33 // 82 - 10-6(rcdata) - 2(crc) = 64
+#define FRAME_RX_PAYLOAD_LEN    51
 
 
 PACKED(
@@ -107,7 +107,7 @@ typedef struct
     tFrameRcData1 rc1; // 6 bytes
     uint16_t crc1;
     tFrameRcData2 rc2; // 10 bytes
-    uint8_t payload[64]; // = FRAME_TX_PAYLOAD_LEN
+    uint8_t payload[FRAME_TX_PAYLOAD_LEN]; // = FRAME_TX_PAYLOAD_LEN
     uint16_t crc;
 }) tTxFrame; // 91 bytes
 
@@ -119,7 +119,7 @@ typedef struct
 {
     uint16_t sync_word; // 2 bytes
     tFrameStatus status; // 5 bytes
-    uint8_t payload[82]; // = FRAME_RX_PAYLOAD_LEN
+    uint8_t payload[FRAME_RX_PAYLOAD_LEN]; // = FRAME_RX_PAYLOAD_LEN
     uint16_t crc;
 }) tRxFrame; // 91 bytes
 
@@ -145,8 +145,8 @@ typedef struct
     uint8_t Mode : 4;
     uint8_t Ortho : 4;
 
-    uint8_t spare1 : 4;
-    uint8_t spare2[71];
+    //uint8_t spare1 : 4;
+    uint8_t spare2[40];
 
     uint16_t crc; // 2 bytes
 }) tTxBindFrame; // 91 bytes
@@ -164,9 +164,9 @@ typedef struct
     uint8_t spare : 7;
 
     uint32_t firmware_version;
-    char device_name_20[20];
+    char device_name_20[18];
 
-    uint8_t spare2[55];
+    uint8_t spare2[26];
 
     uint16_t crc; // 2bytes
 }) tRxBindFrame; // 91 bytes
@@ -205,11 +205,12 @@ typedef struct
     uint8_t SerialBaudrate : 4;
     uint8_t SerialLinkMode : 4;
     uint8_t SendRadioStatus : 4;
-    uint8_t __Buzzer : 4; // deprecated
+    uint8_t Buzzer : 4;
     uint8_t SendRcChannels : 4;
     uint8_t __RadioStatusMethod : 4; // deprecated
     uint8_t OutLqChannelMode : 4;
 
+    /*
     uint8_t spare : 4;
     uint8_t spare2[4];
 
@@ -217,8 +218,8 @@ typedef struct
     uint8_t FailsafeOutChannelValue_Ch13 : 2;
     uint8_t FailsafeOutChannelValue_Ch14 : 2;
     uint8_t FailsafeOutChannelValue_Ch15 : 2;
-    uint8_t FailsafeOutChannelValue_Ch16 : 2;
-}) tCmdFrameRxParameters; // 24 bytes
+    uint8_t FailsafeOutChannelValue_Ch16 : 2; */
+}) tCmdFrameRxParameters; // 6.5 bytes
 
 
 // send from Rx as response to GET_RX_SETUPDATA
@@ -226,12 +227,12 @@ PACKED(
 typedef struct
 {
     uint8_t cmd;
-    uint8_t spare;
+    //uint8_t spare;
 
     // rx setup meta data 1
     uint16_t firmware_version_u16;
     uint16_t setup_layout;
-    char device_name_20[20];
+    char device_name_20[18];
     int8_t actual_power_dbm;
     uint8_t actual_diversity;
 
@@ -240,18 +241,18 @@ typedef struct
     tCmdFrameRxParameters RxParams; // 24 bytes
 
     // rx setup meta data 2, parameter metadata
-    uint16_t FrequencyBand_allowed_mask_XXX; // TODO
-    uint8_t Mode_allowed_mask_XXX; // TODO
-    uint8_t Ortho_allowed_mask_XXX; // TODO
-    uint8_t spare2[2];
+    //uint16_t FrequencyBand_allowed_mask_XXX; // TODO
+    //uint8_t Mode_allowed_mask_XXX; // TODO
+    //uint8_t Ortho_allowed_mask_XXX; // TODO
+    //uint8_t spare2[2];
 
     int16_t Power_list[8];
     uint8_t Diversity_allowed_mask;
     uint8_t OutMode_allowed_mask;
-    uint8_t __Buzzer_allowed_mask; // deprecated
+    uint8_t Buzzer_allowed_mask;
 
-    uint8_t spare3[5];
-}) tRxCmdFrameRxSetupData; // 82 bytes
+    //uint8_t spare3[17];
+}) tRxCmdFrameRxSetupData; // 51 bytes
 
 
 // send from Tx to do SET_RX_PARAMS
@@ -267,13 +268,13 @@ typedef struct
     uint8_t Mode : 4;
     uint8_t Ortho : 4;
 
-    uint8_t spare1 : 4;
-    uint8_t spare2[2];
+    //uint8_t spare1 : 4;
+    //uint8_t spare2[2];
 
     tCmdFrameRxParameters RxParams; // 24 bytes
 
-    uint8_t spare3[28];
-}) tTxCmdFrameRxParams; // 64 bytes
+    uint8_t spare3[16];
+}) tTxCmdFrameRxParams; // 33 bytes
 
 
 // for type casting to get the header

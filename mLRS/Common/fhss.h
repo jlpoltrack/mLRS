@@ -18,7 +18,7 @@
 #include "setup_types.h"
 
 
-#define FHSS_MAX_NUM            32
+#define FHSS_MAX_NUM            64
 #define FHSS_FREQ_LIST_MAX_LEN  86 // 2.4 GHz is 80
 
 //-------------------------------------------------------
