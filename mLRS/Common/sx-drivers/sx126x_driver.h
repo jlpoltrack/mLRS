@@ -199,7 +199,7 @@ class Sx126xDriverCommon : public Sx126xDriverBase
     void SetRfPower_dbm(int8_t power_dbm)
     {
         RfPowerCalc(power_dbm, &sx_power, &actual_power_dbm);
-        SetTxParams(sx_power, SX126X_RAMPTIME_10_US);
+        SetTxParams(sx_power, SX126X_RAMPTIME_40_US);
     }
 
     void Configure(tSxGlobalConfig* const global_config)
