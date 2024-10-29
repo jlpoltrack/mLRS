@@ -250,7 +250,11 @@ class Sx126xDriverCommon : public Sx126xDriverBase
         SetRxGain(SX126X_RX_GAIN_BOOSTED_GAIN);
         SetOverCurrentProtection(SX126X_OCP_CONFIGURATION_140_MA); // default for SX1262 according to data sheet, but can't hurt
 
-        SetPaConfig_22dbm();
+		#if defined POWER_PA_SE2435L || defined POWER_PA_MATEK_MR900_30
+        	SetPaConfig_Min();
+		#else
+        	SetPaConfig_22dbm();
+		#endif
 
         SetRfPower_dbm(gconfig->Power_dbm);
 
