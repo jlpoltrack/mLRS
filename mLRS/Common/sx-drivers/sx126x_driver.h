@@ -251,7 +251,7 @@ class Sx126xDriverCommon : public Sx126xDriverBase
         SetOverCurrentProtection(SX126X_OCP_CONFIGURATION_140_MA); // default for SX1262 according to data sheet, but can't hurt
 
         #if defined POWER_PA_SE2435L || defined POWER_PA_MATEK_MR900_30 
-            SetPaConfig_Min();
+            SetPaConfig_10dbm();
         #else
             SetPaConfig_22dbm();
         #endif
