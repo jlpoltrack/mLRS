@@ -19,6 +19,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+#define MLRS_FEATURE_ELRS_BOOTLOADER
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 

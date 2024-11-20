@@ -22,6 +22,8 @@
 #define DEVICE_HAS_BUZZER
 #define DEVICE_HAS_FAN_ONOFF
 
+#define MLRS_FEATURE_ELRS_BOOTLOADER
+
 
 //-- Timers, Timing, EEPROM, and such stuff
 
