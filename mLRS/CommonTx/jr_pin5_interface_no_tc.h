@@ -38,7 +38,7 @@ class tPin5BridgeBase
     // interface to the uart hardware peripheral used for the bridge, may be called in isr context
     void pin5_init(void);
     void pin5_tx_start(void) {}
-    void pin5_putbuf(uint8_t* const buf, uint16_t len) { uart_putbuf(buf, len); }
+    void pin5_putbuf(uint8_t* const buf, uint16_t len) { uart_putbuf(buf, len); TS_START(0); }
 
     // for in-isr processing
     void pin5_tx_enable(bool enable_flag);
@@ -79,6 +79,7 @@ class tPin5BridgeBase
     uint8_t len;
     uint8_t cnt;
     uint16_t tlast_us;
+    uint16_t discarded;
 
     // check and rescue
     void CheckAndRescue(void);
@@ -91,11 +92,35 @@ void tPin5BridgeBase::Init(void)
     len = 0;
     cnt = 0;
     tlast_us = 0;
+    discarded = 0;
 
     telemetry_start_next_tick = false;
     telemetry_state = 0;
 
     pin5_init();
+
+#if UART_USE_TX_IO == UART_USE_RX_IO // Half duplex
+
+#ifdef UART_USE_SERIAL
+  #define UART_SERIAL_NO       Serial
+#elif defined UART_USE_SERIAL1
+  #define UART_SERIAL_NO       Serial1
+#elif defined UART_USE_SERIAL2
+  #define UART_SERIAL_NO       Serial2
+#else
+  #error UART_SERIAL_NO must be defined!
+#endif
+    UART_SERIAL_NO.setMode(MODE_RS485_HALF_DUPLEX);
+    
+    gpio_matrix_in((gpio_num_t)UART_USE_TX_IO, U1RXD_IN_IDX, true);
+    gpio_pulldown_en((gpio_num_t)UART_USE_TX_IO);
+    gpio_pullup_dis((gpio_num_t)UART_USE_TX_IO);
+
+    gpio_set_level((gpio_num_t)UART_USE_TX_IO, 0);
+    gpio_set_direction((gpio_num_t)UART_USE_TX_IO, GPIO_MODE_INPUT_OUTPUT);
+    gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, true, false);
+    gpio_set_drive_capability((gpio_num_t)UART_USE_TX_IO, GPIO_DRIVE_CAP_0);
+#endif
 }
 
 
@@ -139,13 +164,19 @@ void tPin5BridgeBase::pin5_tc_callback(void)
 
 void tPin5BridgeBase::pin5_do(void)
 {
+    TS_START(3);
+    TS_END(2, 10000, true);
+    TS_END(3);
+    
     // poll uart
     while (uart_rx_available() && state != STATE_TRANSMIT_START) { // read at most 1 message
         parse_nextchar(uart_getc());
+        TS_END(0);
     }
 
     // send telemetry after every received message
     if (state == STATE_TRANSMIT_START) { // time to send telemetry
+        TS_END(1, 10000, true);
         transmit_start();
         state = STATE_IDLE;
     }

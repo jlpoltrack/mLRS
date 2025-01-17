@@ -14,7 +14,7 @@
 // https://github.com/ExpressLRS/targets/blob/master/TX/Jumper%20T-20%202400.json
 // Added fan on GPIO 33
 
-#define DEVICE_HAS_JRPIN5_FULL_DUPLEX
+#define DEVICE_HAS_JRPIN5_NO_TC
 #define DEVICE_HAS_NO_LED
 #define DEVICE_HAS_NO_COM
 #define DEVICE_HAS_NO_DEBUG
