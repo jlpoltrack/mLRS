@@ -38,10 +38,10 @@
 
 #define UARTC_USE_SERIAL // CLI, is connected to USB-C via USB<>UART
 #define UARTC_BAUD                115200
-#define UARTB_USE_TX_IO           IO_P1
-#define UARTB_USE_RX_IO           IO_P3
-#define UARTC_TXBUFSIZE           0
-#define UARTC_RXBUFSIZE           0
+#define UARTC_USE_TX_IO           IO_P1
+#define UARTC_USE_RX_IO           IO_P3
+#define UARTC_TXBUFSIZE           0  // TX FIFO = 128
+#define UARTC_RXBUFSIZE           0  // RX FIFO = 128
 
 #define UART_USE_SERIAL1 // JR Pin 5
 #define UART_BAUD                 400000
