@@ -275,7 +275,7 @@ IRAM_ATTR void fan_set_power(int8_t power_dbm)
 
 #define ESP_RESET                 IO_P19 // backpack_en
 #define ESP_GPIO0                 IO_P23 // backpack_boot inverted?
-#define ESP_BOOT0                 IO_P0 // Will always be IO_P0
+#define ESP_BOOT0                 IO_P0  // will always be IO_P0
 
 uint8_t esp_boot0()
 {
