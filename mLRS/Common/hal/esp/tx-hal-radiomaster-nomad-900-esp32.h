@@ -41,7 +41,7 @@
 #define UARTC_USE_TX_IO           IO_P1
 #define UARTC_USE_RX_IO           IO_P3
 #define UARTC_TXBUFSIZE           0  // TX FIFO = 128
-#define UARTC_RXBUFSIZE           0  // RX FIFO = 128
+#define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
 
 #define UART_USE_SERIAL1 // JR Pin 5
 #define UART_BAUD                 400000
