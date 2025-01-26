@@ -240,7 +240,6 @@ void tTxCrsf::parse_nextchar(uint8_t c)
             cmd_received = true;
         }
         state = STATE_TRANSMIT_START;
-        TS_END(4, 10000, true);
         break;
     }
 }

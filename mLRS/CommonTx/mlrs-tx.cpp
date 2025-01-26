@@ -113,7 +113,7 @@
 #include "../Common/diversity.h"
 #include "../Common/arq.h"
 #include "../Common/rf_power.h"
-#include "../Common/time_stats.h" // un-comment if you want to use
+//#include "../Common/time_stats.h" // un-comment if you want to use
 //#include "../Common/test.h" // un-comment if you want to compile for board test
 
 #include "config_id.h"

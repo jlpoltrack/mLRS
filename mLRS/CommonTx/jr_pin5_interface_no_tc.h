@@ -38,7 +38,7 @@ class tPin5BridgeBase
     // interface to the uart hardware peripheral used for the bridge, may be called in isr context
     void pin5_init(void);
     void pin5_tx_start(void) {}
-    void pin5_putbuf(uint8_t* const buf, uint16_t len) { uart_putbuf(buf, len); TS_START(0); }
+    void pin5_putbuf(uint8_t* const buf, uint16_t len) { uart_putbuf(buf, len); }
 
     // for in-isr processing
     void pin5_tx_enable(bool enable_flag);
@@ -164,19 +164,13 @@ void tPin5BridgeBase::pin5_tc_callback(void)
 
 void tPin5BridgeBase::pin5_do(void)
 {
-    TS_START(3);
-    TS_END(2, 10000, true);
-    TS_END(3);
-    
     // poll uart
     while (uart_rx_available() && state != STATE_TRANSMIT_START) { // read at most 1 message
         parse_nextchar(uart_getc());
-        TS_END(0);
     }
 
     // send telemetry after every received message
     if (state == STATE_TRANSMIT_START) { // time to send telemetry
-        TS_END(1, 10000, true);
         transmit_start();
         state = STATE_IDLE;
     }
