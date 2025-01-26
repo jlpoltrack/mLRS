@@ -12,11 +12,11 @@
 
 // https://github.com/ExpressLRS/targets/blob/master/TX/Radiomaster%20Nomad.json
 
-#define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI
-#define DEVICE_HAS_NO_COM
-#define DEVICE_HAS_NO_DEBUG
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
+#define DEVICE_HAS_SINGLE_LED_RGB
+#define DEVICE_HAS_SERIAL_OR_COM
+#define DEVICE_HAS_NO_DEBUG
 
 
 //-- UARTS
@@ -27,12 +27,19 @@
 // UARTE = in port, SBus or whatever
 // UARTF = debug port
 
-#define UARTB_USE_SERIAL // serial, is connected to USB-C vis USB<>UART
+#define UARTB_USE_SERIAL // serial, is connected to USB-C via USB<>UART
 #define UARTB_BAUD                TX_SERIAL_BAUDRATE
 #define UARTB_USE_TX_IO           IO_P1
 #define UARTB_USE_RX_IO           IO_P3
 #define UARTB_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
 #define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
+
+#define UARTC_USE_SERIAL // CLI, is connected to USB-C via USB<>UART
+#define UARTC_BAUD                115200
+#define UARTB_USE_TX_IO           IO_P1
+#define UARTB_USE_RX_IO           IO_P3
+#define UARTC_TXBUFSIZE           0
+#define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
 
 #define DEVICE_HAS_JRPIN5_NO_TC
 
@@ -41,14 +48,14 @@
 #define UART_USE_TX_IO            IO_P4
 #define UART_USE_RX_IO            IO_P4
 #define UART_TXBUFSIZE            0  // TX FIFO = 128
-#define UART_RXBUFSIZE            TX_SERIAL_RXBUFSIZE
+#define UART_RXBUFSIZE            0  // RX FIFO = 128
 
 #define UARTD_USE_SERIAL2 // serial2, connected to ESP32C3 backpack
-#define UARTD_BAUD                 TX_SERIAL_BAUDRATE
-#define UARTD_USE_TX_IO            IO_P5
-#define UARTD_USE_RX_IO            IO_P18
-#define UARTD_TXBUFSIZE            TX_SERIAL_TXBUFSIZE
-#define UARTD_RXBUFSIZE            TX_SERIAL_RXBUFSIZE
+#define UARTD_BAUD                TX_SERIAL_BAUDRATE
+#define UARTD_USE_TX_IO           IO_P5
+#define UARTD_USE_RX_IO           IO_P18
+#define UARTD_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
+#define UARTD_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
 
 //-- SX1: LR11xx & SPI
@@ -73,24 +80,15 @@ void sx_init_gpio(void)
     gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
 }
 
-IRAM_ATTR bool sx_busy_read(void)
-{
-    return (gpio_read_activehigh(SX_BUSY)) ? true : false;
-}
+IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
 
 IRAM_ATTR void sx_amp_transmit(void) {}
 
 IRAM_ATTR void sx_amp_receive(void) {}
 
-void sx_dio_enable_exti_isr(void)
-{
-    attachInterrupt(SX_DIO1, SX_DIO_EXTI_IRQHandler, RISING);
-}
+void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO1, SX_DIO_EXTI_IRQHandler, RISING); }
 
-void sx_dio_init_exti_isroff(void)
-{
-    detachInterrupt(SX_DIO1);
-}
+void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO1); }
 
 void sx_dio_exti_isr_clearflag(void) {}
 
@@ -116,50 +114,30 @@ void sx2_init_gpio(void)
 
 #define SX2_USE_REGULATOR_MODE_DCDC
 
-IRAM_ATTR void spib_select(void)
-{
-    gpio_low(SX2_CS_IO);
-}
+IRAM_ATTR void spib_select(void) { gpio_low(SX2_CS_IO); }
 
-IRAM_ATTR void spib_deselect(void)
-{
-    gpio_high(SX2_CS_IO);
-}
+IRAM_ATTR void spib_deselect(void) { gpio_high(SX2_CS_IO); }
 
-IRAM_ATTR bool sx2_busy_read(void)
-{
-    return (gpio_read_activehigh(SX2_BUSY)) ? true : false;
-}
+IRAM_ATTR bool sx2_busy_read(void) { return (gpio_read_activehigh(SX2_BUSY)) ? true : false; }
 
 IRAM_ATTR void sx2_amp_transmit(void) {}
 
 IRAM_ATTR void sx2_amp_receive(void) {}
 
-void sx2_dio_init_exti_isroff(void)
-{
-    detachInterrupt(SX2_DIO1);
-}
+void sx2_dio_init_exti_isroff(void) { detachInterrupt(SX2_DIO1); }
 
-void sx2_dio_enable_exti_isr(void)
-{
-    attachInterrupt(SX2_DIO1, SX2_DIO_EXTI_IRQHandler, RISING);
-}
+void sx2_dio_enable_exti_isr(void) { attachInterrupt(SX2_DIO1, SX2_DIO_EXTI_IRQHandler, RISING); }
 
 void sx2_dio_exti_isr_clearflag(void) {}
 
 
 //-- Button
+
 #define BUTTON                    IO_P14
 
-void button_init(void)
-{
-    gpio_init(BUTTON, IO_MODE_INPUT_PU);
-}
+void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
 
-IRAM_ATTR bool button_pressed(void)
-{
-    return gpio_read_activelow(BUTTON) ? true : false;
-}
+IRAM_ATTR bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
 
 
 //-- LEDs
@@ -251,14 +229,35 @@ IRAM_ATTR void led_blue_toggle(void)
 }
 
 
+//-- Serial or Com Switch
+// use com if FIVEWAY is DOWN during power up, else use serial
+
+#ifdef DEVICE_HAS_SERIAL_OR_COM
+
+bool tx_ser_or_com_serial = true; // we use serial as default
+
+void ser_or_com_init(void)
+{
+    gpio_init(BUTTON, IO_MODE_INPUT_PU);
+    uint8_t cnt = 0;
+    for (uint8_t i = 0; i < 16; i++) {
+        if (gpio_read_activelow(BUTTON)) cnt++;
+    }
+    tx_ser_or_com_serial = (cnt > 8);
+}
+
+IRAM_ATTR bool ser_or_com_serial(void) { return tx_ser_or_com_serial; }
+
+IRAM_ATTR void ser_or_com_set_to_com(void) { tx_ser_or_com_serial = false; }
+
+#endif // DEVICE_HAS_SERIAL_OR_COM
+
+
 //-- Cooling Fan
 
 #define FAN_IO                    IO_P2
 
-void fan_init(void)
-{
-    gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW);
-}
+void fan_init(void) { gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW); }
 
 IRAM_ATTR void fan_set_power(int8_t power_dbm)
 {
@@ -278,16 +277,13 @@ IRAM_ATTR void fan_set_power(int8_t power_dbm)
 #define ESP_GPIO0                 IO_P23 // backpack_boot inverted?
 #define ESP_BOOT0                 IO_P0  // will always be IO_P0
 
-uint8_t esp_boot0()
-{
-    return gpio_read_activelow(ESP_BOOT0);
-}
+uint8_t esp_boot0() { return gpio_read_activelow(ESP_BOOT0); }
 
 void esp_init(void)
 {
-    // No need to configure ESP_BOOT0 which will always be IO_P0 and is pull-up by default
-    gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
     gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
+    gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
+    // No need to configure ESP_BOOT0 which will always be IO_P0 and is pull-up by default
 }
 
 IRAM_ATTR void esp_reset_high(void) { gpio_high(ESP_RESET); }
