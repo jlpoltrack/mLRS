@@ -12,11 +12,13 @@
 
 // https://github.com/ExpressLRS/targets/blob/master/TX/Radiomaster%20Nomad.json
 
+#define DEVICE_HAS_JRPIN5_NO_TC
+#define DEVICE_HAS_NO_DEBUG
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI
-#define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_SERIAL_OR_COM
-#define DEVICE_HAS_NO_DEBUG
+#define DEVICE_HAS_FAN_ONOFF
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
 
 
 //-- UARTS
@@ -40,8 +42,6 @@
 #define UARTB_USE_RX_IO           IO_P3
 #define UARTC_TXBUFSIZE           0
 #define UARTC_RXBUFSIZE           0
-
-#define DEVICE_HAS_JRPIN5_NO_TC
 
 #define UART_USE_SERIAL1 // JR Pin 5
 #define UART_BAUD                 400000
