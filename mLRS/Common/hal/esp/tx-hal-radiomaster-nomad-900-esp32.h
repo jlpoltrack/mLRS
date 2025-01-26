@@ -39,7 +39,7 @@
 #define UARTB_USE_TX_IO           IO_P1
 #define UARTB_USE_RX_IO           IO_P3
 #define UARTC_TXBUFSIZE           0
-#define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
+#define UARTC_RXBUFSIZE           0
 
 #define DEVICE_HAS_JRPIN5_NO_TC
 
@@ -243,7 +243,7 @@ void ser_or_com_init(void)
     for (uint8_t i = 0; i < 16; i++) {
         if (gpio_read_activelow(BUTTON)) cnt++;
     }
-    tx_ser_or_com_serial = (cnt > 8);
+    tx_ser_or_com_serial = !(cnt > 8);
 }
 
 IRAM_ATTR bool ser_or_com_serial(void) { return tx_ser_or_com_serial; }
