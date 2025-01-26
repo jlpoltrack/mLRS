@@ -238,14 +238,8 @@ GPIO15 = RTC_GPIO13
     #define USE_SERIAL1_DBG
     #undef USE_SERIAL2_DBG
 
-    #define SERIAL_RXD 18 // = RX1
-    #define SERIAL_TXD 19 // = TX1
-
-    #undef LED_IO
-    #define USE_LED
-    #define NUMPIXELS  1
-    #define PIN_NEOPIXEL  2
-
+    #define SERIAL_RXD 20 // = RX1
+    #define SERIAL_TXD 21 // = TX1
 
 //-- M5Stack M5Stamp Pico
 #elif defined MODULE_M5STAMP_PICO || defined MODULE_M5STAMP_PICO_FOR_FRSKY_R9M // M5STAMP_PICO, ARDUINO_BOARD == ESP32_PICO

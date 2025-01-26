@@ -52,7 +52,7 @@ Troubleshooting:
 //#define MODULE_ESP32_PICO_KIT
 //#define MODULE_ADAFRUIT_QT_PY_ESP32_S2
 //#define MODULE_TTGO_MICRO32
-//#define MODULE_M5STAMP_C3_MATE
+#define MODULE_M5STAMP_C3_MATE
 //#define MODULE_M5STAMP_C3U_MATE
 //#define MODULE_M5STAMP_C3U_MATE_FOR_FRSKY_R9M // uses inverted serial
 //#define MODULE_M5STAMP_PICO
@@ -100,13 +100,13 @@ int port_udpcl = 14550; // connect to this port per UDPCL // MissionPlanner defa
 // WiFi channel (only for TCP, UDP)
 // choose 1, 6, 11, 13. Channel 13 (2461-2483 MHz) has the least overlap with mLRS 2.4 GHz frequencies.
 // Note: Channel 13 is generally not available in the US, where 11 is the maximum.
-#define WIFI_CHANNEL  6
+#define WIFI_CHANNEL  13
 
 // WiFi power (for all TCP, UDP, UDPCl)
 // this sets the power level for the WiFi protocols
 // Note: If GPIO0_IO is defined, this sets the power for the medium power option.
 // Note: In order to find the possible options, right click on WIFI_POWER_19_5dBm and choose "Go To Definiton"
-#define WIFI_POWER  WIFI_POWER_2dBm // WIFI_POWER_MINUS_1dBm is the lowest possible, WIFI_POWER_19_5dBm is the max
+#define WIFI_POWER  WIFI_POWER_11dBm // WIFI_POWER_MINUS_1dBm is the lowest possible, WIFI_POWER_19_5dBm is the max
 
 
 //**************************//
@@ -119,7 +119,7 @@ String bluetooth_device_name = ""; // "mLRS BT"; // Bluetooth device name, "" re
 //*** General settings ***//
 
 // Baudrate
-#define BAUD_RATE  115200
+#define BAUD_RATE  230400
 
 // Serial port usage (only effective for the generic module)
 // comment all for default behavior, which is using only Serial port

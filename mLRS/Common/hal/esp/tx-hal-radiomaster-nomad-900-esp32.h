@@ -13,6 +13,7 @@
 // https://github.com/ExpressLRS/targets/blob/master/TX/Radiomaster%20Nomad.json
 
 #define DEVICE_HAS_SINGLE_LED_RGB
+#define DEVICE_HAS_DIVERSITY_SINGLE_SPI
 #define DEVICE_HAS_NO_COM
 #define DEVICE_HAS_NO_DEBUG
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
