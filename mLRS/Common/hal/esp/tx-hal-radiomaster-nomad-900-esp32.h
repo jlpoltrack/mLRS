@@ -297,7 +297,8 @@ IRAM_ATTR void esp_reset_low(void) { gpio_low(ESP_RESET); }
 
 IRAM_ATTR void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
 IRAM_ATTR void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
-#endif
+
+#endif // DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2 
 
 
 //-- POWER
