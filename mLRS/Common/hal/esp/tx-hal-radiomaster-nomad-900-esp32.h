@@ -37,7 +37,7 @@
 #define UARTB_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
 #define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
-#define UARTC_USE_SERIAL // CLI, is connected to USB-C via USB<>UART
+#define UARTC_USE_SERIAL // COM (CLI), is connected to USB-C via USB<>UART
 #define UARTC_BAUD                115200
 #define UARTC_USE_TX_IO           IO_P1
 #define UARTC_USE_RX_IO           IO_P3
@@ -236,11 +236,10 @@ IRAM_ATTR void led_blue_toggle(void)
 
 
 //-- Serial or Com Switch
-// use com if FIVEWAY is DOWN during power up, else use serial
 
 #ifdef DEVICE_HAS_SERIAL_OR_COM
 
-bool tx_ser_or_com_serial = true; // we use serial as default
+bool tx_ser_or_com_serial = true; // default is serial
 
 void ser_or_com_init(void)
 {
@@ -268,11 +267,8 @@ void fan_init(void) { gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW); }
 
 IRAM_ATTR void fan_set_power(int8_t power_dbm)
 {
-    if (power_dbm >= POWER_23_DBM) {
-        gpio_high(FAN_IO);
-    } else {
-        gpio_low(FAN_IO);
-    }
+    if (power_dbm >= POWER_23_DBM) { gpio_high(FAN_IO); } 
+    else { gpio_low(FAN_IO); }
 }
 
 
@@ -281,7 +277,7 @@ IRAM_ATTR void fan_set_power(int8_t power_dbm)
 #ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2  // this is an ESP32C3
 
 #define ESP_RESET                 IO_P19 // backpack_en
-#define ESP_GPIO0                 IO_P23 // backpack_boot inverted?
+#define ESP_GPIO0                 IO_P23 // backpack_boot
 #define ESP_BOOT0                 IO_P0  // will always be IO_P0
 
 uint8_t esp_boot0() { return gpio_read_activelow(ESP_BOOT0); }
@@ -290,7 +286,7 @@ void esp_init(void)
 {
     gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
     gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
-    // No need to configure ESP_BOOT0 which will always be IO_P0 and is pull-up by default
+    // no need to configure ESP_BOOT0 which will always be IO_P0 and is pull-up by default
 }
 
 IRAM_ATTR void esp_reset_high(void) { gpio_high(ESP_RESET); }
