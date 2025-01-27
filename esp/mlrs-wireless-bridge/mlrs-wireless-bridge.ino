@@ -73,8 +73,8 @@ Troubleshooting:
 
 // GPIO0 usage
 // uncomment, if your Tx module does support the RESET and GPIO0 lines on the EPS32 (aka AT mode)
-// the number determines the IO pin, usally it is 0
-//#define GPIO0_IO  0
+// the number determines the IO pin, usally it is 0.  On ESP32C3, it is GPIO9 !!!
+#define GPIO0_IO  9
 
 
 //**********************//
@@ -168,8 +168,8 @@ String bluetooth_device_name = ""; // "mLRS BT"; // Bluetooth device name, "" re
 // does not work here. Also checking e.g. PLATFORM_ESP32_C3 seems not to work. 
 // This sucks. So we don't try to be nice but let the compiler work it out.
 #if defined USE_AT_MODE || (WIRELESS_PROTOCOL == 3) // for AT commands we require BT be available
-  #define USE_WIRELESS_PROTOCOL_BLUETOOTH
-  #include <BluetoothSerial.h>
+  //#define USE_WIRELESS_PROTOCOL_BLUETOOTH
+  //#include <BluetoothSerial.h>
 #endif
 #endif
 
