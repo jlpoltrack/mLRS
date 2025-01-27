@@ -19,7 +19,7 @@
 #define DEVICE_HAS_SERIAL_OR_COM
 #define DEVICE_HAS_FAN_ONOFF
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
-#define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE  // requires backpack firmware to have AT mode enabled
 
 
 //-- UARTS
