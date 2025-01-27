@@ -14,7 +14,7 @@
 
 #define DEVICE_HAS_JRPIN5_NO_TC
 #define DEVICE_HAS_NO_DEBUG
-#define DEVICE_HAS_DIVERSITY_SINGLE_SPI
+//#define DEVICE_HAS_DIVERSITY_SINGLE_SPI
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_SERIAL_OR_COM
 #define DEVICE_HAS_FAN_ONOFF
@@ -324,10 +324,14 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, uint8_t* sx_power, int8_t* actu
         dac = 120;
         *sx_power = -14;
         *actual_power_dbm = 17;
-    } else {
+    } else if (power_dbm > 12) { // -> 14
         dac = 120;
         *sx_power = -16;
         *actual_power_dbm = 14;
+    } else {
+        dac = 150;
+        *sx_power = -17;
+        *actual_power_dbm = 10;
     }
 
     dacWrite(IO_P26, dac);
@@ -336,8 +340,9 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, uint8_t* sx_power, int8_t* actu
 #define RFPOWER_DEFAULT           0 // index into rfpower_list array
 
 const rfpower_t rfpower_list[] = {
+    { .dbm = POWER_10_DBM, .mW = 10 },
     { .dbm = POWER_14_DBM, .mW = 25 },
-    { .dbm = POWER_17_DBM, .mW = 50 },
+    //{ .dbm = POWER_17_DBM, .mW = 50 },
     { .dbm = POWER_20_DBM, .mW = 100 },
     { .dbm = POWER_24_DBM, .mW = 250 },
     { .dbm = POWER_27_DBM, .mW = 500 },
