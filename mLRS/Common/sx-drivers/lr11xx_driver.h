@@ -12,6 +12,7 @@
 // #define SX_USE_REGULATOR_MODE_DCDC
 // #define SX2_USE_REGULATOR_MODE_DCDC
 // #define SX_USE_RFSW_CTRL
+// #define SX_USE_LP_PA  
 //*******************************************************
 
 #ifndef LR11XX_DRIVER_H
