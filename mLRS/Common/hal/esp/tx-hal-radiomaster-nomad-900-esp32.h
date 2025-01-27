@@ -76,8 +76,8 @@ IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
 void sx_init_gpio(void)
 {
     gpio_init(SX_DIO1, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_PU);
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
+    gpio_init(SX_BUSY, IO_MODE_INPUT_ANALOG);
+    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_LOW);
 }
 
 IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
