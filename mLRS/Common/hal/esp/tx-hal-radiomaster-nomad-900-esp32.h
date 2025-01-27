@@ -26,7 +26,7 @@
 // UARTB = serial port BT/ESP port
 // UARTC = COM (CLI)
 // UARTD = serial2
-// UART  = JR bay pin5, full duplex CRSF serial connection to radio - code still calls it JR bay pin5
+// UART  = JR bay pin5
 // UARTE = in port, SBus or whatever
 // UARTF = debug port
 
@@ -44,7 +44,7 @@
 #define UARTC_TXBUFSIZE           0  // TX FIFO = 128
 #define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
 
-#define UART_USE_SERIAL1 // JR Pin 5
+#define UART_USE_SERIAL1 // JR bay pin5
 #define UART_BAUD                 400000
 #define UART_USE_TX_IO            IO_P4
 #define UART_USE_RX_IO            IO_P4
@@ -337,7 +337,7 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, uint8_t* sx_power, int8_t* actu
     } else {
         dac = 150;
         *sx_power = -17;
-        *actual_power_dbm = 10;
+        *actual_power_dbm = 10; // measures about 11 dBm
     }
 
     dacWrite(IO_P26, dac);
@@ -348,7 +348,7 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, uint8_t* sx_power, int8_t* actu
 const rfpower_t rfpower_list[] = {
     { .dbm = POWER_10_DBM, .mW = 10 },
     { .dbm = POWER_14_DBM, .mW = 25 },
-    //{ .dbm = POWER_17_DBM, .mW = 50 },
+    //{ .dbm = POWER_17_DBM, .mW = 50 }, // 6 power levels allowed
     { .dbm = POWER_20_DBM, .mW = 100 },
     { .dbm = POWER_24_DBM, .mW = 250 },
     { .dbm = POWER_27_DBM, .mW = 500 },
