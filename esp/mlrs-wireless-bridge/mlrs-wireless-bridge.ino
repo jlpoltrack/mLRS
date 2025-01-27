@@ -152,6 +152,7 @@ String bluetooth_device_name = ""; // "mLRS BT"; // Bluetooth device name, "" re
 
 #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
     //#error Version of your ESP Arduino Core below 3.0.0 !
+    // ESP32C3 only seems to work with 2.0.17 !!!
 #elif ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 4)
     #warning Consider upgrading your ESP Arduino Core ! // warnings may not be displayed in console !
 #endif
