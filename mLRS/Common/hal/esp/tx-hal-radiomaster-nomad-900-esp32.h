@@ -49,7 +49,7 @@
 #define UART_USE_TX_IO            IO_P4
 #define UART_USE_RX_IO            IO_P4
 #define UART_TXBUFSIZE            0  // TX FIFO = 128
-#define UART_RXBUFSIZE            0  // RX FIFO = 128
+#define UART_RXBUFSIZE            512
 
 #define UARTD_USE_SERIAL2 // serial2, connected to ESP32C3 backpack
 #define UARTD_BAUD                TX_SERIAL_BAUDRATE
