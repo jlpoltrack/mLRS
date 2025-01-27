@@ -134,10 +134,15 @@ void sx2_dio_exti_isr_clearflag(void) {}
 //-- Button
 
 #define BUTTON                    IO_P14
+#define BUTTON2                   IO_P12
 
-void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
+void button_init(void)
+{ 
+    gpio_init(BUTTON, IO_MODE_INPUT_PU);
+    gpio_init(BUTTON2, IO_MODE_INPUT_PU);
+}
 
-IRAM_ATTR bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
+IRAM_ATTR bool button_pressed(void) { return (gpio_read_activelow(BUTTON) || gpio_read_activelow(BUTTON2)) ? true : false; }
 
 
 //-- LEDs
@@ -239,9 +244,10 @@ bool tx_ser_or_com_serial = true; // we use serial as default
 void ser_or_com_init(void)
 {
     gpio_init(BUTTON, IO_MODE_INPUT_PU);
+    gpio_init(BUTTON2, IO_MODE_INPUT_PU);
     uint8_t cnt = 0;
     for (uint8_t i = 0; i < 16; i++) {
-        if (gpio_read_activelow(BUTTON)) cnt++;
+        if (gpio_read_activelow(BUTTON) || gpio_read_activelow(BUTTON2)) cnt++;
     }
     tx_ser_or_com_serial = !(cnt > 8);
 }
@@ -297,8 +303,6 @@ IRAM_ATTR void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 //-- POWER
 
 #define SX_USE_LP_PA  // Nomad uses the low power amplifier for the 900 side
-
-#include "../../setup_types.h"
 
 void lr11xx_rfpower_calc(const int8_t power_dbm, uint8_t* sx_power, int8_t* actual_power_dbm)
 {
