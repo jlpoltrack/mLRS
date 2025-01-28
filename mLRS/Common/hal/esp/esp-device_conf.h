@@ -194,6 +194,14 @@
   #define FREQUENCY_BAND_915_MHZ_FCC
 #endif
 
+#ifdef RX_ELRS_RADIOMASTER_NOMAD_900_ESP32
+  #define DEVICE_NAME "RM Nomad 900"
+  #define DEVICE_IS_RECEIVER
+  #define DEVICE_HAS_LR11xx
+  #define FREQUENCY_BAND_868_MHZ
+  #define FREQUENCY_BAND_915_MHZ_FCC
+#endif
+
 
 // -- DIY
 
