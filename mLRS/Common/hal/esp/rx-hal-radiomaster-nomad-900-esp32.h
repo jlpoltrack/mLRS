@@ -7,13 +7,13 @@
 //*******************************************************
 
 //-------------------------------------------------------
-// ESP32, Radiomaster Tx Nomad
+// ESP32, Radiomaster Nomad as Rx
 //-------------------------------------------------------
 
 // https://github.com/ExpressLRS/targets/blob/master/TX/Radiomaster%20Nomad.json
 
-#define DEVICE_HAS_NO_DEBUG
 #define DEVICE_HAS_OUT
+#define DEVICE_HAS_NO_DEBUG
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_FAN_ONOFF
@@ -40,16 +40,9 @@
 
 void out_init_gpio(void) {}
 
-void out_set_normal(void)
-{
-    // https://github.com/espressif/esp-idf/blob/release/v4.4/components/esp_rom/include/esp32/rom/gpio.h#L228-L242
-    gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, false, false);
-}
+void out_set_normal(void) { gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, false, false); }
 
-void out_set_inverted(void) 
-{
-    gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, true, false);
-}
+void out_set_inverted(void) { gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, true, false); }
 
 
 //-- SX1: LR11xx & SPI
