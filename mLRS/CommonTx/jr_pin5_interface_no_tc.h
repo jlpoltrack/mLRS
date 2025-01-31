@@ -20,7 +20,6 @@
 #include "../modules/stm32ll-lib/src/stdstm32-uart.h"
 #endif
 
-
 //-------------------------------------------------------
 // Pin5BridgeBase class
 
@@ -48,9 +47,6 @@ class tPin5BridgeBase
     // actual isr functions
     void pin5_rx_callback(uint8_t c);
     void pin5_tc_callback(void);
-
-    // asynchronous uart handler
-    void pin5_do(void);
 
     // parser
     typedef enum {
@@ -99,6 +95,13 @@ void tPin5BridgeBase::Init(void)
 
     pin5_init();
 
+    UART_SERIAL_NO.setRxTimeout(1);
+    // A small value (like 4) for RxFIFOFull has a higher impact on main loop time,
+    // but reduces the delay between JRpin5 receive and transmit.  Choose large for now.
+    // The documented default is 128, but seems to actually be smaller than 64 when RXBUFSIZE = 0
+    UART_SERIAL_NO.setRxFIFOFull(64);
+    UART_SERIAL_NO.onReceive((void (*)(void)) uart_rx_callback_ptr, false);
+    
 #if UART_USE_TX_IO == UART_USE_RX_IO // Half duplex
 
 #ifdef UART_USE_SERIAL
@@ -111,7 +114,7 @@ void tPin5BridgeBase::Init(void)
   #error UART_SERIAL_NO must be defined!
 #endif
     UART_SERIAL_NO.setMode(MODE_RS485_HALF_DUPLEX);
-    
+
     gpio_matrix_in((gpio_num_t)UART_USE_TX_IO, U1RXD_IN_IDX, true);
     gpio_pulldown_en((gpio_num_t)UART_USE_TX_IO);
     gpio_pullup_dis((gpio_num_t)UART_USE_TX_IO);
@@ -142,27 +145,11 @@ void tPin5BridgeBase::pin5_init(void)
 
 void tPin5BridgeBase::pin5_tx_enable(bool enable_flag)
 {
-    // nothing to do for full duplex
+    // not used
 }
 
 
 void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
-{
-    // not used for full duplex
-}
-
-
-void tPin5BridgeBase::pin5_tc_callback(void)
-{
-    // not needed for full duplex
-}
-
-
-//-------------------------------------------------------
-// Pin5 asynchronous uart handler
-// polled in Crsf or mBridge ChannelsUpdated()
-
-void tPin5BridgeBase::pin5_do(void)
 {
     // poll uart
     while (uart_rx_available() && state != STATE_TRANSMIT_START) { // read at most 1 message
@@ -177,12 +164,18 @@ void tPin5BridgeBase::pin5_do(void)
 }
 
 
+void tPin5BridgeBase::pin5_tc_callback(void)
+{
+    // not used
+}
+
+
 //-------------------------------------------------------
 // Check and rescue
 
 void tPin5BridgeBase::CheckAndRescue(void)
 {
-    // not needed for ESP full duplex
+    // not needed
 }
 
 

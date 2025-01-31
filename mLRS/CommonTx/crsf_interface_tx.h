@@ -336,8 +336,6 @@ bool tTxCrsf::ChannelsUpdated(tRcData* const rc)
 {
     if (!enabled) return false;
 
-    pin5_do();
-    
     CheckAndRescue();
 
     if (!channels_received) return false;

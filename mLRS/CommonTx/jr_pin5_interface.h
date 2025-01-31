@@ -123,9 +123,6 @@ class tPin5BridgeBase
     void pin5_rx_callback(uint8_t c);
     void pin5_tc_callback(void);
 
-    // asynchronous uart handler
-    void pin5_do(void);
-
     // parser
     typedef enum {
         STATE_IDLE = 0,
@@ -355,16 +352,6 @@ void tPin5BridgeBase::pin5_tc_callback(void)
 {
     pin5_tx_enable(false); // switches on rx
     state = STATE_IDLE;
-}
-
-
-//-------------------------------------------------------
-// Pin5 asynchronous uart handler
-// polled in Crsf or mBridge ChannelsUpdated()
-
-void tPin5BridgeBase::pin5_do(void)
-{
-    // not used on STM32
 }
 
 
