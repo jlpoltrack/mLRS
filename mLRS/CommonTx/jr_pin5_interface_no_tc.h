@@ -113,7 +113,7 @@ void tPin5BridgeBase::Init(void)
 #else
   #error UART_SERIAL_NO must be defined!
 #endif
-    UART_SERIAL_NO.setMode(MODE_RS485_HALF_DUPLEX);
+    UART_SERIAL_NO.setMode(UART_MODE_RS485_HALF_DUPLEX);
 
     gpio_matrix_in((gpio_num_t)UART_USE_TX_IO, U1RXD_IN_IDX, true);
     gpio_pulldown_en((gpio_num_t)UART_USE_TX_IO);
