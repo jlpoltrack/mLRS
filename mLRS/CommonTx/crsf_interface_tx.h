@@ -173,7 +173,7 @@ bool tTxCrsf::transmit_start(void)
 // a frame is sent every 4 ms, frame length is max 64 bytes
 // a byte is 25 us
 // gaps between frames are 3 ms or so
-#define CRSF_PARSE_NEXTCHAR_TMO_US  2200 // Lots of jitter when polled.
+#define CRSF_PARSE_NEXTCHAR_TMO_US  500 // Lots of jitter when polled.
 
 
 // CRSF frame format:
