@@ -30,7 +30,7 @@
 #if defined ESP8266 || defined ESP32
 
 #include "../Common/hal/esp-glue.h"
-#include "../modules/stm32ll-lib/src/stdstm32.h"
+#include "../Common/esp-lib/esp-std.h"
 #include "../Common/esp-lib/esp-peripherals.h"
 #include "../Common/esp-lib/esp-mcu.h"
 #include "../Common/esp-lib/esp-stack.h"
