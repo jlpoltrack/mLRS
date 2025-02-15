@@ -131,6 +131,10 @@
 #include "tx-hal-radiomaster-bandit-series-900-esp32.h"
 #endif
 
+#ifdef TX_ELRS_NAMIMNO_FLASH_2400_ESP32
+#include "tx-hal-namimno-flash-2400-esp32.h"
+#endif
+
 
 // -- DIY
 

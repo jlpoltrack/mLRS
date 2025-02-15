@@ -199,6 +199,13 @@
   #define FREQUENCY_BAND_915_MHZ_FCC
 #endif
 
+#ifdef TX_ELRS_NAMIMNO_FLASH_2400_ESP32
+  #define DEVICE_NAME "Namimno Flash 2.4G"
+  #define DEVICE_IS_TRANSMITTER
+  #define DEVICE_HAS_SX128x
+  #define FREQUENCY_BAND_2P4_GHZ
+#endif
+
 
 //-- ELRS Internal Tx Modules
 
