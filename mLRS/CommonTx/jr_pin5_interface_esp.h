@@ -97,6 +97,9 @@ class tPin5BridgeBase
 
     // check and rescue
     void CheckAndRescue(void);
+
+  private:
+    bool initialized = false;
 };
 
 
@@ -123,6 +126,10 @@ void tPin5BridgeBase::Init(void)
 
 #ifndef JR_PIN5_FULL_DUPLEX
 
+    pin5_rx_enable();
+
+    if (initialized) return;
+
     xTaskCreatePinnedToCore([](void *parameter) {
         hw_timer_t* timer1_cfg = nullptr;
         timer1_cfg = timerBegin(1, 800, 1);  // Timer 1, APB clock is 80 Mhz | divide by 800 is 100 KHz / 10 us, count up
@@ -132,8 +139,7 @@ void tPin5BridgeBase::Init(void)
         vTaskDelete(NULL);
     }, "TimerSetup", 2048, NULL, 1, NULL, 0);  // last argument here is Core 0, ignored on ESP32C3
 
-    pin5_rx_enable();
-
+    initialized = true;
 #endif
 }
 
