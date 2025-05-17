@@ -86,7 +86,7 @@ void setup_configure_metadata(void)
 #elif defined DEVICE_HAS_SX127x
     SetupMetaData.Mode_allowed_mask = 0b100000; // 19 Hz 7x, not editable
 #elif defined DEVICE_HAS_LR11xx
-    SetupMetaData.Mode_allowed_mask = 0b010110; // 31 Hz, 19 Hz, FSK
+    SetupMetaData.Mode_allowed_mask = 0b100000; // 19 Hz 7x, not editable
 #else
     #error Unknown Mode !
 #endif
