@@ -41,8 +41,6 @@ extern tSetup Setup;
 #define MAVLINK_BUF_SIZE              300 // needs to be larger than max MAVLink frame size = 280 bytes
 #define MAVLINK_CHUNK_SIZE            16  // maximum number of bytes to read out in a single loop
 
-#define MAVLINK_OPT_FAKE_PARAMFTP     2 // 0: off, 1: always, 2: determined from mode & baudrate
-
 
 // keeps info on the attached autopilot (ArduPilot only)
 // currently used to
@@ -61,10 +59,10 @@ class tRxAutoPilot
     void handle_heartbeat(fmav_message_t* const msg);
     void handle_autopilot_version(fmav_message_t* const msg);
 
-    uint8_t sysid;
+    uint8_t sysid; // 0 indicates autopilot not detected
   private:
     uint8_t autopilot; // this is the equally named field in HEARTBEAT message, a bit confusing, but it's how it is
-    uint32_t flight_sw_version;
+    uint32_t flight_sw_version; // 0 indicates not known
     uint32_t middleware_sw_version;
     uint32_t version;
     uint32_t heartbeat_tlast_ms;
@@ -408,13 +406,11 @@ void tRxMavlink::parse_link_in_serial_out(char c)
     if (result.res == FASTMAVLINK_PARSE_RESULT_OK) {
         fmav_frame_buf_to_msg(&msg_serial_out, &result, buf_link_in); // requires RESULT_OK
 
-#if MAVLINK_OPT_FAKE_PARAMFTP > 0
         // if it's a mavftp call to @PARAM/param.pck we fake the url
         // this will make ArduPilot to response with a NACK:FileNotFound
         // which will make MissionPlanner (any GCS?) to fallback to normal parameter upload
         if (msg_serial_out.msgid == FASTMAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL) {
             bool force_param_list = true;
-#if MAVLINK_OPT_FAKE_PARAMFTP > 1
             switch (Config.Mode) {
             case MODE_FLRC_111HZ: force_param_list = (Config.SerialBaudrate > 230400); break; // 230400 bps and lower is ok for mftp
             case MODE_50HZ:
@@ -424,7 +420,6 @@ void tRxMavlink::parse_link_in_serial_out(char c)
             case MODE_19HZ_7X: force_param_list = (Config.SerialBaudrate > 38400); break; // 38400 bps and lower is ok for mftp
             }
             if (autopilot.HasMFtpFlowControl()) force_param_list = false; // mftp is flow controlled, so always ok
-#endif
             if (force_param_list) {
                 uint8_t target_component = msg_serial_out.payload[2];
                 uint8_t opcode = msg_serial_out.payload[6];
@@ -438,7 +433,6 @@ void tRxMavlink::parse_link_in_serial_out(char c)
                 }
             }
         }
-#endif
 
 #ifdef DEVICE_HAS_DRONECAN
         // Two issues, which have been resolved but are present in some versions of
@@ -1280,6 +1274,7 @@ void tRxAutoPilot::handle_heartbeat(fmav_message_t* const msg)
 
     // check if it could be the heartbeat from ArduPilot
     // we also could check if type is proper, but this is very daunting, so don't do
+    // TODO: PX4 ??
     if (payload.autopilot == MAV_AUTOPILOT_ARDUPILOTMEGA) {
 //if (!sysid) { dbg.puts("\ngot heartbeat"); }
         sysid = msg->sysid;
