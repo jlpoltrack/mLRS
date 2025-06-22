@@ -319,6 +319,33 @@ IRAM_ATTR void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 
 #define SX_USE_LP_PA  // Nomad uses the low power amplifier for the 900 side
 
+#ifdef FREQUENCY_BAND_2P4_GHZ
+void lr11xx_rfpower_calc(const int8_t power_dbm, uint8_t* sx_power, int8_t* actual_power_dbm)
+{
+    if (power_dbm > 28) { // -> 30
+        *sx_power = 5;
+        *actual_power_dbm = 30;
+    } else if (power_dbm > 25) { // -> 27
+        *sx_power = 3;
+        *actual_power_dbm = 27;
+    } else if (power_dbm > 22) { // -> 24
+        *sx_power = 2;
+        *actual_power_dbm = 24;
+    } else if (power_dbm > 18) { // -> 20
+        *sx_power = -6;
+        *actual_power_dbm = 20;
+    } else if (power_dbm > 15) { // -> 17
+        *sx_power = -8;
+        *actual_power_dbm = 17;
+    } else if (power_dbm > 12) { // -> 14
+        *sx_power = -14;
+        *actual_power_dbm = 14;
+    } else {
+        *sx_power = -18;
+        *actual_power_dbm = 10; // measures about 11 dBm
+    }
+}
+#else
 void lr11xx_rfpower_calc(const int8_t power_dbm, uint8_t* sx_power, int8_t* actual_power_dbm)
 {
     uint8_t dac = 120;
@@ -355,13 +382,14 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, uint8_t* sx_power, int8_t* actu
 
     dacWrite(IO_P26, dac);
 }
+#endif
 
 #define RFPOWER_DEFAULT           0 // index into rfpower_list array
 
 const rfpower_t rfpower_list[] = {
-    { .dbm = POWER_10_DBM, .mW = 10 },
+    //{ .dbm = POWER_10_DBM, .mW = 10 },
     { .dbm = POWER_14_DBM, .mW = 25 },
-    //{ .dbm = POWER_17_DBM, .mW = 50 }, // 6 power levels allowed
+    { .dbm = POWER_17_DBM, .mW = 50 }, // 6 power levels allowed
     { .dbm = POWER_20_DBM, .mW = 100 },
     { .dbm = POWER_24_DBM, .mW = 250 },
     { .dbm = POWER_27_DBM, .mW = 500 },
