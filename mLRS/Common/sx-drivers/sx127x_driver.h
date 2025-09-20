@@ -39,7 +39,7 @@ const tSxLoraConfiguration Sx127xLoraConfiguration[] = {
       .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX1276_LORA_CRC_DISABLE,
       .InvertIQ = SX1276_LORA_IQ_NORMAL,
-      .TimeOverAir = 22300,
+      .TimeOverAir = 23580,
       .ReceiverSensitivity = -112,
     }
 };
