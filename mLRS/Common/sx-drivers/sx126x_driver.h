@@ -276,6 +276,12 @@ class Sx126xDriverCommon : public Sx126xDriverBase
 
     void SendFrame(uint8_t* const data, uint8_t len, uint16_t tmo_ms)
     {
+        if (gconfig->modeIsLora()) {
+            Sx126xDriverBase::SetTxModulation(SX126X_LORA_BW_500);
+        } else {
+            Sx126xDriverBase::SetTxModulation(0);
+        }
+
         WriteBuffer(0, data, len);
         ClearIrqStatus(SX126X_IRQ_ALL);
         SetTx(tmo_ms * 64); // 0 = no timeout. TimeOut period in ms. sx1262 have static 15p625 period base, so for 1 ms needs 64 tmo value
