@@ -27,7 +27,7 @@
 const tSxLoraConfiguration Lr11xxLoraConfiguration[] = {
     { .SpreadingFactor = LR11XX_LORA_SF5,
       .Bandwidth = LR11XX_LORA_BW_500,
-      .CodingRate = LR11XX_LORA_CR_4_5,
+      .CodingRate = LR11XX_LORA_CR_4_8,
       .PreambleLength = 12,
       .HeaderType = LR11XX_LORA_HEADER_DISABLE,
       .PayloadLength = FRAME_TX_RX_LEN,
@@ -38,7 +38,7 @@ const tSxLoraConfiguration Lr11xxLoraConfiguration[] = {
     },
     { .SpreadingFactor = LR11XX_LORA_SF6,
       .Bandwidth = LR11XX_LORA_BW_500,
-      .CodingRate = LR11XX_LORA_CR_4_5,
+      .CodingRate = LR11XX_LORA_CR_4_8,
       .PreambleLength = 12,
       .HeaderType = LR11XX_LORA_HEADER_DISABLE,
       .PayloadLength = FRAME_TX_RX_LEN,
