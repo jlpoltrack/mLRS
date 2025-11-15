@@ -6,9 +6,9 @@
 # OlliW @ www.olliw.eu
 #************************************************************
 # mLRS Flasher Desktop App
-# 3. Mai. 2025 001
+# 14. Nov. 2025 001
 #************************************************************
-app_version = '3.05.2025-001'
+app_version = '14.11.2025-001'
 
 import os, sys, time
 import subprocess
@@ -241,12 +241,16 @@ def find_serial_ports_usbttl_devices():
 
 def _flash_esptool_argstr(programmer, firmware, comport, baudrate):
     assets_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
-    if 'esp32c3' in programmer: # must come before we test for 'eps32'!
+    if 'no dtr' in programmer:
+        before_arg = '--before no_reset'
+    else:
+        before_arg = '--before default_reset'
+    if 'esp32c3' in programmer: # must come before we test for 'esp32'!
         args = (
             '--chip esp32c3 ' +
             '--port "' + comport + '" ' +
             '--baud ' + str(baudrate) + ' ' +
-            '--before default_reset --after hard_reset ' +
+            before_arg + ' --after hard_reset ' +
             'write_flash ' +
             '-z ' +
             '--flash_mode dio --flash_freq 40m --flash_size 4MB ' +
@@ -260,16 +264,24 @@ def _flash_esptool_argstr(programmer, firmware, comport, baudrate):
             '"' + firmware + '"'
             )
     elif 'esp32' in programmer:
+        # flash was changed to 80 MHz QIO with this PR: https://github.com/olliw42/mLRS/pull/320
+        # observed that the code will still run but flash writes fail with older bootloader
+        firmware_version = int(''.join(re.search(r'v(\d+\.\d+\.\d+)', os.path.basename(firmware)).group(1).split('.')))
+        if firmware_version >= 1307:
+            bootloader_file = 'bootloader_80qio.bin'
+        else:
+            bootloader_file = 'bootloader_40dio.bin'
+        #print(firmware_version, bootloader_file)
         args = (
             '--chip esp32 ' +
             '--port "' + comport + '" ' +
             '--baud ' + str(baudrate) + ' ' +
-            '--before default_reset --after hard_reset ' +
+            before_arg + ' --after hard_reset ' +
             'write_flash ' +
             '-z ' +
             '--flash_mode dio --flash_freq 40m --flash_size 4MB ' +
             '0x1000  ' +
-            '"' + os.path.join(assets_path,'esp32','bootloader.bin') + '" ' +
+            '"' + os.path.join(assets_path,'esp32', bootloader_file) + '" ' +
             '0x8000 ' +
             '"' + os.path.join(assets_path,'esp32','partitions.bin') + '" ' +
             '0xe000 ' +
@@ -277,22 +289,12 @@ def _flash_esptool_argstr(programmer, firmware, comport, baudrate):
             '0x10000 ' +
             '"' + firmware + '"'
             )
-    elif ('esp8266' in programmer or 'esp8285' in programmer) and 'no dtr' in programmer:
+    elif ('esp8266' in programmer or 'esp8285' in programmer):
         args = (
             '--chip esp8266 ' +
             '--port "' + comport + '" ' +
             '--baud ' + str(baudrate) + ' ' +
-            '--before no_reset --after soft_reset ' +
-            'write_flash ' +
-            '0x0 ' +
-            '"' + firmware + '"'
-            )
-    elif ('esp8266' in programmer or 'esp8285' in programmer): # 'dtr'
-        args = (
-            '--chip esp8266 ' +
-            '--port "' + comport + '" ' +
-            '--baud ' + str(baudrate) + ' ' +
-            '--before default_reset --after hard_reset ' +
+            before_arg + ' --after hard_reset ' +
             'write_flash ' +
             '0x0 ' +
             '"' + firmware + '"'
@@ -1022,7 +1024,10 @@ class App(ctk.CTk):
         else:
             baudrate = 921600
         #url = 'https://raw.githubusercontent.com/olliw42/mLRS/refs/heads/main/firmware/wirelessbridge-esp8266/mlrs-wireless-bridge-esp8266.ino.bin'
-        firmware_filename = 'mlrs-wireless-bridge-esp8266.ino.bin'
+        if 'esp32c3' in chipset:
+            firmware_filename = 'mlrs-wireless-bridge-esp32c3.ino.bin'
+        else:
+            firmware_filename = 'mlrs-wireless-bridge-esp8266.ino.bin'
         url = g_wirelessbridge_path_url + firmware_filename
         flashDevice(programmer, url, firmware_filename, comport, baudrate)
 
