@@ -717,6 +717,9 @@ def flashDevice(programmer, url, filename, comport=None, baudrate=None):
             if ('esp8266' in programmer or 'esp8285' in programmer):
                 flashEspToolProgrammer(programmer, filepath, comport, baudrate)
                 return
+            elif ('esp32c3' in programmer):
+                flashEspToolProgrammer(programmer, filepath, comport, baudrate)
+                return
     elif 'stm32' in programmer:
         # STM32
         flashSTM32CubeProgrammer(programmer, filepath, comport, baudrate)
@@ -1024,7 +1027,7 @@ class App(ctk.CTk):
         else:
             baudrate = 921600
         #url = 'https://raw.githubusercontent.com/olliw42/mLRS/refs/heads/main/firmware/wirelessbridge-esp8266/mlrs-wireless-bridge-esp8266.ino.bin'
-        if 'esp32c3' in chipset:
+        if 'esp32c3' in programmer:
             firmware_filename = 'mlrs-wireless-bridge-esp32c3.ino.bin'
         else:
             firmware_filename = 'mlrs-wireless-bridge-esp8266.ino.bin'
