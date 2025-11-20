@@ -215,6 +215,13 @@
   #define FREQUENCY_BAND_915_MHZ_FCC
 #endif
 
+#ifdef TX_ELRS_JUMPER_AION_NANO_2400_ESP32
+  #define DEVICE_NAME "JumperAionNano 2.4G"
+  #define DEVICE_IS_TRANSMITTER
+  #define DEVICE_HAS_SX128x
+  #define FREQUENCY_BAND_2P4_GHZ
+#endif
+
 
 //-- ELRS Internal Tx Modules
 
