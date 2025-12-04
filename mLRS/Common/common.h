@@ -10,22 +10,20 @@
 #define COMMON_H
 #pragma once
 
+#include "bind.h"
+#include "buzzer.h"
 #include "common_conf.h"
 #include "common_stats.h"
-#include "frame_types.h"
-#include "link_types.h"
-#include "sx-drivers/sx12xx_driver.h"
-
-#include "bind.h"
-#include "frames.h"
-#include "rf_power.h"
-
-#include "buzzer.h"
 #include "fail.h"
 #include "fan.h"
 #include "fhss.h"
+#include "frame_types.h"
+#include "frames.h"
 #include "leds.h"
+#include "link_types.h"
 #include "lq_counter.h"
+#include "rf_power.h"
+#include "sx-drivers/sx12xx_driver.h"
 
 //-------------------------------------------------------
 // Serial Classes

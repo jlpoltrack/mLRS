@@ -46,6 +46,7 @@ void setup_configure_metadata(void) {
 #error Unknown Frequencyband !
 #endif
 //** multi band
+//** multi band
 #elif defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC &&  \
     defined FREQUENCY_BAND_868_MHZ
   // MULTIBAND 2.4 GHz & 868/915 MHz
@@ -450,11 +451,6 @@ void setup_sanitize_config(uint8_t config_id) {
     SetupMetaData.Mode_allowed_mask &=
         0b110110; // filter down to 31 Hz, 19 Hz, 19 Hz 7x, FSK
     break;
-  case SETUP_FREQUENCY_BAND_868_MHZ_PLUS_2P4_GHZ:
-  case SETUP_FREQUENCY_BAND_915_MHZ_FCC_PLUS_2P4_GHZ:
-    // Dual-band: must use modes that work on both bands (31 Hz, 19 Hz)
-    SetupMetaData.Mode_allowed_mask &= 0b000110; // 31 Hz, 19 Hz
-    break;
   default:
     while (1) {
     } // must not happen, should have been resolved in setup_sanitize()
@@ -470,9 +466,6 @@ void setup_sanitize_config(uint8_t config_id) {
   case SETUP_FREQUENCY_BAND_2P4_GHZ: // restrict ortho to 2.4GHz, 915FCC, 70CM
   case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
   case SETUP_FREQUENCY_BAND_70_CM_HAM:
-  case SETUP_FREQUENCY_BAND_868_MHZ_PLUS_2P4_GHZ: // dual-band includes 2.4 and
-                                                  // 915
-  case SETUP_FREQUENCY_BAND_915_MHZ_FCC_PLUS_2P4_GHZ:
     break;
   default:
     SetupMetaData.Ortho_allowed_mask = 0; // not available, do not display
@@ -697,9 +690,6 @@ void configure_mode(uint8_t mode, uint8_t frequencyband) {
 #elif defined DEVICE_HAS_LR11xx
     if (frequencyband == SETUP_FREQUENCY_BAND_2P4_GHZ) {
       Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF6_CR4_5;
-    } else if (is_dual_band_frequency(frequencyband)) {
-      // Dual-band: SX1 uses 900 MHz config
-      Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW500_SF5_CR4_5;
     } else {
       Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW500_SF5_CR4_5;
     }
@@ -723,9 +713,6 @@ void configure_mode(uint8_t mode, uint8_t frequencyband) {
 #elif defined DEVICE_HAS_LR11xx
     if (frequencyband == SETUP_FREQUENCY_BAND_2P4_GHZ) {
       Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF7_CR4_5;
-    } else if (is_dual_band_frequency(frequencyband)) {
-      // Dual-band: SX1 uses 900 MHz config
-      Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW500_SF6_CR4_5;
     } else {
       Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW500_SF6_CR4_5;
     }
@@ -766,25 +753,6 @@ void configure_mode(uint8_t mode, uint8_t frequencyband) {
   // DUALBAND 868/915 MHz & 433 MHz
   // nothing to do, is the same as for 868/915
 #endif
-
-#if defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
-  // LR11xx DUAL-BAND: configure SX2 for 2.4 GHz
-  if (is_dual_band_frequency(frequencyband)) {
-    switch (Config.Mode) {
-    case MODE_31HZ:
-      Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF6_CR4_5;
-      Config.Sx2.is_lora = true;
-      break;
-    case MODE_19HZ:
-      Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF7_CR4_5;
-      Config.Sx2.is_lora = true;
-      break;
-    default:
-      while (1) {
-      } // must not happen, modes are filtered in setup_sanitize_config
-    }
-  }
-#endif
 }
 
 void setup_configure_config(uint8_t config_id) {
@@ -814,54 +782,42 @@ void setup_configure_config(uint8_t config_id) {
   Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
   Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
 #elif defined DEVICE_HAS_DIVERSITY || defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
-  // Check for LR11xx dual-band mode first
-#if defined DEVICE_HAS_LR11xx
-  if (is_dual_band_frequency(Setup.Common[config_id].FrequencyBand)) {
-    // Dual-band: treat like diversity, use both antennas
-    Config.Diversity = DIVERSITY_DEFAULT;
-    Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
-    Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
-  } else {
-#endif
 #ifdef DEVICE_IS_TRANSMITTER
-    switch (Setup.Tx[config_id].Diversity) {
+  switch (Setup.Tx[config_id].Diversity) {
 #else // DEVICE_IS_RECEIVER
   switch (Setup.Rx.Diversity) {
 #endif
-    case DIVERSITY_DEFAULT:
-      Config.Diversity = DIVERSITY_DEFAULT;
-      Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
-      Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
-      break;
-    case DIVERSITY_ANTENNA1:
-      Config.Diversity = DIVERSITY_ANTENNA1;
-      Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
-      Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = false;
-      break;
-    case DIVERSITY_ANTENNA2:
-      Config.Diversity = DIVERSITY_ANTENNA2;
-      Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = false;
-      Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
-      break;
-    case DIVERSITY_R_ENABLED_T_ANTENNA1:
-      Config.Diversity = DIVERSITY_R_ENABLED_T_ANTENNA1;
-      Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
-      Config.ReceiveUseAntenna2 = true;
-      Config.TransmitUseAntenna2 = false;
-      break;
-    case DIVERSITY_R_ENABLED_T_ANTENNA2:
-      Config.Diversity = DIVERSITY_R_ENABLED_T_ANTENNA2;
-      Config.ReceiveUseAntenna1 = true;
-      Config.TransmitUseAntenna1 = false;
-      Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
-      break;
-    default:
-      while (1) {
-      } // must not happen, should have been resolved in setup_sanitize()
-    }
-#if defined DEVICE_HAS_LR11xx
+  case DIVERSITY_DEFAULT:
+    Config.Diversity = DIVERSITY_DEFAULT;
+    Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
+    Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
+    break;
+  case DIVERSITY_ANTENNA1:
+    Config.Diversity = DIVERSITY_ANTENNA1;
+    Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
+    Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = false;
+    break;
+  case DIVERSITY_ANTENNA2:
+    Config.Diversity = DIVERSITY_ANTENNA2;
+    Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = false;
+    Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
+    break;
+  case DIVERSITY_R_ENABLED_T_ANTENNA1:
+    Config.Diversity = DIVERSITY_R_ENABLED_T_ANTENNA1;
+    Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
+    Config.ReceiveUseAntenna2 = true;
+    Config.TransmitUseAntenna2 = false;
+    break;
+  case DIVERSITY_R_ENABLED_T_ANTENNA2:
+    Config.Diversity = DIVERSITY_R_ENABLED_T_ANTENNA2;
+    Config.ReceiveUseAntenna1 = true;
+    Config.TransmitUseAntenna1 = false;
+    Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
+    break;
+  default:
+    while (1) {
+    } // must not happen, should have been resolved in setup_sanitize()
   }
-#endif
 #else
   Config.Diversity = DIVERSITY_ANTENNA1;
   Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
@@ -909,8 +865,7 @@ void setup_configure_config(uint8_t config_id) {
 
   Config.Sx.FrequencyBand = cvt_to_sx_fhss_frequency_band(
       Config.FrequencyBand); // asserts if not a valid SETUP_FREQUENCY_BAND_ENUM
-  Config.Sx2.FrequencyBand =
-      cvt_to_sx2_fhss_frequency_band(Config.FrequencyBand);
+  Config.Sx2.FrequencyBand = Config.Sx.FrequencyBand;
 
 #ifdef DEVICE_HAS_DUAL_SX126x_SX128x
   // DUALBAND 2.4 GHz & 868/915 MHz
@@ -1057,26 +1012,6 @@ void setup_configure_config(uint8_t config_id) {
   Config.Fhss2.FrequencyBand_allowed_mask =
       (1 << SX_FHSS_CONFIG_FREQUENCY_BAND_433_MHZ);
   Config.Fhss2.Num = FHSS_NUM_BAND_433_MHZ;
-#endif
-
-#if defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
-  // LR11xx DUAL-BAND: configure FHSS2 for 2.4 GHz
-  if (is_dual_band_frequency(Config.FrequencyBand)) {
-    Config.Fhss2.FrequencyBand = SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ;
-    Config.Fhss2.FrequencyBand_allowed_mask =
-        (1 << SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ);
-    switch (Config.Mode) {
-    case MODE_31HZ:
-      Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_31HZ_MODE;
-      break;
-    case MODE_19HZ:
-      Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_19HZ_MODE;
-      break;
-    default:
-      while (1) {
-      } // must not happen
-    }
-  }
 #endif
 
   //-- More Config, may depend on above config settings
