@@ -50,7 +50,13 @@ void setup_configure_metadata(void)
 //** multi band
 #elif defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ
     // MULTIBAND 2.4 GHz & 868/915 MHz
+#if defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+    // LR11xx with diversity - enable dual-band options (868+2.4, 915+2.4)
+    SetupMetaData.FrequencyBand_allowed_mask = 0b11000111; // 2.4 GHz, 915 FCC, 868, 868+2.4, 915+2.4
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
+#else
     SetupMetaData.FrequencyBand_allowed_mask = 0b000111; // 2.4 GHz, 915 FCC, 868
+#endif
     #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
 //** single band, multiple frequencies
 #elif defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ && \
