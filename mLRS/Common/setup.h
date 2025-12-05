@@ -640,6 +640,23 @@ void configure_mode(uint8_t mode, uint8_t frequencyband)
 #elif defined DEVICE_HAS_DUAL_SX126x_SX126x
     // DUALBAND 868/915 MHz & 433 MHz
     // nothing to do, is the same as for 868/915
+#elif defined DEVICE_HAS_LR11xx
+    // MULTIBAND 2.4 GHz & 868/915 MHz
+    // we need to set the Sx2 config correctly for 2.4 GHz, which is different from 868/915 MHz
+    if (frequencyband == SETUP_FREQUENCY_BAND_868_MHZ_PLUS_2P4_GHZ ||
+        frequencyband == SETUP_FREQUENCY_BAND_915_MHZ_FCC_PLUS_2P4_GHZ)
+    {
+        switch (Config.Mode) {
+        case MODE_31HZ:
+            Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF6_CR4_5;
+            Config.Sx2.is_lora = true;
+            break;
+        case MODE_19HZ:
+            Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF7_CR4_5;
+            Config.Sx2.is_lora = true;
+            break;
+        }
+    }
 #endif
 }
 
