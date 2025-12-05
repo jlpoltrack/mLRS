@@ -11,6 +11,7 @@
 #include "hal/device_conf.h"
 #include "common_types.h"
 #include "link_types.h"
+#include "setup_types.h"
 #include "diversity.h"
 
 
@@ -124,9 +125,10 @@ Rx:
 #define TDIVERSITY_RANGE          (TDIVERSITY_TIME_CONSTANT / 2)
 
 
-void tTDiversity::Init(uint16_t _frame_rate_ms)
+void tTDiversity::Init(uint16_t _frame_rate_ms, bool _is_dual_band)
 {
     frame_rate_ms = _frame_rate_ms;
+    is_dual_band = _is_dual_band;
 
     estimator_value = TDIVERSITY_RANGE; // start with antenna1
     estimator_step_last = frame_rate_ms;
@@ -156,6 +158,25 @@ int16_t estimator_step;
     }
 
     // now run the estimator
+    if (is_dual_band) {
+        int16_t switch_step = 2 * TDIVERSITY_RANGE + 10;
+        bool antenna1_good = (invalid1_cnt < 3);
+        bool antenna2_good = (invalid2_cnt < 3);
+
+        if (antenna1_good && antenna2_good) {
+            // alternate
+            if (proposed_antenna == ANTENNA_1) estimator_step = -switch_step;
+            else estimator_step = switch_step;
+        } else if (antenna1_good) {
+            estimator_step = switch_step; // Stay/Go ANTENNA_1
+        } else if (antenna2_good) {
+            estimator_step = -switch_step; // Stay/Go ANTENNA_2
+        } else {
+            // Both bad, alternate to try to re-establish
+            if (proposed_antenna == ANTENNA_1) estimator_step = -switch_step;
+            else estimator_step = switch_step;
+        }
+    } else
 #ifdef DEVICE_IS_RECEIVER
     if ((link_rx1_status == RX_STATUS_VALID && link_rx2_status == RX_STATUS_VALID) ||
         (link_rx1_status == RX_STATUS_CRC1_VALID && link_rx2_status == RX_STATUS_CRC1_VALID)) {

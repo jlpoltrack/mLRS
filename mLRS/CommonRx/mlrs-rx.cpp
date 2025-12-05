@@ -554,7 +554,7 @@ RESTARTCONTROLLER
 
     stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
     rdiversity.Init();
-    tdiversity.Init(Config.frame_rate_ms);
+    tdiversity.Init(Config.frame_rate_ms, is_dual_band_frequency(Config.FrequencyBand));
     tarq.Init();
 
     out.Configure(Setup.Rx.OutMode);
