@@ -383,6 +383,10 @@ void setup_sanitize_config(uint8_t config_id)
     case SETUP_FREQUENCY_BAND_868_MHZ:
         SetupMetaData.Mode_allowed_mask &= 0b110110; // filter down to 31 Hz, 19 Hz, 19 Hz 7x, FSK
         break;
+    case SETUP_FREQUENCY_BAND_868_MHZ_PLUS_2P4_GHZ:
+    case SETUP_FREQUENCY_BAND_915_MHZ_FCC_PLUS_2P4_GHZ:
+        SetupMetaData.Mode_allowed_mask &= 0b000110; // filter down to 31 Hz, 19 Hz
+        break;
     default:
         while(1){} // must not happen, should have been resolved in setup_sanitize()
     }
@@ -735,7 +739,7 @@ void setup_configure_config(uint8_t config_id)
     Config.Sx2.Power_dbm = Config.Sx.Power_dbm;
 
     Config.Sx.FrequencyBand = cvt_to_sx_fhss_frequency_band(Config.FrequencyBand); // asserts if not a valid SETUP_FREQUENCY_BAND_ENUM
-    Config.Sx2.FrequencyBand = Config.Sx.FrequencyBand;
+    Config.Sx2.FrequencyBand = cvt_to_sx2_fhss_frequency_band(Config.FrequencyBand);
 
 #ifdef DEVICE_HAS_DUAL_SX126x_SX128x
     // DUALBAND 2.4 GHz & 868/915 MHz
