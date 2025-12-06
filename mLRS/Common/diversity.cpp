@@ -148,21 +148,34 @@ int16_t estimator_step;
     bool rx1_valid = (link_rx1_status > RX_STATUS_INVALID);
     bool rx2_valid = (link_rx2_status > RX_STATUS_INVALID);
 
-    if (rx1_valid) {
-        if (invalid1_cnt) invalid1_cnt--;
-    } else {
-        // Only increment if global failure AND we expected to be on this band (or single band logic)
-        // In alternating mode, proposed_antenna tracks which band was active for this frame result
-        bool is_my_turn = (!is_dual_band) || (proposed_antenna == ANTENNA_1);
-        if (!rx2_valid && is_my_turn && invalid1_cnt < 5) invalid1_cnt++;
-    }
-
-    if (rx2_valid) {
-        if (invalid2_cnt) invalid2_cnt--;
-    } else {
+    if (is_dual_band) {
+        // Dual-band alternating: Dependent counters to handle scheduled silence
         // Only increment if global failure AND we expected to be on this band
-        bool is_my_turn = (!is_dual_band) || (proposed_antenna == ANTENNA_2);
-        if (!rx1_valid && is_my_turn && invalid2_cnt < 5) invalid2_cnt++;
+        
+        if (rx1_valid) {
+            if (invalid1_cnt) invalid1_cnt--;
+        } else {
+            if (!rx2_valid && (proposed_antenna == ANTENNA_1) && invalid1_cnt < 5) invalid1_cnt++;
+        }
+
+        if (rx2_valid) {
+            if (invalid2_cnt) invalid2_cnt--;
+        } else {
+            if (!rx1_valid && (proposed_antenna == ANTENNA_2) && invalid2_cnt < 5) invalid2_cnt++;
+        }
+    } else {
+        // Standard diversity: Independent counters
+        if (rx1_valid) {
+            if (invalid1_cnt) invalid1_cnt--;
+        } else {
+            if (invalid1_cnt < 5) invalid1_cnt++;
+        }
+
+        if (rx2_valid) {
+            if (invalid2_cnt) invalid2_cnt--;
+        } else {
+            if (invalid2_cnt < 5) invalid2_cnt++;
+        }
     }
 
     // now run the estimator
