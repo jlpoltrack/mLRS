@@ -151,16 +151,18 @@ int16_t estimator_step;
     if (rx1_valid) {
         if (invalid1_cnt) invalid1_cnt--;
     } else {
-        // Only increment if the other band was also invalid (global failure)
-        // This prevents penalizing band 1 when we are intentionally receiving on band 2
-        if (!rx2_valid && invalid1_cnt < 5) invalid1_cnt++;
+        // Only increment if global failure AND we expected to be on this band (or single band logic)
+        // In alternating mode, proposed_antenna tracks which band was active for this frame result
+        bool is_my_turn = (!is_dual_band) || (proposed_antenna == ANTENNA_1);
+        if (!rx2_valid && is_my_turn && invalid1_cnt < 5) invalid1_cnt++;
     }
 
     if (rx2_valid) {
         if (invalid2_cnt) invalid2_cnt--;
     } else {
-        // Only increment if the other band was also invalid (global failure)
-        if (!rx1_valid && invalid2_cnt < 5) invalid2_cnt++;
+        // Only increment if global failure AND we expected to be on this band
+        bool is_my_turn = (!is_dual_band) || (proposed_antenna == ANTENNA_2);
+        if (!rx1_valid && is_my_turn && invalid2_cnt < 5) invalid2_cnt++;
     }
 
     // now run the estimator
