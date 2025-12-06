@@ -145,16 +145,22 @@ void tTDiversity::DoEstimate(uint8_t link_rx1_status, uint8_t link_rx2_status, i
 {
 int16_t estimator_step;
 
-    if (link_rx1_status <= RX_STATUS_INVALID) {
-        if (invalid1_cnt < 5) invalid1_cnt++;
-    } else {
+    bool rx1_valid = (link_rx1_status > RX_STATUS_INVALID);
+    bool rx2_valid = (link_rx2_status > RX_STATUS_INVALID);
+
+    if (rx1_valid) {
         if (invalid1_cnt) invalid1_cnt--;
+    } else {
+        // Only increment if the other band was also invalid (global failure)
+        // This prevents penalizing band 1 when we are intentionally receiving on band 2
+        if (!rx2_valid && invalid1_cnt < 5) invalid1_cnt++;
     }
 
-    if (link_rx2_status <= RX_STATUS_INVALID) {
-        if (invalid2_cnt < 5) invalid2_cnt++;
-    } else {
+    if (rx2_valid) {
         if (invalid2_cnt) invalid2_cnt--;
+    } else {
+        // Only increment if the other band was also invalid (global failure)
+        if (!rx1_valid && invalid2_cnt < 5) invalid2_cnt++;
     }
 
     // now run the estimator
