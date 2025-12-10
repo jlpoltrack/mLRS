@@ -23,10 +23,12 @@
 
 #define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_IN
-#define DEVICE_HAS_NO_DEBUG
+//#define DEVICE_HAS_NO_DEBUG
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI
 #define DEVICE_HAS_SINGLE_LED_RGB
-#define DEVICE_HAS_SERIAL_OR_COM
+//#define DEVICE_HAS_SERIAL_OR_COM
+#define DEVICE_HAS_NO_SERIAL
+#define DEVICE_HAS_NO_COM
 #define DEVICE_HAS_FAN_ONOFF
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE  // requires backpack firmware to have AT mode enabled
@@ -75,6 +77,12 @@
 #define UARTE_USE_TX_IO            -1
 #define UARTE_USE_RX_IO            IO_P4
 #define UARTE_RXBUFSIZE            0  // RX FIFO = 128 + 1
+
+#define UARTF_USE_SERIAL // debug over USB
+#define UARTF_BAUD                TX_SERIAL_BAUDRATE
+#define UARTF_USE_TX_IO           IO_P1
+#define UARTF_USE_RX_IO           -1
+#define UARTF_TXBUFSIZE           256
 
 
 //-- SX1: LR11xx & SPI

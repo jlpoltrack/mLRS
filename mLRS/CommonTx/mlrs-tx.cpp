@@ -7,11 +7,16 @@
 // mLRS TX
 //*******************************************************
 
+#include <Arduino.h>
 
-#define DBG_MAIN(x)
+#define DBG_MAIN(x) 
 #define DBG_MAIN_SLIM(x)
 #define DEBUG_ENABLED
 #define FAIL_ENABLED
+
+// Uncomment to enable SPI contention debugging with old IRQ approach
+// When enabled, SPI operations are done in ISR to test for contention
+#define DEBUG_SPI_CONTENTION
 
 
 // we set the priorities here to have an overview, SysTick is at 15, I2C is at 15, USB is at 0
@@ -114,6 +119,7 @@
 #include "../Common/arq.h"
 #include "../Common/tasks.h"
 //#include "../Common/time_stats.h" // un-comment if you want to use
+#include "../Common/time_stats.h" // un-comment if you want to use
 //#include "../Common/test.h" // un-comment if you want to compile for board test
 
 #include "config_id.h"
@@ -306,24 +312,115 @@ void init_hw(void)
 // SX12xx
 //-------------------------------------------------------
 
+#ifdef DEBUG_SPI_CONTENTION
+volatile uint16_t irq_status;
+volatile uint16_t irq2_status;
+volatile bool spi_busy = false;
+volatile bool spi_contention_detected = false;
+volatile uint8_t spi_op = 0;  // Tracks which SPI operation is in progress
+volatile uint8_t spi_op_captured = 0;  // Captures spi_op at moment of contention
+volatile uint8_t spi_irq_source = 0;  // Which IRQ caused the contention (1=SX1, 2=SX2)
+volatile uint8_t spi_chip = 0;  // Which chip the current operation is for (1=SX1, 2=SX2)
+volatile uint8_t spi_chip_captured = 0;  // Captures spi_chip at moment of contention
+// SPI operation codes for debugging
+#define SPI_OP_NONE           0
+#define SPI_OP_INIT_FREQ      1  // Initial SetRfFrequency
+#define SPI_OP_TRANSMIT_FREQ  2  // SetRfFrequency before transmit
+#define SPI_OP_SEND_FRAME     3  // sxSendFrame
+#define SPI_OP_SET_TO_RX      4  // SetToRx
+#define SPI_OP_DO_RECEIVE     5  // do_receive (sxReadFrame + GetPacketStatus)
+#define SPI_OP_ISR_POLL       6  // Polling ISR flags (GetAndClearIrqStatus)
+
+const char* spi_op_name(uint8_t op) {
+    switch(op) {
+        case SPI_OP_INIT_FREQ:     return "INIT_FREQ";
+        case SPI_OP_TRANSMIT_FREQ: return "TRANSMIT_FREQ";
+        case SPI_OP_SEND_FRAME:    return "SEND_FRAME";
+        case SPI_OP_SET_TO_RX:     return "SET_TO_RX";
+        case SPI_OP_DO_RECEIVE:    return "DO_RECEIVE";
+        case SPI_OP_ISR_POLL:      return "ISR_POLL";
+        default:                   return "NONE";
+    }
+}
+
+const char* link_state_name(uint8_t state) {
+    switch(state) {
+        case LINK_STATE_IDLE:          return "IDLE";
+        case LINK_STATE_TRANSMIT:      return "TRANSMIT";
+        case LINK_STATE_TRANSMIT_SEND: return "TX_SEND";
+        case LINK_STATE_TRANSMIT_WAIT: return "TX_WAIT";
+        case LINK_STATE_RECEIVE:       return "RECEIVE";
+        case LINK_STATE_RECEIVE_WAIT:  return "RX_WAIT";
+        default:                       return "?";
+    }
+}
+#else
 uint16_t irq_status;
 uint16_t irq2_status;
-
 volatile bool isr_sx_flag = false;
 volatile bool isr_sx2_flag = false;
+#endif
 
 IRQHANDLER(
 void SX_DIO_EXTI_IRQHandler(void)
 {
     sx_dio_exti_isr_clearflag();
+#ifdef DEBUG_SPI_CONTENTION
+    // Old approach: do SPI in ISR to test for contention
+    if (spi_busy) {
+        spi_contention_detected = true;
+        spi_op_captured = spi_op;  // Capture which operation was running
+        spi_chip_captured = spi_chip;  // Capture which chip the operation was for
+        spi_irq_source = 1;  // SX1 IRQ caused the contention
+        return;  // Exit immediately to avoid actual SPI conflict
+    }
+    irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
+    if (irq_status & SX_IRQ_RX_DONE) {
+        if (bind.IsInBind()) {
+            uint64_t bind_signature;
+            sx.ReadBuffer(0, (uint8_t*)&bind_signature, 8);
+            if (bind_signature != bind.RxSignature) irq_status = 0;
+        } else {
+            uint16_t sync_word;
+            sx.ReadBuffer(0, (uint8_t*)&sync_word, 2);
+            if (sync_word != Config.FrameSyncWord) irq_status = 0;
+        }
+    }
+#else
+    // New approach: just set flag, SPI done in main loop
     isr_sx_flag = true;
+#endif
 })
 #ifdef USE_SX2
 IRQHANDLER(
 void SX2_DIO_EXTI_IRQHandler(void)
 {
     sx2_dio_exti_isr_clearflag();
+#ifdef DEBUG_SPI_CONTENTION
+    // Old approach: do SPI in ISR to test for contention
+    if (spi_busy) {
+        spi_contention_detected = true;
+        spi_op_captured = spi_op;  // Capture which operation was running
+        spi_chip_captured = spi_chip;  // Capture which chip the operation was for
+        spi_irq_source = 2;  // SX2 IRQ caused the contention
+        return;  // Exit immediately to avoid actual SPI conflict
+    }
+    irq2_status = sx2.GetAndClearIrqStatus(SX2_IRQ_ALL);
+    if (irq2_status & SX2_IRQ_RX_DONE) {
+        if (bind.IsInBind()) {
+            uint64_t bind_signature;
+            sx2.ReadBuffer(0, (uint8_t*)&bind_signature, 8);
+            if (bind_signature != bind.RxSignature) irq2_status = 0;
+        } else {
+            uint16_t sync_word;
+            sx2.ReadBuffer(0, (uint8_t*)&sync_word, 2);
+            if (sync_word != Config.FrameSyncWord) irq2_status = 0;
+        }
+    }
+#else
+    // New approach: just set flag, SPI done in main loop
     isr_sx2_flag = true;
+#endif
 })
 #endif
 
@@ -717,8 +814,17 @@ RESTARTCONTROLLER
     fhss.Start();
     rfpower.Init();
 
+#ifdef DEBUG_SPI_CONTENTION
+    spi_busy = true; spi_op = SPI_OP_INIT_FREQ; spi_chip = 1;
+#endif
     sx.SetRfFrequency(fhss.GetCurrFreq());
+#ifdef DEBUG_SPI_CONTENTION
+    spi_chip = 2;
+#endif
     sx2.SetRfFrequency(fhss.GetCurrFreq2());
+#ifdef DEBUG_SPI_CONTENTION
+    spi_busy = false; spi_op = SPI_OP_NONE; spi_chip = 0;
+#endif
 
     tx_tick = 0;
     isInTimeGuard = false;
@@ -769,6 +875,21 @@ RESTARTCONTROLLER
     resetSysTask(); // helps in avoiding too short first loop
 INITCONTROLLER_END
 
+#ifdef DEBUG_SPI_CONTENTION
+    //-- Check for SPI contention (DEBUG_SPI_CONTENTION enabled)
+    if (spi_contention_detected) {
+        spi_contention_detected = false;
+        dbg.puts("\n!!! SPI CONTENTION: SX");
+        dbg.puts(u8toBCD_s(spi_irq_source));
+        dbg.puts(" IRQ interrupted SX");
+        dbg.puts(u8toBCD_s(spi_chip_captured));
+        dbg.puts(" ");
+        dbg.puts(spi_op_name(spi_op_captured));
+        dbg.puts(" (");
+        dbg.puts(link_state_name(link_state));
+        dbg.puts(")\n");
+    }
+#else
     //-- Poll ISR flags safely in main loop
     if (isr_sx_flag) {
         isr_sx_flag = false;
@@ -801,6 +922,7 @@ INITCONTROLLER_END
             }
         }
     }
+#endif
 #endif
 
     //-- SysTask handling
@@ -843,8 +965,8 @@ INITCONTROLLER_END
             esp.Tick_ms();
 
             if (!tick_1hz) {
-                dbg.puts(".");
-/*                dbg.puts("\nTX: ");
+                //dbg.puts(".");
+                dbg.puts("\nTX: ");
                 dbg.puts(u8toBCD_s(stats.GetLQ_serial()));
                 dbg.puts("(");
                 dbg.puts(u8toBCD_s(stats.frames_received.GetLQ())); dbg.putc(',');
@@ -853,11 +975,15 @@ INITCONTROLLER_END
                 dbg.puts(u8toBCD_s(stats.received_LQ_rc)); dbg.puts(", ");
 
                 dbg.puts(s8toBCD_s(stats.last_rssi1)); dbg.putc(',');
-                dbg.puts(s8toBCD_s(stats.received_rssi)); dbg.puts(", ");
+                //dbg.puts(s8toBCD_s(stats.received_rssi)); dbg.puts(", ");
                 dbg.puts(s8toBCD_s(stats.last_snr1)); dbg.puts("; ");
 
+                dbg.puts(s8toBCD_s(stats.last_rssi2)); dbg.putc(',');
+                //dbg.puts(s8toBCD_s(stats.received_rssi)); dbg.puts(", ");
+                dbg.puts(s8toBCD_s(stats.last_snr2)); dbg.puts("; ");
+
                 dbg.puts(u16toBCD_s(stats.bytes_transmitted.GetBytesPerSec())); dbg.puts(", ");
-                dbg.puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec())); dbg.puts("; "); */
+                dbg.puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec())); dbg.puts("; ");
             }
         } // end of if (!doPreTransmit)
     }
@@ -880,9 +1006,21 @@ INITCONTROLLER_END
         if (dt < 750) break;
         isInTimeGuard = false;
         rfpower.Update();
+#ifdef DEBUG_SPI_CONTENTION
+        spi_busy = true; spi_op = SPI_OP_TRANSMIT_FREQ; spi_chip = 1;
+#endif
         sx.SetRfFrequency(fhss.GetCurrFreq());
+#ifdef DEBUG_SPI_CONTENTION
+        spi_chip = 2;
+#endif
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
+#ifdef DEBUG_SPI_CONTENTION
+        spi_op = SPI_OP_SEND_FRAME; spi_chip = 0;
+#endif
         do_transmit_send(tdiversity.Antenna());
+#ifdef DEBUG_SPI_CONTENTION
+        spi_busy = false; spi_op = SPI_OP_NONE;
+#endif
         link_state = LINK_STATE_TRANSMIT_WAIT;
         irq_status = irq2_status = 0;
         if (is_dual_band_frequency(Config.FrequencyBand)) {
@@ -899,8 +1037,17 @@ INITCONTROLLER_END
         break; }
 
     case LINK_STATE_RECEIVE:
+#ifdef DEBUG_SPI_CONTENTION
+        spi_busy = true; spi_op = SPI_OP_SET_TO_RX; spi_chip = 1;
+#endif
         IF_ANTENNA1(sx.SetToRx(0));
+#ifdef DEBUG_SPI_CONTENTION
+        spi_chip = 2;
+#endif
         IF_ANTENNA2(sx2.SetToRx(0));
+#ifdef DEBUG_SPI_CONTENTION
+        spi_busy = false; spi_op = SPI_OP_NONE; spi_chip = 0;
+#endif
         link_state = LINK_STATE_RECEIVE_WAIT;
         link_rx1_status = link_rx2_status = RX_STATUS_NONE;
         irq_status = irq2_status = 0;
@@ -923,7 +1070,13 @@ IF_SX(
         if (link_state == LINK_STATE_RECEIVE_WAIT) {
             if (irq_status & SX_IRQ_RX_DONE) {
                 irq_status = 0;
+#ifdef DEBUG_SPI_CONTENTION
+                spi_busy = true; spi_op = SPI_OP_DO_RECEIVE; spi_chip = 1;
+#endif
                 link_rx1_status = do_receive(ANTENNA_1);
+#ifdef DEBUG_SPI_CONTENTION
+                spi_busy = false; spi_op = SPI_OP_NONE; spi_chip = 0;
+#endif
                 DBG_MAIN_SLIM(dbg.puts("1<");)
             }
         }
@@ -961,7 +1114,13 @@ IF_SX2(
         if (link_state == LINK_STATE_RECEIVE_WAIT) {
             if (irq2_status & SX2_IRQ_RX_DONE) {
                 irq2_status = 0;
+#ifdef DEBUG_SPI_CONTENTION
+                spi_busy = true; spi_op = SPI_OP_DO_RECEIVE; spi_chip = 2;
+#endif
                 link_rx2_status = do_receive(ANTENNA_2);
+#ifdef DEBUG_SPI_CONTENTION
+                spi_busy = false; spi_op = SPI_OP_NONE; spi_chip = 0;
+#endif
                 DBG_MAIN_SLIM(dbg.puts("2<");)
             }
         }
