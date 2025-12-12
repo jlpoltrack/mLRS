@@ -710,6 +710,57 @@ class tFhss
     uint32_t GetCurrFreq(void) { return fhss1stBand.GetCurrFreq(); }
     uint32_t GetCurrFreq2(void) { return fhss2ndBand.GetCurrFreq(); }
 
+#if defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+    // D2.4G: compute freq2 as fhss1 +/- 40 MHz, respecting except zones
+    uint32_t GetCurrFreq2_D24G(uint8_t except)
+    {
+        uint32_t freq1 = fhss1stBand.GetCurrFreq();
+        uint32_t offset_40mhz = LR11XX_FREQ_GHZ_TO_REG(0.040);
+        uint32_t freq2_candidate = freq1 + offset_40mhz;
+        
+        // If freq2 exceeds 2.480 GHz, subtract offset instead
+        if (freq2_candidate > LR11XX_FREQ_GHZ_TO_REG(2.480)) {
+            freq2_candidate = freq1 - offset_40mhz;
+        }
+        
+        // Check if freq2 lands in an except (WiFi) zone - if so, flip direction
+        if (is_in_except_zone_d24g(freq2_candidate, except)) {
+            // Try opposite direction
+            if (freq2_candidate == freq1 + offset_40mhz) {
+                freq2_candidate = freq1 - offset_40mhz;
+            } else {
+                freq2_candidate = freq1 + offset_40mhz;
+            }
+            // If still in except zone or out of bounds, use fhss1 (same frequency fallback)
+            if (is_in_except_zone_d24g(freq2_candidate, except) || 
+                freq2_candidate < LR11XX_FREQ_GHZ_TO_REG(2.401) ||
+                freq2_candidate > LR11XX_FREQ_GHZ_TO_REG(2.480)) {
+                freq2_candidate = freq1; // fallback: same frequency on both chips
+            }
+        }
+        return freq2_candidate;
+    }
+
+  private:
+    // Helper to check if frequency is in WiFi except zone
+    bool is_in_except_zone_d24g(uint32_t freq, uint8_t except)
+    {
+        switch (except) {
+        case EXCEPT_2P4_GHZ_WIFIBAND_1:  // 2.401-2.423 GHz
+            return (freq >= LR11XX_FREQ_GHZ_TO_REG(2.401) && freq <= LR11XX_FREQ_GHZ_TO_REG(2.423));
+        case EXCEPT_2P4_GHZ_WIFIBAND_6:  // 2.426-2.448 GHz
+            return (freq >= LR11XX_FREQ_GHZ_TO_REG(2.426) && freq <= LR11XX_FREQ_GHZ_TO_REG(2.448));
+        case EXCEPT_2P4_GHZ_WIFIBAND_11: // 2.451-2.473 GHz
+            return (freq >= LR11XX_FREQ_GHZ_TO_REG(2.451) && freq <= LR11XX_FREQ_GHZ_TO_REG(2.473));
+        case EXCEPT_2P4_GHZ_WIFIBAND_13: // 2.461-2.483 GHz
+            return (freq >= LR11XX_FREQ_GHZ_TO_REG(2.461) && freq <= LR11XX_FREQ_GHZ_TO_REG(2.483));
+        default:
+            return false;
+        }
+    }
+  public:
+#endif
+
     void SetToBind(uint16_t frame_rate_ms = 1) // preset so it is good for transmitter
     {
         fhss1stBand.SetToBind(frame_rate_ms);

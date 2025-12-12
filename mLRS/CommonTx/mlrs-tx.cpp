@@ -718,7 +718,15 @@ RESTARTCONTROLLER
     rfpower.Init();
 
     sx.SetRfFrequency(fhss.GetCurrFreq());
+#if defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+    if (is_dual_24g_frequency(Config.FrequencyBand)) {
+        sx2.SetRfFrequency(fhss.GetCurrFreq2_D24G(Config.Fhss2.Except));
+    } else {
+        sx2.SetRfFrequency(fhss.GetCurrFreq2());
+    }
+#else
     sx2.SetRfFrequency(fhss.GetCurrFreq2());
+#endif
 
     tx_tick = 0;
     isInTimeGuard = false;
@@ -881,7 +889,15 @@ INITCONTROLLER_END
         isInTimeGuard = false;
         rfpower.Update();
         sx.SetRfFrequency(fhss.GetCurrFreq());
+#if defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+        if (is_dual_24g_frequency(Config.FrequencyBand)) {
+            sx2.SetRfFrequency(fhss.GetCurrFreq2_D24G(Config.Fhss2.Except));
+        } else {
+            sx2.SetRfFrequency(fhss.GetCurrFreq2());
+        }
+#else
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
+#endif
         do_transmit_send(tdiversity.Antenna());
         link_state = LINK_STATE_TRANSMIT_WAIT;
         irq_status = irq2_status = 0;

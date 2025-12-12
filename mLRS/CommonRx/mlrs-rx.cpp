@@ -540,7 +540,15 @@ RESTARTCONTROLLER
     rfpower.Init();
 
     sx.SetRfFrequency(fhss.GetCurrFreq());
+#if defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+    if (is_dual_24g_frequency(Config.FrequencyBand)) {
+        sx2.SetRfFrequency(fhss.GetCurrFreq2_D24G(Config.Fhss2.Except));
+    } else {
+        sx2.SetRfFrequency(fhss.GetCurrFreq2());
+    }
+#else
     sx2.SetRfFrequency(fhss.GetCurrFreq2());
+#endif
 
     link_state = LINK_STATE_RECEIVE;
     connect_state = CONNECT_STATE_LISTEN;
@@ -653,7 +661,15 @@ INITCONTROLLER_END
             fhss.HopToNext();
         }
         sx.SetRfFrequency(fhss.GetCurrFreq());
+#if defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+        if (is_dual_24g_frequency(Config.FrequencyBand)) {
+            sx2.SetRfFrequency(fhss.GetCurrFreq2_D24G(Config.Fhss2.Except));
+        } else {
+            sx2.SetRfFrequency(fhss.GetCurrFreq2());
+        }
+#else
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
+#endif
         IF_ANTENNA1(sx.SetToRx(0)); // single without tmo
         IF_ANTENNA2(sx2.SetToRx(0));
         link_state = LINK_STATE_RECEIVE_WAIT;

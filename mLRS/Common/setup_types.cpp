@@ -22,6 +22,7 @@ SX_FHSS_CONFIG_FREQUENCY_BAND_ENUM cvt_to_sx_fhss_frequency_band(uint8_t setup_f
         case SETUP_FREQUENCY_BAND_866_MHZ_IN: return SX_FHSS_CONFIG_FREQUENCY_BAND_866_MHZ_IN;
         case SETUP_FREQUENCY_BAND_915_MHZ_FCC_PLUS_2P4_GHZ: return SX_FHSS_CONFIG_FREQUENCY_BAND_915_MHZ_FCC;
         case SETUP_FREQUENCY_BAND_868_MHZ_PLUS_2P4_GHZ: return SX_FHSS_CONFIG_FREQUENCY_BAND_868_MHZ;
+        case SETUP_FREQUENCY_BAND_D2P4_GHZ: return SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ;
         default: while(1){}
     }
 }
@@ -44,5 +45,12 @@ SETUP_FREQUENCY_BAND_ENUM cvt_to_setup_frequency_band(uint8_t sx_fhss_frequency_
 bool is_dual_band_frequency(uint8_t setup_frequency_band)
 {
     return (setup_frequency_band == SETUP_FREQUENCY_BAND_915_MHZ_FCC_PLUS_2P4_GHZ ||
-            setup_frequency_band == SETUP_FREQUENCY_BAND_868_MHZ_PLUS_2P4_GHZ);
+            setup_frequency_band == SETUP_FREQUENCY_BAND_868_MHZ_PLUS_2P4_GHZ ||
+            setup_frequency_band == SETUP_FREQUENCY_BAND_D2P4_GHZ);
+}
+
+
+bool is_dual_24g_frequency(uint8_t setup_frequency_band)
+{
+    return (setup_frequency_band == SETUP_FREQUENCY_BAND_D2P4_GHZ);
 }

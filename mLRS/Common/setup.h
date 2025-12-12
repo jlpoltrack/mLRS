@@ -51,8 +51,8 @@ void setup_configure_metadata(void)
 #elif defined DEVICE_HAS_LR11xx
   #if defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ
     #if defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
-    // DUALBAND + MULTIBAND  - enable dual-band frequencies (915+2.4, 868+2.4)
-    SetupMetaData.FrequencyBand_allowed_mask = 0b11000111; // 2.4 GHz, 915 FCC, 868, 915+2.4, 868+2.4
+    // DUALBAND + MULTIBAND  - enable dual-band frequencies (915+2.4, 868+2.4, D2.4)
+    SetupMetaData.FrequencyBand_allowed_mask = 0b111000111; // 2.4 GHz, 915 FCC, 868, 915+2.4, 868+2.4, D2.4
     #else
     // MULTIBAND 2.4 GHz & 868/915 MHz
     SetupMetaData.FrequencyBand_allowed_mask = 0b00000111; // 2.4 GHz, 915 FCC, 868
@@ -379,7 +379,8 @@ void setup_sanitize_config(uint8_t config_id)
     // we now know the frequency band, so can adjust the allowed mask for Mode and Ortho (Ortho is done below)
     switch (Setup.Common[config_id].FrequencyBand) {
     case SETUP_FREQUENCY_BAND_2P4_GHZ:
-        SetupMetaData.Mode_allowed_mask &= 0b000111; // filter down to 50 Hz, 31 Hz, 19 Hz
+    case SETUP_FREQUENCY_BAND_D2P4_GHZ: // D2.4G supports same modes as 2.4G
+        SetupMetaData.Mode_allowed_mask &= 0b001111; // filter down to 50 Hz, 31 Hz, 19 Hz, FLRC
         break;
     case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
     case SETUP_FREQUENCY_BAND_868_MHZ:
@@ -643,20 +644,45 @@ void configure_mode(uint8_t mode, uint8_t frequencyband)
     // DUALBAND 868/915 MHz & 433 MHz
     // nothing to do, is the same as for 868/915
 #elif defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
-    // need to set sx2 to 2.4 modes if dual-band frequency 
+    // need to set sx2 to 2.4 modes if dual-band or D2.4G frequency 
     if (is_dual_band_frequency(frequencyband))
     {
-        switch (Config.Mode) {
-        case MODE_31HZ:
-            Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF6_CR4_5;
-            Config.Sx2.is_lora = true;
-            break;
-        case MODE_19HZ:
-            Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF7_CR4_5;
-            Config.Sx2.is_lora = true;
-            break;
-        default:
-            while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+        if (is_dual_24g_frequency(frequencyband)) {
+            // D2.4G - both SX chips on 2.4 GHz, support all 2.4 GHz modes
+            switch (Config.Mode) {
+            case MODE_50HZ:
+                Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF5_CR4_5;
+                Config.Sx2.is_lora = true;
+                break;
+            case MODE_31HZ:
+                Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF6_CR4_5;
+                Config.Sx2.is_lora = true;
+                break;
+            case MODE_19HZ:
+                Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF7_CR4_5;
+                Config.Sx2.is_lora = true;
+                break;
+            case MODE_FLRC_111HZ:
+                Config.Sx2.LoraConfigIndex = 0;
+                Config.Sx2.is_lora = false;
+                break;
+            default:
+                while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+            }
+        } else {
+            // 915+2.4 or 868+2.4 - SX1 on sub-GHz, SX2 on 2.4 GHz
+            switch (Config.Mode) {
+            case MODE_31HZ:
+                Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF6_CR4_5;
+                Config.Sx2.is_lora = true;
+                break;
+            case MODE_19HZ:
+                Config.Sx2.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF7_CR4_5;
+                Config.Sx2.is_lora = true;
+                break;
+            default:
+                while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+            }
         }
     }
 #endif
@@ -865,16 +891,29 @@ void setup_configure_config(uint8_t config_id)
     Config.Fhss2.FrequencyBand_allowed_mask = (1 << SX_FHSS_CONFIG_FREQUENCY_BAND_433_MHZ);
     Config.Fhss2.Num = FHSS_NUM_BAND_433_MHZ;
 #elif defined DEVICE_HAS_LR11xx && defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
-    // need to set sx2 to 2.4 fhss if dual-band frequency 
+    // need to set sx2 to 2.4 fhss if dual-band or D2.4G frequency 
     if (is_dual_band_frequency(Config.FrequencyBand)) {
         Config.Fhss2.FrequencyBand = SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ;
         Config.Fhss2.FrequencyBand_allowed_mask = (1 << SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ);
         Config.Fhss2.Except = except_from_bindphrase(Setup.Common[config_id].BindPhrase);
-        switch (Config.Mode) {
-        case MODE_31HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_31HZ_MODE; break;
-        case MODE_19HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_19HZ_MODE; break;
-        default:
-            while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+        if (is_dual_24g_frequency(Config.FrequencyBand)) {
+            // D2.4G - both chips on 2.4 GHz with all modes
+            switch (Config.Mode) {
+            case MODE_50HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ; break;
+            case MODE_31HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_31HZ_MODE; break;
+            case MODE_19HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_19HZ_MODE; break;
+            case MODE_FLRC_111HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ; break;
+            default:
+                while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+            }
+        } else {
+            // 915+2.4 or 868+2.4
+            switch (Config.Mode) {
+            case MODE_31HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_31HZ_MODE; break;
+            case MODE_19HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_19HZ_MODE; break;
+            default:
+                while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+            }
         }
     }
 #endif
