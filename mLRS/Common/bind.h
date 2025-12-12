@@ -148,7 +148,7 @@ void tBindBase::HopToNextBind(uint16_t frequency_band) // SETUP_FREQUENCY_BAND_E
 
     // if both 19Hz and 19Hz7X are set, we need to cycle with toggles
     if ((mode_allowed_mask & (1 << MODE_19HZ)) && (mode_allowed_mask & (1 << MODE_19HZ_7X))) {
-        if (frequency_band == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+        if (frequency_band == SETUP_FREQUENCY_BAND_2P4_GHZ || frequency_band == SETUP_FREQUENCY_BAND_D2P4_GHZ) {
             configure_mode(MODE_19HZ, frequency_band);
         } else {
             if (mode_mask & (1 << frequency_band)) {
