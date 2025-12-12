@@ -213,6 +213,9 @@ void SX2_DIO_EXTI_IRQHandler(void)
 uint8_t link_rx1_status;
 uint8_t link_rx2_status;
 
+bool tx1_done;  // tracks TX completion for sx1 in dual-band
+bool tx2_done;  // tracks TX completion for sx2 in dual-band
+
 
 //-- Tx/Rx cmd frame handling
 
@@ -649,6 +652,13 @@ INITCONTROLLER_END
         do_transmit(tdiversity.Antenna());
         link_state = LINK_STATE_TRANSMIT_WAIT;
         irq_status = irq2_status = 0; // important, in low connection condition, RxDone isr could trigger
+        if (is_dual_band_frequency(Config.FrequencyBand)) {
+            tx1_done = tx2_done = false;
+        } else {
+            // Single radio or diversity: only one transmits
+            tx1_done = (tdiversity.Antenna() != ANTENNA_1);  // already "done" if not used
+            tx2_done = (tdiversity.Antenna() != ANTENNA_2);
+        }
         DBG_MAIN_SLIM(dbg.puts("t");)
         break;
     }//end of switch(link_state)
@@ -658,7 +668,10 @@ IF_SX(
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
                 irq_status = 0;
-                link_state = LINK_STATE_RECEIVE;
+                tx1_done = true;
+                if (tx1_done && tx2_done) {
+                    link_state = LINK_STATE_RECEIVE;
+                }
                 DBG_MAIN_SLIM(dbg.puts("1<");)
             }
         } else
@@ -694,7 +707,10 @@ IF_SX2(
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 irq2_status = 0;
-                link_state = LINK_STATE_RECEIVE;
+                tx2_done = true;
+                if (tx1_done && tx2_done) {
+                    link_state = LINK_STATE_RECEIVE;
+                }
                 DBG_MAIN_SLIM(dbg.puts("2<");)
             }
         } else

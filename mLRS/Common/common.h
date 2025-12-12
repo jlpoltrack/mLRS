@@ -244,7 +244,23 @@ void sxReadFrame(uint8_t antenna, void* const data, void* const data2, uint8_t l
 
 void sxSendFrame(uint8_t antenna, void* const data, uint8_t len, uint16_t tmo_ms)
 {
-#if !defined DEVICE_HAS_DUAL_SX126x_SX128x && !defined DEVICE_HAS_DUAL_SX126x_SX126x // SINGLE BAND
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    // DUALBAND 2.4 GHz & 868/915 MHz - respect antenna configuration
+    // For dual-band: both TRANSMIT_USE flags are true, send on both
+    // For single-band 2.4 GHz: only TRANSMIT_USE_ANTENNA2 is true
+    // For single-band sub-GHz: only TRANSMIT_USE_ANTENNA1 is true
+    if (TRANSMIT_USE_ANTENNA2) {
+        sx2.SendFrame((uint8_t*)data, len, tmo_ms);
+    }
+    if (TRANSMIT_USE_ANTENNA1) {
+        sx.SendFrame((uint8_t*)data, len, tmo_ms);
+    }
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+    // DUALBAND 868/915 MHz & 433 MHz - always send on both
+    sx2.SendFrame((uint8_t*)data, len, tmo_ms);
+    sx.SendFrame((uint8_t*)data, len, tmo_ms);
+#else
+    // single-band configuration: normal diversity operation
     if (antenna == ANTENNA_1) {
         sx.SendFrame((uint8_t*)data, len, tmo_ms);
         sx2.SetToIdle();
@@ -252,9 +268,6 @@ void sxSendFrame(uint8_t antenna, void* const data, uint8_t len, uint16_t tmo_ms
         sx2.SendFrame((uint8_t*)data, len, tmo_ms);
         sx.SetToIdle();
     }
-#else
-    sx.SendFrame((uint8_t*)data, len, tmo_ms);
-    sx2.SendFrame((uint8_t*)data, len, tmo_ms);
 #endif
 }
 
