@@ -551,8 +551,14 @@ RESTARTCONTROLLER
     if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
     if (!sx2.isOk()) { FAILALWAYS(BLINK_GR_RD_OFF, "Sx2 not ok"); } // fail!
     irq_status = irq2_status = 0;
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
+    // Always start both chips - both are physically present and needed for bind/config
+    sx.StartUp(&Config.Sx);
+    sx2.StartUp(&Config.Sx2);
+#else
     IF_SX(sx.StartUp(&Config.Sx));
     IF_SX2(sx2.StartUp(&Config.Sx2));
+#endif
     bind.Init();
     fhss.Init(&Config.Fhss, &Config.Fhss2);
     fhss.Start();
@@ -577,6 +583,14 @@ RESTARTCONTROLLER
     stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
     rdiversity.Init();
     tdiversity.Init(Config.frame_rate_ms);
+    // Set initial antenna based on configuration (important for single-band 2.4 GHz)
+    if (TRANSMIT_USE_ANTENNA1 && TRANSMIT_USE_ANTENNA2) {
+        // both antennas, keep default (ANTENNA_1)
+    } else if (TRANSMIT_USE_ANTENNA2) {
+        tdiversity.SetAntenna(ANTENNA_2);
+    } else {
+        tdiversity.SetAntenna(ANTENNA_1);
+    }
     tarq.Init();
 
     out.Configure(Setup.Rx.OutMode);

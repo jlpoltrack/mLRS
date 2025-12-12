@@ -19,6 +19,7 @@
 #define DEVICE_HAS_I2C_DISPLAY_ROT180
 //#define DEVICE_HAS_SERIAL2
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE  // requires backpack firmware to have AT mode enabled
 #define DEVICE_HAS_COM_ON_USB // com USB/CLI
 //#define DEVICE_HAS_NO_DEBUG
 

@@ -9,7 +9,6 @@
 
 #include "common_conf.h"
 #include "hal/device_conf.h"
-#include "hal/hal.h"
 #include "common_types.h"
 #include "link_types.h"
 #include "diversity.h"
@@ -136,14 +135,7 @@ void tTDiversity::Init(uint16_t _frame_rate_ms)
 
     _seed = 12345; // just use something smaller than m-1
 
-    // Set initial antenna based on configuration (important for single-band 2.4 GHz on dual-band hardware)
-    if (TRANSMIT_USE_ANTENNA1 && TRANSMIT_USE_ANTENNA2) {
-        proposed_antenna = ANTENNA_1;  // both antennas available, default to 1
-    } else if (TRANSMIT_USE_ANTENNA2) {
-        proposed_antenna = ANTENNA_2;
-    } else {
-        proposed_antenna = ANTENNA_1;
-    }
+    proposed_antenna = ANTENNA_1;
 }
 
 

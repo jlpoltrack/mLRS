@@ -28,12 +28,13 @@ void setup_configure_metadata(void)
 {
     SetupMetaData = {};
 
-    //-- FrequencyBand: "2.4,915 FCC,868,433,70,866 IN,915+2.4,868+2.4"
+    //-- FrequencyBand: "2.4,915 FCC,868,433,70,866 IN"
     // also define the default setting for use below in setup_sanitize_config()
 //** dual band
 #if defined DEVICE_HAS_DUAL_SX126x_SX128x
   // DUALBAND 2.4 GHz & 868/915 MHz
   #if defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ
+    // Bits: 0=2.4, 1=915, 2=868, 6=915+2.4, 7=868+2.4
     SetupMetaData.FrequencyBand_allowed_mask = 0b11000111; // 2.4, 915 FCC, 868, 915+2.4, 868+2.4
     #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
   #else
@@ -907,19 +908,29 @@ void setup_configure_config(uint8_t config_id)
     Config.Fhss2 = Config.Fhss;
 
 #ifdef DEVICE_HAS_DUAL_SX126x_SX128x
-    if (is_dual_band_frequency(Config.FrequencyBand) || Config.FrequencyBand == SETUP_FREQUENCY_BAND_2P4_GHZ) {
-        // Dual-band or single-band 2.4 GHz: configure FHSS2 for 2.4 GHz
+    // DUALBAND 2.4 GHz & 868/915 MHz
+    if (is_dual_band_frequency(Config.FrequencyBand)) {
+        // Dual-band mode: configure FHSS2 for 2.4 GHz
         Config.Fhss2.FrequencyBand = SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ;
         Config.Fhss2.FrequencyBand_allowed_mask = (1 << SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ);
         Config.Fhss2.Except = except_from_bindphrase(Setup.Common[config_id].BindPhrase);
-        
+        switch (Config.Mode) {
+        case MODE_31HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_31HZ_MODE; break;
+        case MODE_19HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_19HZ_MODE; break;
+        default:
+            while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+        }
+    } else if (Config.FrequencyBand == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+        // Single-band 2.4 GHz: FHSS2 same as FHSS
+        Config.Fhss2.FrequencyBand = SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ;
+        Config.Fhss2.FrequencyBand_allowed_mask = (1 << SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ);
         switch (Config.Mode) {
         case MODE_50HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ; break;
         case MODE_31HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_31HZ_MODE; break;
         case MODE_19HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ_19HZ_MODE; break;
         case MODE_FLRC_111HZ: Config.Fhss2.Num = FHSS_NUM_BAND_2P4_GHZ; break;
         default:
-            while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+            Config.Fhss2.Num = 1;
         }
     }
     // else: single-band sub-GHz, FHSS2 already set from FHSS
@@ -934,10 +945,13 @@ void setup_configure_config(uint8_t config_id)
 
     Config.connect_tmo_systicks = SYSTICK_DELAY_MS(CONNECT_TMO_MS);
 
-    // Use the larger FHSS Num for connection timing (dual-band uses whichever has more channels)
-    uint8_t fhss_num_max = (Config.Fhss.Num >= Config.Fhss2.Num) ? Config.Fhss.Num : Config.Fhss2.Num;
-    Config.connect_listen_hop_cnt = (uint8_t)(1.5f * fhss_num_max);
-    Config.connect_sync_cnt_max = fhss_num_max / 2;
+    if (Config.Fhss.Num >= Config.Fhss2.Num) { // HMMM, requires that Num is set to something low when not used !!
+        Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss.Num);
+        Config.connect_sync_cnt_max = Config.Fhss.Num / 2;
+    } else {
+        Config.connect_sync_cnt_max = Config.Fhss2.Num / 2;
+        Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss2.Num);
+    }
     if (Config.connect_sync_cnt_max < CONNECT_SYNC_CNT) Config.connect_sync_cnt_max = CONNECT_SYNC_CNT;
 
     Config.LQAveragingPeriod = (LQ_AVERAGING_MS/Config.frame_rate_ms);

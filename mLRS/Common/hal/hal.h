@@ -103,8 +103,13 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
 #endif
 
 #ifdef TX_MATEK_MTX_DB30_G474CE
-#include "matek/tx-hal-matek-mtx-db30-g474ce.h"
+  #ifdef DEVICE_HAS_SX128x
+  #include "matek/tx-hal-matek-mtx-db30-g474ce-sx128x.h"
+  #else
+  #include "matek/tx-hal-matek-mtx-db30-g474ce.h"
+  #endif
 #endif
+
 
 #ifdef RX_MATEK_MR24_30_G431KB
 #include "matek/rx-hal-matek-mr24-30-g431kb.h"

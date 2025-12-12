@@ -678,7 +678,7 @@ class tFhss : public tFhssBase
 };
 
 #else
-// DUALBAND !
+// DUALBAND! MULTIBAND!
 
 class tFhss
 {
