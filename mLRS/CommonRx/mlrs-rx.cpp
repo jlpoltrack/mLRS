@@ -213,6 +213,9 @@ void SX2_DIO_EXTI_IRQHandler(void)
 uint8_t link_rx1_status;
 uint8_t link_rx2_status;
 
+bool tx1_done;  // tracks TX completion for sx1 in dual-band
+bool tx2_done;  // tracks TX completion for sx2 in dual-band
+
 
 //-- Tx/Rx cmd frame handling
 
@@ -574,6 +577,12 @@ RESTARTCONTROLLER
     stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
     rdiversity.Init();
     tdiversity.Init(Config.frame_rate_ms);
+    // set initial antenna based on configuration (important for single-band 2.4 GHz on dual-band hardware)
+    if (TRANSMIT_USE_ANTENNA1 && TRANSMIT_USE_ANTENNA2) {
+        // both antennas available, keep default ANTENNA_1
+    } else if (TRANSMIT_USE_ANTENNA2) {
+        tdiversity.SetAntenna(ANTENNA_2);
+    }
     tarq.Init();
 
     out.Configure(Setup.Rx.OutMode);
@@ -607,8 +616,8 @@ INITCONTROLLER_END
         dronecan.Tick_ms();
 
         if (!tick_1hz) {
-            dbg.puts(".");
-/*            dbg.puts("\nRX: ");
+            //dbg.puts(".");
+            dbg.puts("\nRX: ");
             dbg.puts(u8toBCD_s(stats.GetLQ_rc())); dbg.putc(',');
             dbg.puts(u8toBCD_s(stats.GetLQ_serial()));
             dbg.puts(" (");
@@ -622,8 +631,11 @@ INITCONTROLLER_END
             dbg.puts(s8toBCD_s(stats.received_rssi)); dbg.puts(", ");
             dbg.puts(s8toBCD_s(stats.last_snr1)); dbg.puts("; ");
 
+            dbg.puts(s8toBCD_s(stats.last_rssi2)); dbg.putc(',');
+            dbg.puts(s8toBCD_s(stats.last_snr2)); dbg.puts("; ");
+
             dbg.puts(u16toBCD_s(stats.bytes_transmitted.GetBytesPerSec())); dbg.puts(", ");
-            dbg.puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec())); dbg.puts("; "); */
+            dbg.puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec())); dbg.puts("; ");
         }
     }
 
@@ -649,6 +661,13 @@ INITCONTROLLER_END
         do_transmit(tdiversity.Antenna());
         link_state = LINK_STATE_TRANSMIT_WAIT;
         irq_status = irq2_status = 0; // important, in low connection condition, RxDone isr could trigger
+        if (is_dual_band_frequency(Config.FrequencyBand)) {
+            tx1_done = tx2_done = false;
+        } else {
+            // single radio or diversity: only one transmits
+            tx1_done = (tdiversity.Antenna() != ANTENNA_1);  // already "done" if not used
+            tx2_done = (tdiversity.Antenna() != ANTENNA_2);
+        }
         DBG_MAIN_SLIM(dbg.puts("t");)
         break;
     }//end of switch(link_state)
@@ -658,7 +677,10 @@ IF_SX(
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
                 irq_status = 0;
-                link_state = LINK_STATE_RECEIVE;
+                tx1_done = true;
+                if (tx1_done && tx2_done) {
+                    link_state = LINK_STATE_RECEIVE;
+                }
                 DBG_MAIN_SLIM(dbg.puts("1<");)
             }
         } else
@@ -694,7 +716,10 @@ IF_SX2(
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 irq2_status = 0;
-                link_state = LINK_STATE_RECEIVE;
+                tx2_done = true;
+                if (tx1_done && tx2_done) {
+                    link_state = LINK_STATE_RECEIVE;
+                }
                 DBG_MAIN_SLIM(dbg.puts("2<");)
             }
         } else
@@ -901,7 +926,7 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
             link_state = LINK_STATE_RECEIVE;
             break;
         case BIND_TASK_RX_STORE_PARAMS:
-            Setup.Common[0].FrequencyBand = fhss.GetCurrBindSetupFrequencyBand();
+            // FrequencyBand is already set in bind.handle_receive() from the bind frame
             doParamsStore = true;
             break;
         }

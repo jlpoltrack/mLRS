@@ -31,6 +31,8 @@ typedef enum : uint8_t {
     SETUP_FREQUENCY_BAND_433_MHZ,
     SETUP_FREQUENCY_BAND_70_CM_HAM,
     SETUP_FREQUENCY_BAND_866_MHZ_IN,
+    SETUP_FREQUENCY_BAND_915_MHZ_FCC_PLUS_2P4_GHZ, // dual-band: 915 on SX1, 2.4 on SX2
+    SETUP_FREQUENCY_BAND_868_MHZ_PLUS_2P4_GHZ, // dual-band: 868 on SX1, 2.4 on SX2
     SETUP_FREQUENCY_BAND_NUM,
 } SETUP_FREQUENCY_BAND_ENUM;
 
@@ -51,6 +53,7 @@ typedef enum : uint8_t {
 
 SX_FHSS_CONFIG_FREQUENCY_BAND_ENUM cvt_to_sx_fhss_frequency_band(uint8_t setup_frequency_band);
 SETUP_FREQUENCY_BAND_ENUM cvt_to_setup_frequency_band(uint8_t sx_fhss_frequency_band);
+bool is_dual_band_frequency(uint8_t setup_frequency_band);
 
 
 typedef enum {
@@ -60,6 +63,7 @@ typedef enum {
     MODE_FLRC_111HZ,
     MODE_FSK_50HZ,
     MODE_19HZ_7X,
+    MODE_DUALBAND_FSK_50HZ,  // FSK on SX126x (sub-GHz), LoRa on SX128x (2.4 GHz)
     MODE_NUM,
 } MODE_ENUM;
 
@@ -178,12 +182,14 @@ typedef enum {
     SERIAL_DESTINATION_SERIAL = 0,
     SERIAL_DESTINATION_SERIAL2,
     SERIAL_DESTINATION_MBRDIGE,
+    SERIAL_DESTINATION_USB,
     SERIAL_DESTINATION_NUM,
 } TX_SERIAL_DESTINATION_ENUM;
 typedef enum {
     L0329_SERIAL_DESTINATION_SERIAL = 0,
     L0329_SERIAL_DESTINATION_MBRDIGE,
     L0329_SERIAL_DESTINATION_SERIAL2,
+    L0329_SERIAL_DESTINATION_USB,
     L0329_SERIAL_DESTINATION_NUM,
 } L0329_TX_SERIAL_DESTINATION_ENUM;
 

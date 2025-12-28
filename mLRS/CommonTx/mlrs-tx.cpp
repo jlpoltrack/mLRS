@@ -350,6 +350,9 @@ void SX2_DIO_EXTI_IRQHandler(void)
 uint8_t link_rx1_status;
 uint8_t link_rx2_status;
 
+bool tx1_done;  // tracks TX completion for sx1 in dual-band
+bool tx2_done;  // tracks TX completion for sx2 in dual-band
+
 
 //-- Tx/Rx cmd frame handling
 
@@ -752,6 +755,12 @@ RESTARTCONTROLLER
     stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
     rdiversity.Init();
     tdiversity.Init(Config.frame_rate_ms);
+    // set initial antenna based on configuration (important for single-band 2.4 GHz on dual-band hardware)
+    if (TRANSMIT_USE_ANTENNA1 && TRANSMIT_USE_ANTENNA2) {
+        // both antennas available, keep default ANTENNA_1
+    } else if (TRANSMIT_USE_ANTENNA2) {
+        tdiversity.SetAntenna(ANTENNA_2);
+    }
     rarq.Init();
 
     in.Configure(Setup.Tx[Config.ConfigId].InMode);
@@ -771,12 +780,36 @@ RESTARTCONTROLLER
 #else
     hc04.Init(&comport, &serial, Config.SerialBaudrate);
 #endif
-    fan.SetPower(sx.RfPower_dbm());
+    fan.SetPower((TRANSMIT_USE_ANTENNA1) ? sx.RfPower_dbm() : sx2.RfPower_dbm());
     whileTransmit.Init();
     disp.Init();
     tasks.Init();
 
     config_id.Init();
+
+dbg.puts("\nConfig.Diversity: ");dbg.puts(u8toBCD_s(Config.Diversity));
+dbg.puts("\nConfig.ReceiveUseAntenna1: ");dbg.puts(u8toBCD_s(Config.ReceiveUseAntenna1));
+dbg.puts("\nConfig.ReceiveUseAntenna2: ");dbg.puts(u8toBCD_s(Config.ReceiveUseAntenna2));
+dbg.puts("\nConfig.TransmitUseAntenna1: ");dbg.puts(u8toBCD_s(Config.TransmitUseAntenna1));
+dbg.puts("\nConfig.TransmitUseAntenna2: ");dbg.puts(u8toBCD_s(Config.TransmitUseAntenna2));
+
+dbg.puts("\n\nConfig.FrequencyBand: ");dbg.puts(u8toBCD_s(Config.FrequencyBand));
+dbg.puts("\nConfig.Sx.FrequencyBand: ");dbg.puts(u8toBCD_s(Config.Sx.FrequencyBand));
+dbg.puts("\nConfig.Sx2.FrequencyBand: ");dbg.puts(u8toBCD_s(Config.Sx2.FrequencyBand));
+
+dbg.puts("\n\nConfig.Fhss.FrequencyBand: ");dbg.puts(u8toBCD_s(Config.Fhss.FrequencyBand));
+dbg.puts("\nConfig.Fhss.FrequencyBand_allowed_mask: x");dbg.puts(u8toHEX_s(Config.Fhss.FrequencyBand_allowed_mask));
+dbg.puts("\nConfig.Fhss.Num: ");dbg.puts(u8toBCD_s(Config.Fhss.Num));
+
+dbg.puts("\n\nConfig.Fhss2.FrequencyBand: ");dbg.puts(u8toBCD_s(Config.Fhss2.FrequencyBand));
+dbg.puts("\nConfig.Fhss2.FrequencyBand_allowed_mask: x");dbg.puts(u8toHEX_s(Config.Fhss2.FrequencyBand_allowed_mask));
+dbg.puts("\nConfig.Fhss2.Num: ");dbg.puts(u8toBCD_s(Config.Fhss2.Num));
+
+dbg.puts("\n\nConfig.connect_listen_hop_cnt: ");dbg.puts(u8toBCD_s(Config.connect_listen_hop_cnt));
+dbg.puts("\nConfig.connect_sync_cnt_max: ");dbg.puts(u8toBCD_s(Config.connect_sync_cnt_max));
+
+dbg.puts("\n\n");
+
 
     rc_data_updated = false;
 
@@ -820,7 +853,7 @@ INITCONTROLLER_END
 
             bind.Tick_ms();
             disp.Tick_ms(); // can take long
-            fan.SetPower(sx.RfPower_dbm());
+            fan.SetPower((TRANSMIT_USE_ANTENNA1) ? sx.RfPower_dbm() : sx2.RfPower_dbm());
             fan.Tick_ms();
             esp.Tick_ms();
 
@@ -867,6 +900,13 @@ INITCONTROLLER_END
         do_transmit_send(tdiversity.Antenna());
         link_state = LINK_STATE_TRANSMIT_WAIT;
         irq_status = irq2_status = 0;
+        if (is_dual_band_frequency(Config.FrequencyBand)) {
+            tx1_done = tx2_done = false;
+        } else {
+            // single radio or diversity: only one transmits
+            tx1_done = (tdiversity.Antenna() != ANTENNA_1);  // already "done" if not used
+            tx2_done = (tdiversity.Antenna() != ANTENNA_2);
+        }
         DBG_MAIN_SLIM(dbg.puts(">");)
         // auxiliaries
         crsf.TelemetryStart();
@@ -888,7 +928,10 @@ IF_SX(
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
                 irq_status = 0;
-                link_state = LINK_STATE_RECEIVE;
+                tx1_done = true;
+                if (tx1_done && tx2_done) {
+                    link_state = LINK_STATE_RECEIVE;
+                }
                 DBG_MAIN_SLIM(dbg.puts("1!");)
             }
         } else
@@ -921,7 +964,10 @@ IF_SX2(
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 irq2_status = 0;
-                link_state = LINK_STATE_RECEIVE;
+                tx2_done = true;
+                if (tx1_done && tx2_done) {
+                    link_state = LINK_STATE_RECEIVE;
+                }
                 DBG_MAIN_SLIM(dbg.puts("2!");)
             }
         } else

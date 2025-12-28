@@ -10,7 +10,7 @@
 -- copy script to SCRIPTS\TOOLS folder on OpenTx SD card
 -- works with mLRS v1.3.03 and later, mOTX v33
 
-local version = '2025-12-04.01'
+local version = '2025-12-18.02'
 
 local required_tx_mLRS_version_int = 10303 -- 'v1.3.03'
 local required_rx_mLRS_version_int = 10303 -- 'v1.3.03'
@@ -528,6 +528,8 @@ freq_band_list[2] = "868 MHz"
 freq_band_list[3] = "433 MHz"
 freq_band_list[4] = "70 cm HAM"
 freq_band_list[5] = "866 MHz IN"
+freq_band_list[6] = "915 + 2.4"
+freq_band_list[7] = "868 + 2.4"
 
 local function getExceptNoFromChar(c)
     if (c >= 'a' and c <= 'z') then return (string.byte(c) - string.byte('a')) % 5; end
@@ -552,6 +554,8 @@ end
 ----------------------------------------------------------------------
 -- looper to send and read command frames
 ----------------------------------------------------------------------
+-- PROTOCOL CHANGE (2025-12-18): Switched from push-based to pull-based parameter loading
+----------------------------------------------------------------------
 
 local function doParamLoop()
     -- trigger getting device items and param items
@@ -572,8 +576,10 @@ local function doParamLoop()
       elseif DEVICE_PARAM_LIST == nil then
           if DEVICE_INFO ~= nil then -- wait for it to be populated
               DEVICE_PARAM_LIST = {}
-              cmdPush(MBRIDGE_CMD_PARAM_REQUEST_LIST, {}) -- triggers sending full list of PARAM_ITEMs
-              --cmdPush(MBRIDGE_CMD_REQUEST_CMD, {MBRIDGE_CMD_PARAM_REQUEST_LIST})
+              -- Request first parameter by index (pull-based protocol)
+              -- OLD: cmdPush(MBRIDGE_CMD_PARAM_REQUEST_LIST, {}) -- streaming approach
+              cmdPush(MBRIDGE_CMD_REQUEST_CMD, {MBRIDGE_CMD_PARAM_ITEM, DEVICE_PARAM_LIST_expected_index})
+
           end
       end
     end
@@ -642,7 +648,7 @@ local function doParamLoop()
                 elseif disableParamLoadErrorWarnings then -- ignore any errors
                     DEVICE_PARAM_LIST_complete = true
                 else
-                    -- Huston, we have a proble,
+                    -- Huston, we have a problem
                     DEVICE_PARAM_LIST_complete = false
                     setPopupWTmo("Param Upload Errors ("..tostring(DEVICE_PARAM_LIST_errors)..")!\nTry Reload", 200)
                 end
@@ -658,6 +664,7 @@ local function doParamLoop()
             elseif DEVICE_PARAM_LIST == nil or DEVICE_PARAM_LIST[index] == nil then
                 paramsError()
             else
+                local item3_needed = false
                 if DEVICE_PARAM_LIST[index].typ < MBRIDGE_PARAM_TYPE_LIST then
                     DEVICE_PARAM_LIST[index].min = mb_to_value(cmd.payload, 1, DEVICE_PARAM_LIST[index].typ)
                     DEVICE_PARAM_LIST[index].max = mb_to_value(cmd.payload, 3, DEVICE_PARAM_LIST[index].typ)
@@ -669,10 +676,18 @@ local function doParamLoop()
                     DEVICE_PARAM_LIST[index].min = 0
                     DEVICE_PARAM_LIST[index].max = #DEVICE_PARAM_LIST[index].options - 1
                     DEVICE_PARAM_LIST[index].editable = mb_allowed_mask_editable(DEVICE_PARAM_LIST[index].allowed_mask)
+                    -- determine if we should expect an ITEM3
+                    local s = mb_to_string(cmd.payload, 3, 21)
+                    if string.len(s) == 21 then item3_needed = true end
                 elseif DEVICE_PARAM_LIST[index].typ == MBRIDGE_PARAM_TYPE_STR6 then
                     -- nothing to do, is send but hasn't any content
                 else
                     paramsError()
+                end
+                if not item3_needed then
+                    -- Request next parameter by index (pull-based protocol)
+                    -- This ensures we explicitly fetch each parameter after processing the current one
+                    cmdPush(MBRIDGE_CMD_REQUEST_CMD, {MBRIDGE_CMD_PARAM_ITEM, DEVICE_PARAM_LIST_expected_index})
                 end
             end
         elseif cmd.cmd == MBRIDGE_CMD_PARAM_ITEM3 then
@@ -695,10 +710,14 @@ local function doParamLoop()
                 paramsError()
             else
                 local s = DEVICE_PARAM_LIST[index].item2payload
+                local item4_needed = false
                 if not is_item4 then
                     DEVICE_PARAM_LIST[index].item3payload = cmd.payload
                     for i=1,23 do s[23+i] = cmd.payload[i] end
                     DEVICE_PARAM_LIST[index].options = mb_to_options(s, 3, 21+23)
+                    -- determine if we should expect an ITEM4
+                    local opts = mb_to_string(cmd.payload, 1, 23)
+                    if string.len(opts) == 23 then item4_needed = true end
                 else
                     local s3 = DEVICE_PARAM_LIST[index].item3payload
                     for i=1,23 do s[23+i] = s3[i]; s[23+23+i] = cmd.payload[i]; end
@@ -706,6 +725,11 @@ local function doParamLoop()
                 end
                 DEVICE_PARAM_LIST[index].max = #DEVICE_PARAM_LIST[index].options - 1
                 s = nil
+                if not item4_needed then
+                    -- Request next parameter by index (pull-based protocol)
+                    -- All ITEM3/ITEM4 processing complete for current param, fetch next one
+                    cmdPush(MBRIDGE_CMD_REQUEST_CMD, {MBRIDGE_CMD_PARAM_ITEM, DEVICE_PARAM_LIST_expected_index})
+                end
             end
         end
         cmd = nil
@@ -1161,7 +1185,9 @@ local function drawPageMain()
             lcd.drawText(x, y, c, attr)
             --x = x + lcd.getTextWidth(c,1,attr)+1
             x = x + getCharWidth(c) + 1
-            if i == 6 and DEVICE_PARAM_LIST[2].value == 0 then -- do only for 2.4GHz band
+            -- Show Except for 2.4GHz band: pure 2.4GHz (0), 915+2.4 (6), or 868+2.4 (7)
+            local rf_band = DEVICE_PARAM_LIST[2].value
+            if i == 6 and (rf_band == 0 or rf_band == 6 or rf_band == 7) then
                 lcd.drawText(140 + 70, y, getExceptStrFromChar(c), g_textColor)
             end
         end

@@ -885,12 +885,25 @@ int8_t rx_snr1, rx_snr2;
         flags |= MLRS_RADIO_LINK_STATS_FLAGS_TX_TRANSMIT_ANTENNA2;
     }
 
-    // frequencies
-    float freq1 = fhss.GetCurrFreq_Hz();
-#if !defined DEVICE_HAS_DUAL_SX126x_SX128x && !defined DEVICE_HAS_DUAL_SX126x_SX126x // is single band
-    float freq2 = fhss.GetCurrFreq2_Hz();
+    // frequencies - need to check actual frequency band for dual-band hardware
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x // is dual band hardware
+    float freq1, freq2;
+    if (is_dual_band_frequency(Config.FrequencyBand)) {
+        // dual-band frequency: report both
+        freq1 = fhss.GetCurrFreq_Hz();
+        freq2 = fhss.GetCurrFreq2_Hz();
+    } else if (Config.FrequencyBand == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+        // single-band 2.4 GHz on dual-band hardware: only SX2 is used
+        freq1 = fhss.GetCurrFreq2_Hz();
+        freq2 = 0.0f;
+    } else {
+        // single-band sub-GHz on dual-band hardware: only SX1 is used
+        freq1 = fhss.GetCurrFreq_Hz();
+        freq2 = 0.0f;
+    }
 #else
-    float freq2 = 0.0f;
+    float freq1 = fhss.GetCurrFreq_Hz();
+    float freq2 = 0.0f; // single band, no second frequency
 #endif
 
 #if 0

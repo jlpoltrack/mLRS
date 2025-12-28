@@ -544,7 +544,7 @@ tMBridgeLinkStats lstats = {};
     lstats.rx1_valid = stats.rx1_valid;
     lstats.rx2_valid = stats.rx2_valid;
 
-    lstats.rssi_instantaneous_percent = crsf_cvt_rssi_percent(stats.GetLastRssi(), sx.ReceiverSensitivity_dbm());
+    lstats.rssi_instantaneous_percent = crsf_cvt_rssi_percent(stats.GetLastRssi(), (TRANSMIT_USE_ANTENNA1) ? sx.ReceiverSensitivity_dbm() : sx2.ReceiverSensitivity_dbm());
 
     // receiver side of things
 
@@ -554,7 +554,7 @@ tMBridgeLinkStats lstats = {};
     lstats.receiver_receive_antenna = stats.received_antenna;
     lstats.receiver_transmit_antenna = stats.received_transmit_antenna;
 
-    lstats.receiver_rssi_instantaneous_percent = crsf_cvt_rssi_percent(stats.received_rssi, sx.ReceiverSensitivity_dbm());
+    lstats.receiver_rssi_instantaneous_percent = crsf_cvt_rssi_percent(stats.received_rssi, (TRANSMIT_USE_ANTENNA1) ? sx.ReceiverSensitivity_dbm() : sx2.ReceiverSensitivity_dbm());
 
     // further stats acquired on transmitter side
 

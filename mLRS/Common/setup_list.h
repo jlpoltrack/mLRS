@@ -65,12 +65,12 @@
 #define SETUP_OPT_SERIAL_LINK_MODE_DISPSTR  "transp.,mavlink,mavlnkX,mspX"
 #endif
 
-#define SETUP_OPT_MODE                "50 Hz,31 Hz,19 Hz,FLRC,FSK,19 Hz 7x" // used below in LIST_COMMON, also used in e.g. cli
-#define SETUP_OPT_MODE_DISPSTR        "50 Hz,31 Hz,19 Hz,FLRC,FSK,19Hz7x" // used in display, 7 chars max, should be 6 chars however
+#define SETUP_OPT_MODE                "50 Hz,31 Hz,19 Hz,FLRC,FSK,19 Hz 7x,FSK / 50" // used below in LIST_COMMON, also used in e.g. cli
+#define SETUP_OPT_MODE_DISPSTR        "50 Hz,31 Hz,19 Hz,FLRC,FSK,19Hz7x,FSK/50" // used in display, 7 chars max, should be 6 chars however
 
-#define SETUP_OPT_RFBAND              "2.4,915 FCC,868,433,70,866 IN" // used below in LIST_COMMON
-#define SETUP_OPT_RF_BAND_LONGSTR     "2.4 GHz,915 MHz FCC,868 MHz,433 MHz,70 cm HAM,866 MHz IN" // used e.g. in cli
-#define SETUP_OPT_RF_BAND_DISPSTR     "2.4 GHz,915 FCC,868 MHz,433 MHz,70 cm,866 IN" // used in display, 7 chars max
+#define SETUP_OPT_RFBAND              "2.4,915 FCC,868,433,70,866 IN,915+2.4,868+2.4" // used below in LIST_COMMON
+#define SETUP_OPT_RF_BAND_LONGSTR     "2.4 GHz,915 MHz FCC,868 MHz,433 MHz,70 cm HAM,866 MHz IN,915 + 2.4,868 + 2.4" // used e.g. in cli
+#define SETUP_OPT_RF_BAND_DISPSTR     "2.4 GHz,915 FCC,868 MHz,433 MHz,70 cm,866 IN,915+2.4,868+2.4" // used in display, 7 chars max
 
 
 #define MSK_ALL                       nullptr // is converted to UINT16_MAX
@@ -99,7 +99,7 @@
   X( Setup.Tx[0].ChannelsSource,    LIST, "Tx Ch Source",     "TX_CH_SOURCE",     0,0,0,"", "none,crsf,in,mbridge", SETUP_MSK_TX_CH_SOURCE )\
   X( Setup.Tx[0].ChannelOrder,      LIST, "Tx Ch Order",      "TX_CH_ORDER",      0,0,0,"", SETUP_OPT_CH_ORDER, MSK_ALL )\
   X( Setup.Tx[0].InMode,            LIST, "Tx In Mode",       "TX_IN_MODE",       0,0,0,"", "sbus,sbus inv", SETUP_MSK_TX_IN_MODE )\
-  X( Setup.Tx[0].SerialDestination, LIST, "Tx Ser Dest",      "TX_SER_DEST",      0,0,0,"", "serial,serial2,mbridge", SETUP_MSK_TX_SER_DEST )\
+  X( Setup.Tx[0].SerialDestination, LIST, "Tx Ser Dest",      "TX_SER_DEST",      0,0,0,"", "serial,serial2,mbridge,usb", SETUP_MSK_TX_SER_DEST )\
   X( Setup.Tx[0].SerialBaudrate,    LIST, "Tx Ser Baudrate",  "TX_SER_BAUD",      0,0,0,"", SETUP_OPT_TX_SERIAL_BAUDRATE, MSK_ALL )\
   X( Setup.Tx[0].SendRadioStatus,   LIST, "Tx Snd RadioStat", "TX_SND_RADIOSTAT", 0,0,0,"", "off,1 Hz", MSK_ALL )\
   X( Setup.Tx[0].MavlinkComponent,  LIST, "Tx Mav Component", "TX_MAV_COMPONENT", 0,0,0,"", "off,enabled", MSK_ALL )\

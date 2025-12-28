@@ -50,6 +50,7 @@ In tx-hal files:
 #define DEVICE_HAS_SERIAL_ON_USB    // board has the Serial port on native USB
 #define DEVICE_HAS_NO_COM           // board has no Com port
 #define DEVICE_HAS_COM_ON_USB       // board has the Com port on native USB
+#define DEVICE_HAS_SERIAL_OR_COM_ON_USB  // board shares USB between Serial or Com, selected by SerialDestination setting
 #define DEVICE_HAS_NO_DEBUG         // board has no Debug port
 #define DEVICE_HAS_DEBUG_SWUART     // implement Debug as software UART
 #define DEVICE_HAS_I2C_DISPLAY          // board has a DISPLAY on I2C, and 5-way switch
@@ -98,6 +99,14 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
 
 //-- MATEKSYS mLRS devices
 
+#ifdef RX_MATEK_MR900_TD30_G474CE
+#include "matek/rx-hal-matek-mr900-td30-g474ce.h"
+#endif
+
+#ifdef TX_MATEK_MTX_DB30_G474CE
+#include "matek/tx-hal-matek-mtx-db30-g474ce.h"
+#endif
+
 #ifdef RX_MATEK_MR24_30_G431KB
 #include "matek/rx-hal-matek-mr24-30-g431kb.h"
 #endif
@@ -116,10 +125,6 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
 
 #ifdef RX_MATEK_MR900_22_WLE5CC
 #include "matek/rx-hal-matek-mr900-22-wle5cc.h"
-#endif
-
-#ifdef RX_MATEK_MR900_TD30_G474CE
-#include "matek/rx-hal-matek-mr900-td30-g474ce.h"
 #endif
 
 #ifdef RX_MATEK_MR900_30C_G431KB
@@ -293,10 +298,10 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
 #endif // DEVICE_IS_RECEIVER
 
 #ifdef DEVICE_IS_TRANSMITTER
-#if defined DEVICE_HAS_SERIAL_OR_COM // some devices have device dependent ways to select serial or com
+#if defined DEVICE_HAS_SERIAL_OR_COM || defined DEVICE_HAS_SERIAL_OR_COM_ON_USB // some devices have device dependent ways to select serial or com
   #define USE_SERIAL
   #define USE_COM_ON_SERIAL
-  #ifdef DEVICE_HAS_SERIAL_ON_USB
+  #if defined DEVICE_HAS_SERIAL_ON_USB || defined DEVICE_HAS_SERIAL_OR_COM_ON_USB
     #define USE_USB
   #endif
   #if defined DEBUG_ENABLED && !defined DEVICE_HAS_NO_DEBUG
@@ -350,7 +355,7 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
 #endif
 
 
-#if defined DEVICE_HAS_FAN_ONOFF || defined DEVICE_HAS_FAN_TEMPCONTROLLED_ONOFF
+#if defined DEVICE_HAS_FAN_ONOFF || defined DEVICE_HAS_FAN_TEMPCONTROLLED_ONOFF || defined DEVICE_HAS_FAN_PWM
   #define USE_FAN
 #endif
 
@@ -360,7 +365,7 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
   #if defined ESP_RESET && defined ESP_GPIO0
     #define USE_ESP_WIFI_BRIDGE_RST_GPIO0
   #endif
-  #if defined ESP_DTR && defined ESP_RTS
+  #if (defined ESP_DTR && defined ESP_RTS) || defined ESP_DTR_RTS_USB
     #define USE_ESP_WIFI_BRIDGE_DTR_RTS
   #endif
   #if defined ESP_BOOT0

@@ -164,16 +164,23 @@ void tBindBase::HopToNextBind(uint16_t frequency_band) // SETUP_FREQUENCY_BAND_E
 }
 
 
+// for single-band operation on dual-band hardware, only one chip has StartUp() called.
+// guard operations with IF_SX/IF_SX2 to avoid calling functions on unconfigured chips
+// as ResetToLoraConfiguration traps if gconfig is nullptr.
 void tBindBase::config_rf(void)
 {
-    sx.SetToIdle();
-    sx2.SetToIdle();
-    sx.SetRfPower_dbm(rfpower_list[0].dbm);
-    sx2.SetRfPower_dbm(rfpower_list[0].dbm);
-    sx.ResetToLoraConfiguration();
-    sx2.ResetToLoraConfiguration();
-    sx.SetToIdle();
-    sx2.SetToIdle();
+    IF_SX(
+        sx.SetToIdle();
+        sx.SetRfPower_dbm(rfpower_list[0].dbm);
+        sx.ResetToLoraConfiguration();
+        sx.SetToIdle();
+    );
+    IF_SX2(
+        sx2.SetToIdle();
+        sx2.SetRfPower_dbm(rfpower_list[0].dbm);
+        sx2.ResetToLoraConfiguration();
+        sx2.SetToIdle();
+    );
 }
 
 
@@ -277,7 +284,7 @@ void tBindBase::do_transmit(uint8_t antenna)
     txBindFrame.connected = connected();
 
     strbufstrcpy(txBindFrame.BindPhrase_6, Setup.Common[Config.ConfigId].BindPhrase, 6);
-    // TODO txBindFrame.FrequencyBand = Setup.Common[Config.ConfigId].FrequencyBand;
+    txBindFrame.FrequencyBand = Setup.Common[Config.ConfigId].FrequencyBand;
     txBindFrame.Mode = Setup.Common[Config.ConfigId].Mode;
     txBindFrame.Ortho = Setup.Common[Config.ConfigId].Ortho;
 
@@ -310,7 +317,10 @@ void tBindBase::handle_receive(uint8_t antenna, uint8_t rx_status)
     if (rx_status == RX_STATUS_INVALID) return;
 
     strstrbufcpy(Setup.Common[0].BindPhrase, txBindFrame.BindPhrase_6, 6);
-    // TODO Setup.Common[0].FrequencyBand = txBindFrame.FrequencyBand;
+    // only update FrequencyBand if set; older firmware leaves this at 0
+    if (txBindFrame.FrequencyBand != 0) {
+        Setup.Common[0].FrequencyBand = (SETUP_FREQUENCY_BAND_ENUM)txBindFrame.FrequencyBand;
+    }
     Setup.Common[0].Mode = txBindFrame.Mode;
     Setup.Common[0].Ortho = txBindFrame.Ortho;
 

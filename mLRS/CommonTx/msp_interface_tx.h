@@ -69,6 +69,9 @@ void tTxMsp::Init(tSerialBase* const _serialport, tSerialBase* const _serial2por
     case SERIAL_DESTINATION_MBRDIGE:
         ser = nullptr;
         break;
+    case SERIAL_DESTINATION_USB:
+        ser = _serialport; // USB is handled via tSerialPort when SerialDestination==USB
+        break;
     default:
         while(1){} // must not happen
     }

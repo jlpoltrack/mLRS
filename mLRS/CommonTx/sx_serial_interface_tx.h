@@ -29,7 +29,7 @@ class tTxSxSerial : public tSerialBase
 };
 
 
-void tTxSxSerial::Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port)
+void tTxSxSerial::Init(tSerialBase* const _serialport,tSerialBase* const _mbridge, tSerialBase* const _serial2port)
 {
     tSerialBase::Init();
 
@@ -42,6 +42,9 @@ void tTxSxSerial::Init(tSerialBase* const _serialport, tSerialBase* const _mbrid
         break;
     case SERIAL_DESTINATION_MBRDIGE:
         ser = _mbridge;
+        break;
+    case SERIAL_DESTINATION_USB:
+        ser = _serialport; // USB is handled via tSerialPort when SerialDestination==USB
         break;
     default:
         while(1){} // must not happen

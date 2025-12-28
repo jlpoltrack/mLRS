@@ -13,7 +13,7 @@
 
 //#define DEVICE_HAS_DIVERSITY
 #define DEVICE_HAS_OUT
-
+#define DEVICE_HAS_SINGLE_LED
 
 //-- Timers, Timing, EEPROM, and such stuff
 
@@ -34,7 +34,7 @@
 // UART = output port, SBus or whatever
 // UARTF = debug port
 
-#define UARTB_USE_UART1_PB6PB7 // serial // PB6,PB7
+#define UARTB_USE_UART2_PA2PA3 // serial // PA2,PA3
 #define UARTB_BAUD                RX_SERIAL_BAUDRATE
 #define UARTB_USE_TX
 #define UARTB_TXBUFSIZE           RX_SERIAL_TXBUFSIZE
@@ -42,16 +42,16 @@
 #define UARTB_USE_RX
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE
 
-#define UART_USE_UART2_PA2PA3 // out pin // PA2
+#define UART_USE_LPUART1_PC1PC0 // out pin // PC1
 #define UART_BAUD                 100000 // SBus normal baud rate, is being set later anyhow
 #define UART_USE_TX
 #define UART_TXBUFSIZE            256
 #define UART_USE_TX_ISR
 //#define UART_USE_RX
 //#define UART_RXBUFSIZE            512
-#define OUT_UARTx                 USART2 // UART_UARTx is not known yet, so define by hand
+#define OUT_UARTx                 LPUART1 // UART_UARTx is not known yet, so define by hand
 
-#define UARTF_USE_LPUART1_PC1PC0 // debug // PC1
+#define UARTF_USE_UART1_PB6PB7 // debug // PB6,PB7 usb plug
 #define UARTF_BAUD                115200
 #define UARTF_USE_TX
 #define UARTF_TXBUFSIZE           512
@@ -233,22 +233,26 @@ bool button_pressed(void)
 
 
 //-- LEDs
+// we keep the green LED stuff in case a user wants it
 
-#define LED_GREEN                 IO_PB10
+#define LED_GREEN                 IO_PA15
 #define LED_RED                   IO_PB5
 
 void leds_init(void)
 {
     gpio_init(LED_GREEN, IO_MODE_OUTPUT_PP_LOW, IO_SPEED_DEFAULT);
-    gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW, IO_SPEED_DEFAULT);
+    gpio_init(LED_RED, IO_MODE_OUTPUT_PP_HIGH, IO_SPEED_DEFAULT);
+
+    // pin IO_PB15 must be floating, is used as artificial pad for green LED!
+    gpio_init(IO_PB15, IO_MODE_Z, IO_SPEED_DEFAULT);
 }
 
 void led_green_off(void) { gpio_low(LED_GREEN); }
 void led_green_on(void) { gpio_high(LED_GREEN); }
 void led_green_toggle(void) { gpio_toggle(LED_GREEN); }
 
-void led_red_off(void) { gpio_low(LED_RED); }
-void led_red_on(void) { gpio_high(LED_RED); }
+void led_red_off(void) { gpio_high(LED_RED); }
+void led_red_on(void) { gpio_low(LED_RED); }
 void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 
@@ -256,6 +260,10 @@ void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 #define POWER_PA_NONE_SX126X
 #include "../hal-power-pa.h"
+
+#define POWER2_GAIN_DBM           27 // gain of a PA stage if present
+#define POWER2_SX1280_MAX_DBM     SX1280_POWER_0_DBM // maximum allowed sx power
+#define POWER2_USE_DEFAULT_RFPOWER_CALC
 
 
 //-- TEST

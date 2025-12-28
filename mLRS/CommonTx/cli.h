@@ -282,7 +282,7 @@ bool except_str_from_bindphrase(char* const ext, char* const bind_phrase, uint8_
 #define CLI_LINEND  "\r\n"
 
 
-#ifdef DEVICE_HAS_COM_ON_USB
+#if defined(DEVICE_HAS_COM_ON_USB) || defined(DEVICE_HAS_SERIAL_OR_COM_ON_USB)
   #if USB_TXBUFSIZE >= 2048
     #define CLI_PRINT_CHUNKS_CNT_MAX  200
   #else // we assume 512
@@ -366,6 +366,12 @@ void tTxCli::Init(tSerialBase* const _comport, uint16_t _frame_rate_ms)
 
     state = CLI_STATE_NORMAL;
 
+    // USB is much faster than UART - allow more chunks per call
+    // lines avg ~50 bytes, so 32 lines ≈ 1600 bytes, under 2KB buffer
+#if defined(DEVICE_HAS_COM_ON_USB) || defined(DEVICE_HAS_SERIAL_OR_COM_ON_USB)
+    print_chunks_max = 32;
+#else
+    // UART: throttle based on frame rate to avoid TX buffer overflow
     // 9 ms, 20 ms, 32 ms, 53 ms
     if (_frame_rate_ms < 19) {
         print_chunks_max = 1;
@@ -376,6 +382,7 @@ void tTxCli::Init(tSerialBase* const _comport, uint16_t _frame_rate_ms)
     } else {
         print_chunks_max = 8;
     }
+#endif
     if (print_chunks_max > CLI_PRINT_CHUNKS_CNT_MAX) print_chunks_max = CLI_PRINT_CHUNKS_CNT_MAX;
 
     print_index = 0;
@@ -611,6 +618,11 @@ void tTxCli::stream(void)
             puts(s8toBCD_s(stats.last_snr1));
             puts("; ");
 
+            puts(s8toBCD_s(stats.last_rssi2));
+            puts(",");
+            puts(s8toBCD_s(stats.last_snr2));
+            puts("; ");
+
             puts(u16toBCD_s(stats.bytes_transmitted.GetBytesPerSec()));
             puts(", ");
             puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec()));
@@ -654,26 +666,80 @@ void tTxCli::print_frequencies_do(void)
 char s[32];
 char unit[32];
 
+    // determine what to print based on frequency band configuration:
+    // - dual-band frequency: print both bands with headers
+    // - single-band 2.4 GHz on dual-band hardware: print only 2nd band (no header)
+    // - single-band sub-GHz: print only 1st band (no header)
+    bool is_dual_band = is_dual_band_frequency(Config.FrequencyBand);
+
     for (uint8_t count = 0; count < print_chunks_max; count++) { // only as many lines fit into tx buffer
-        if (print_index >= fhss.Cnt()) {
-            print_it_reset();
-            return;
+        // print_pl_flag: 0 = first band, 1 = second band
+        if (print_pl_flag == 0) {
+            // for single-band 2.4 GHz on dual-band hardware, skip to 2nd band
+            if (Config.FrequencyBand == SETUP_FREQUENCY_BAND_2P4_GHZ && fhss.Cnt2() > 0) {
+                print_pl_flag = 1;
+                print_index = 0;
+                continue;
+            }
+
+            // first band - print header on first entry if dual-band
+            if (print_index == 0 && is_dual_band) {
+                putsn("1st Band (sub-GHz):");
+                putsn("");
+            }
+            // first band
+            if (print_index >= fhss.Cnt()) {
+                // check if there's a second band to print (only for true dual-band)
+                if (is_dual_band && fhss.Cnt2() > 0) {
+                    putsn("");
+                    putsn("2nd Band (2.4 GHz):");
+                    putsn("");
+                    print_pl_flag = 1;
+                    print_index = 0;
+                    continue;
+                }
+                print_pl_flag = 0;
+                print_it_reset();
+                return;
+            }
+
+            uint8_t i = print_index;
+
+            puts(u8toBCD_s(i));
+            puts("  ch: ");
+            puts(u8toBCD_s(fhss.ChList(i)));
+            puts("  f_reg: ");
+            puts(u32toBCD_s(fhss.FhssList(i)));
+            puts("  f: ");
+            u32toBCDstr(fhss.GetFreq_x1000(unit, i), s);
+            remove_leading_zeros(s);
+            puts(s);
+            putsn(unit);
+
+            print_index++;
+        } else {
+            // second band
+            if (print_index >= fhss.Cnt2()) {
+                print_pl_flag = 0;
+                print_it_reset();
+                return;
+            }
+
+            uint8_t i = print_index;
+
+            puts(u8toBCD_s(i));
+            puts("  ch: ");
+            puts(u8toBCD_s(fhss.ChList2(i)));
+            puts("  f_reg: ");
+            puts(u32toBCD_s(fhss.FhssList2(i)));
+            puts("  f: ");
+            u32toBCDstr(fhss.GetFreq2_x1000(unit, i), s);
+            remove_leading_zeros(s);
+            puts(s);
+            putsn(unit);
+
+            print_index++;
         }
-
-        uint8_t i = print_index;
-
-        puts(u8toBCD_s(i));
-        puts("  ch: ");
-        puts(u8toBCD_s(fhss.ChList(i)));
-        puts("  f_reg: ");
-        puts(u32toBCD_s(fhss.FhssList(i)));
-        puts("  f: ");
-        u32toBCDstr(fhss.GetFreq_x1000(unit, i), s);
-        remove_leading_zeros(s);
-        puts(s);
-        putsn(unit);
-
-        print_index++;
     }
 }
 
@@ -840,6 +906,7 @@ bool rx_param_changed;
         //-- miscellaneous
         } else
         if (is_cmd("listfreqs")) {
+            print_pl_flag = 0; // start with first band
             print_it(CLI_STATE_PRINT_LISTFREQS);
 
         //-- System Bootloader

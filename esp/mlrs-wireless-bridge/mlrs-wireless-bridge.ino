@@ -7,11 +7,11 @@
 // Basic but effective & reliable transparent WiFi or Bluetooth <-> serial bridge.
 // Minimizes wireless traffic while respecting latency by better packeting algorithm.
 //*******************************************************
-// 10. Dez. 2025
+// 13. Dez. 2025
 //*********************************************************/
 // inspired by examples from Arduino
 // NOTES:
-// - For ESP32 and ESP32C3: Partition Scheme needs to be changed to "No OTA (Large App)" !!
+// - For ESP32 and ESP32C3: Partition Scheme needs to be 'No OTA (2MB APP/2MB SPIFFS)' / 'No OTA (Large APP)' !!
 // - Use upload speed 115200 if serial passthrough shall be used for flashing (else 921600 is fine)
 // - ArduinoIDE 2.3.2, esp32 by Espressif Systems 3.0.4
 // - For ESP32C3: ESP32 arduino core must be 2.0.17 !!
@@ -70,6 +70,7 @@ Troubleshooting:
 // Module
 // uncomment what you want, you must select one (and only one)
 // (you also need to set the board in the Arduino IDE accordingly)
+//#define MODULE_MATEK_TXM_TD30
 //#define MODULE_ESP82XX_ELRS_TX                // board: Generic ESP8266 Module or Generic ESP8285 Module
 //#define MODULE_ESP32C3_ELRS_TX                // board: Generic ESP32C3 Module
 //#define MODULE_ESP32_DEVKITC_V4               // board: ESP32 Dev Module
@@ -213,6 +214,11 @@ String ble_device_name = ""; // name of your BLE device as it will be seen by yo
     #error Version of your ESP Arduino Core below 3.0.0 !
 #elif ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 4)
     #warning Consider upgrading your ESP Arduino Core !
+#endif
+#endif
+#if defined(ARDUINO_ESP32_DEV) || defined(ARDUINO_ESP32C3_DEV) || defined(ARDUINO_M5Stack_ATOM) || defined(ARDUINO_ESP32_PICO)
+#ifndef ARDUINO_PARTITION_no_ota
+    #error Partition Scheme must be 'No OTA (2MB APP/2MB SPIFFS)' / 'No OTA (Large APP)'. Select via Arduino IDE Tools > Partition Scheme.
 #endif
 #endif
 

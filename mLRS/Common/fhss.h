@@ -675,6 +675,12 @@ class tFhss : public tFhssBase
 
     void SetCurrI2(uint8_t i) { SetCurrI(i); }
     float GetCurrFreq2_Hz(void) { return GetCurrFreq_Hz(); } // for RADIO_LINK_STATS_MLRS
+
+    // second band accessors (stubs for single-band, Cnt2()=0 indicates no second band)
+    uint8_t Cnt2(void) { return 0; }
+    uint8_t ChList2(uint8_t i) { return 0; }
+    uint32_t FhssList2(uint8_t i) { return 0; }
+    uint32_t GetFreq2_x1000(char* const unit_str, uint8_t i) { return 0; }
 };
 
 #else
@@ -750,6 +756,26 @@ class tFhss
     uint8_t ChList(uint8_t i) { return fhss1stBand.ChList(i); }
     uint32_t FhssList(uint8_t i) { return fhss1stBand.FhssList(i); }
     uint32_t GetFreq_x1000(char* const unit_str, uint8_t i) { return fhss1stBand.GetFreq_x1000(unit_str, i); }
+
+    // second band accessors for CLI dual-band frequency listing
+    uint8_t Cnt2(void) { return fhss2ndBand.Cnt(); }
+    uint8_t ChList2(uint8_t i) { return fhss2ndBand.ChList(i); }
+    uint32_t FhssList2(uint8_t i) { return fhss2ndBand.FhssList(i); }
+    uint32_t GetFreq2_x1000(char* const unit_str, uint8_t i)
+    {
+        // for dual-band, 2nd band is always 2.4 GHz
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+        // SX128x uses MHz
+        strcpy(unit_str, " MHz");
+        return (uint32_t)SX128X_REG_TO_FREQ_MHZ(fhss2ndBand.FhssList(i));
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+        // both are SX126x, use kHz
+        strcpy(unit_str, " kHz");
+        return (uint32_t)SX126X_REG_TO_FREQ_KHZ(fhss2ndBand.FhssList(i));
+#else
+        return fhss2ndBand.GetFreq_x1000(unit_str, i);
+#endif
+    }
 
   private:
     tFhssBase fhss1stBand;
