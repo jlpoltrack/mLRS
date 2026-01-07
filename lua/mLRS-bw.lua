@@ -12,7 +12,7 @@
 -- copy script to SCRIPTS\TOOLS folder on OpenTx SD card
 -- works with OTX, ETX, mOTX v33
 
--- local version = '2024-11-14.00'
+-- local version = '2026-01-01.00'
 
 local req_tx_ver = 1000 -- 'v1.0.0'
 local req_rx_ver = 1000 -- 'v1.0.0'
@@ -28,12 +28,13 @@ local BindPhrase_idx = 0 -- must not be changed
 -- tools (max 4)
 local Bind_idx = 4
 local Boot_idx = 5
+local Device_idx = 6
 
 -- save/load/nav (max 4)
-local Save_idx = 7
-local Reload_idx = 8
-local Prev_idx = 9
-local Next_idx = 10
+local Save_idx = 8
+local Reload_idx = 9
+local Prev_idx = 10
+local Next_idx = 11
 
 local Page0_parm_max = 3
 local Page_parm_max = 6
@@ -271,6 +272,12 @@ local DEV_PARM_LIST_complete = false
 local DEV_DOWNLOAD_is_running = true -- we start the script with this
 local DEV_SAVE_t_last = 0
 
+-- retry configuration
+local PARM_RETRY_TIMEOUT = 20  -- 200ms timeout
+local PARM_RETRY_LIMIT = 10    -- retries before giving up
+local PARM_REQUEST_t_last = 0  -- when last param request was sent
+local retry_count = 0          -- current retry count
+
 --[[ -- memory size
 local mem_max1 = 0
 local mem_max2 = 0
@@ -296,6 +303,8 @@ local function clearParms()
     DEV_PARM_LIST_error = 0
     DEV_PARM_LIST_complete = false
     DEV_DOWNLOAD_is_running = true
+    PARM_REQUEST_t_last = 0
+    retry_count = 0
 end
 
 
@@ -419,9 +428,49 @@ end
 -- looper to send and read command frames
 ----------------------------------------------------------------------
 
+local function startParmRequest(parm_idx)
+    cmdPush(MB_CMD_REQ_CMD, {MB_CMD_PARM_ITEM, parm_idx})
+    PARM_REQUEST_t_last = getTime()
+end
+
+local function checkAndHandleRetry(t_10ms)
+    if DEV_PARM_LIST == nil or DEV_PARM_LIST_complete or PARM_REQUEST_t_last == 0 then
+        return false  -- no retry needed
+    end
+    
+    if t_10ms - PARM_REQUEST_t_last <= PARM_RETRY_TIMEOUT then
+        return false  -- timeout not reached
+    end
+    
+    -- timeout reached - retry
+    retry_count = retry_count + 1
+    if retry_count > PARM_RETRY_LIMIT then
+        setPopupWTmo("Loading Failed\nCheck connection", 300)
+        DEV_DOWNLOAD_is_running = false
+        PARM_REQUEST_t_last = 0
+        return true
+    end
+    
+    -- re-request current parameter (list_idx points to next, so use list_idx-1)
+    if list_idx > 0 then
+        local valid, parm_item = idx_to_parm(list_idx - 1)
+        if valid then
+            list_idx = list_idx - 1  -- back up to retry
+            startParmRequest(parm_item)
+        end
+    end
+    return true
+end
+
 local function doParmLoop()
     -- trigger getting device items and parm items
     local t_10ms = getTime()
+    
+    -- check for timeout and handle retries
+    if checkAndHandleRetry(t_10ms) then
+        return
+    end
+    
     if t_10ms - parmloop_t_last > 15 then -- was 10 = 100 ms
       parmloop_t_last = t_10ms
       if t_10ms < DEV_SAVE_t_last + parmLoadDeadTime_10ms then
@@ -436,7 +485,7 @@ local function doParmLoop()
               end
               local valid, parm_item = idx_to_parm(list_idx)
               if valid then
-                  cmdPush(MB_CMD_REQ_CMD, {MB_CMD_PARM_ITEM, parm_item})
+                  startParmRequest(parm_item)
               else
                   DEV_PARM_LIST_complete = true
                   DEV_DOWNLOAD_is_running = false
@@ -456,13 +505,13 @@ local function doParmLoop()
         end
         if cmd.cmd == MB_CMD_DEV_ITEM_TX then
             DEV_ITEM_TX = cmd
-            --DEV_ITEM_TX.name = mb_to_string(cmd.payload, 4, 20)
+            DEV_ITEM_TX.name = mb_to_string(cmd.payload, 4, 20)
             DEV_ITEM_TX.version_int = mb_to_firmware_int(mb_to_u16(cmd.payload, 0))
             DEV_ITEM_TX.setuplayout_int = mb_to_firmware_int(mb_to_u16(cmd.payload, 2))
             DEV_ITEM_TX.version_str = mb_to_firmware_string(mb_to_u16(cmd.payload, 0))
         elseif cmd.cmd == MB_CMD_DEV_ITEM_RX then
             DEV_ITEM_RX = cmd
-            --DEV_ITEM_RX.name = mb_to_string(cmd.payload, 4, 20)
+            DEV_ITEM_RX.name = mb_to_string(cmd.payload, 4, 20)
             DEV_ITEM_RX.version_int = mb_to_firmware_int(mb_to_u16(cmd.payload, 0))
             DEV_ITEM_RX.setuplayout_int = mb_to_firmware_int(mb_to_u16(cmd.payload, 2))
             DEV_ITEM_RX.version_str = mb_to_firmware_string(mb_to_u16(cmd.payload, 0))
@@ -487,6 +536,9 @@ local function doParmLoop()
             if parm_idx ~= parm_item then
                 break -- unexpected skip
             end
+            -- reset retry state on successful response
+            PARM_REQUEST_t_last = getTime()
+            retry_count = 0
             if DEV_PARM_LIST == nil then
                 parmsError(1)
             else
@@ -549,8 +601,7 @@ local function doParmLoop()
                     if DEV_PARM_LIST[idx].typ ~= MB_PARM_TYPE_LIST then
                         parmsError(7)
                     elseif extra_payload == nil then
-                        parmsError(8)
-                        -- parmsError(idx)
+                        -- silently skip - ITEM2 may have been missed at slow baud rates
                     else
                         if not is_item4 then
                             for i=1,23 do extra_payload[23+i] = cmd.payload[i]; end
@@ -758,7 +809,7 @@ local function drawPage()
     local parm_max = Page_parm_max
 
     if DEV_DOWNLOAD_is_running then
-        lcd.drawText(LCD_W/3, LCD_H-24, "MLRS", DBLSIZE+TEXT_COLOR+BLINK+INVERS)
+        lcd.drawText(LCD_W/3, LCD_H-24, "mLRS", DBLSIZE+TEXT_COLOR+BLINK+INVERS)
         lcd.drawText(12, LCD_H-9, "parameters loading ...", TEXT_COLOR+BLINK+INVERS)
         return
     end
@@ -793,7 +844,7 @@ local function drawPage()
     s = 1
   end
 
-    if DEV_PARM_LIST_complete then
+    if DEV_PARM_LIST_complete and page ~= 99 then
         for i=s,parm_max do
             if DEV_PARM_LIST[i] ~= nil and DEV_PARM_LIST[i].name ~= nil then
                 lcd.drawText(0, liney(i), string.sub(DEV_PARM_LIST[i].name, 1, 14), TEXT_COLOR)
@@ -801,7 +852,8 @@ local function drawPage()
                     if DEV_PARM_LIST[i].typ < MB_PARM_TYPE_LIST then
                         lcd.drawText(LCD_W*2/3, liney(i), DEV_PARM_LIST[i].value.." "..DEV_PARM_LIST[i].unit, cur_attr(i))
                     else
-                        lcd.drawText(LCD_W*2/3, liney(i), DEV_PARM_LIST[i].options[DEV_PARM_LIST[i].value], cur_attr(i))
+                        local opt = DEV_PARM_LIST[i].options[DEV_PARM_LIST[i].value]
+                        lcd.drawText(LCD_W*2/3, liney(i), opt or "?", cur_attr(i))
                     end
                 else
                     lcd.drawText(LCD_W*2/3, liney(i), "-", cur_attr(i))
@@ -850,15 +902,40 @@ local function drawPage()
     y = liney(6)
     lcd.drawText(0, y, "bind", cur_attr(Bind_idx))
     lcd.drawText(LCD_W/4, y, "boot", cur_attr(Boot_idx))
-    -- lcd.drawText(LCD_W/2, y, tostring(mem_max1), TEXT_COLOR) -- memory size
+    lcd.drawText(LCD_W/2+10, y, "device", cur_attr(Device_idx))
     -- lcd.drawText(LCD_W*3/4, y, tostring(mem_max2), TEXT_COLOR) -- memory size
 
+  elseif page == 99 then
+    -- Device Info Page
+    y = liney(0)
+    lcd.drawText(0, y, "Device Information", TITLE_COLOR)
+    
+    y = liney(2)
+    lcd.drawText(0, y, "Tx Name:", TEXT_COLOR)
+    if DEV_ITEM_TX ~= nil and DEV_ITEM_TX.name ~= nil then
+        lcd.drawText(0, liney(3), DEV_ITEM_TX.name, TEXT_COLOR)
+    else
+        lcd.drawText(0, liney(3), "unknown", TEXT_COLOR)
+    end
+    
+    -- Blank line at liney(4)
+    
+    y = liney(5)
+    lcd.drawText(0, y, "Rx Name:", TEXT_COLOR)
+    if DEV_ITEM_RX ~= nil and DEV_ITEM_RX.name ~= nil and connected then
+        lcd.drawText(0, liney(6), DEV_ITEM_RX.name, TEXT_COLOR)
+    else
+        lcd.drawText(0, liney(6), "unknown", TEXT_COLOR)
+    end
+    
   end
 
     -- Save/Load and Navigation
     y = liney(7)
-    lcd.drawText(0, y, "save", cur_attr(Save_idx - s))
-    lcd.drawText(LCD_W/4, y, "load", cur_attr(Reload_idx - s))
+    if page ~= 99 then
+        lcd.drawText(0, y, "save", cur_attr(Save_idx - s))
+        lcd.drawText(LCD_W/4, y, "load", cur_attr(Reload_idx - s))
+    end
     lcd.drawText(LCD_W/2, y, "prev", cur_attr(Prev_idx - s))
     lcd.drawText(LCD_W*3/4, y, "next", cur_attr(Next_idx - s))
 end
@@ -867,6 +944,8 @@ local function doPage(event)
     local s = 0
     if page == 0 then
       s = 1
+    elseif page == 99 then
+      s = 0
     end
 
     if not edit then
@@ -880,29 +959,42 @@ local function doPage(event)
                 sendBind()
             elseif page == 0 and cursor_idx == Boot_idx then -- Boot pressed
                 sendBoot()
+            elseif page == 0 and cursor_idx == Device_idx then -- Device info pressed
+                page = 99 -- jump to device info page
+                cursor_idx = Next_idx
             elseif cursor_idx == Reload_idx - s then -- Reload pressed
                 page = 0  -- move to page 0 to force MBRIDGE_CMD_REQUEST_INFO
                 clearParms()
-                cursor_idx = 9
+                cursor_idx = 10
             elseif cursor_idx == Prev_idx - s then -- Prev pressed
                 clearParms()
-                page = page - 1
-                if page == 0 then
-                    cursor_idx = cursor_idx - 1 -- 1 fewer positions on page 0; move back to "next"
-                end
-                if page < 0 then
-                    page = Max_Page
-                    cursor_idx = cursor_idx + 1 -- 1 more positions on subsequent pages; move forward to "next"
-                 end
-            elseif cursor_idx == Next_idx - s then -- Next pressed
-                clearParms()
-                if page == 0 then
-                    cursor_idx = cursor_idx + 1 -- 1 more positions on subsequent pages; move forward to "next"
-                end
-                page = page + 1
-                if page > Max_Page then
+                if page == 99 then
                     page = 0
                     cursor_idx = cursor_idx - 1 -- 1 fewer positions on page 0; move back to "next"
+                else
+                    page = page - 1
+                    if page == 0 then
+                        cursor_idx = cursor_idx - 1 -- 1 fewer positions on page 0; move back to "next"
+                    end
+                    if page < 0 then
+                        page = Max_Page
+                        cursor_idx = cursor_idx + 1 -- 1 more positions on subsequent pages; move forward to "next"
+                    end
+                end
+            elseif cursor_idx == Next_idx - s then -- Next pressed
+                clearParms()
+                if page == 99 then
+                    page = 0
+                    cursor_idx = cursor_idx - 1 -- 1 fewer positions on page 0; move back to "next"
+                else
+                    if page == 0 then
+                        cursor_idx = cursor_idx + 1 -- 1 more positions on subsequent pages; move forward to "next"
+                    end
+                    page = page + 1
+                    if page > Max_Page then
+                        page = 0
+                        cursor_idx = cursor_idx - 1 -- 1 fewer positions on page 0; move back to "next"
+                    end
                 end
             elseif DEV_PARM_LIST_complete and DEV_PARM_LIST[cursor_idx] ~= nil and DEV_PARM_LIST[cursor_idx].editable then -- edit option
                 cursor_x_idx = 0
@@ -912,10 +1004,14 @@ local function doPage(event)
             end
         elseif event == EVT_VIRTUAL_NEXT then -- and DEV_PARM_LIST_complete then
             cursor_idx = cursor_idx + 1
-            if cursor_idx > Next_idx - s then cursor_idx = Next_idx - s end
+            local max_cursor = Next_idx - s
+            if page == 99 then max_cursor = Prev_idx end -- only prev/next on page 99, start at prev
+            if cursor_idx > max_cursor then cursor_idx = max_cursor end
         elseif event == EVT_VIRTUAL_PREV then -- and DEV_PARM_LIST_complete then
             cursor_idx = cursor_idx - 1
-            if cursor_idx < 0 then cursor_idx = 0 end
+            local min_cursor = 0
+            if page == 99 then min_cursor = Prev_idx end -- only prev/next on page 99
+            if cursor_idx < min_cursor then cursor_idx = min_cursor end
         end
     else -- edit
         if event == EVT_VIRTUAL_EXIT then
@@ -963,7 +1059,7 @@ local function Do(event)
 
     if has_connected then
         clearParms()
-        if not popup then setPopup("Receiver connected!") end
+        if not popup then setPopup("Receiver\nconnected!") end
         if isPopupBlocked() then clearPopup() end
     end
     if has_disconnected then
@@ -999,8 +1095,21 @@ local function scriptRun(event)
         error("Cannot be run as a model script!")
         return 2
     end
-    if model.getModule(0).Type ~= 5 and model.getModule(1).Type ~= 5 then
-        error("mLRS not accessible: CRSF not enabled!")
+    local module0 = model.getModule(0)
+    local module1 = model.getModule(1)
+    local isInternal = (module0.Type == 5)  -- CRSF on Internal
+    local isExternal = (module1.Type == 5)  -- CRSF on External RF
+    
+    if not isInternal and not isExternal then
+        lcd.clear()
+        setPopupBlocked("Enable CRSF\nMDL > SETUP")
+        doPopup()
+        if event == EVT_VIRTUAL_EXIT then return 2 end
+        return 0
+    end
+
+    if isConnected == nil or cmdPush == nil or cmdPop == nil then --just to be sure for sure
+        error("Unclear issue with mBridge or CRSF!")
         return 2
     end
 

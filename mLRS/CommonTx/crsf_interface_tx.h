@@ -163,6 +163,9 @@ tTxCrsf crsf;
 // to avoid error: ISO C++ forbids taking the address of a bound member function to form a pointer to member function
 void crsf_pin5_rx_callback(uint8_t c) { crsf.pin5_rx_callback(c); }
 void crsf_pin5_tc_callback(void) { crsf.pin5_tc_callback(); }
+#if !(defined ESP32)
+void crsf_pin5_cc1_callback(void) { crsf.pin5_cc1_callback(); }
+#endif
 
 
 // is called in isr context
@@ -354,6 +357,9 @@ void tTxCrsf::Init(bool enable_flag)
 
     uart_rx_callback_ptr = &crsf_pin5_rx_callback;
     uart_tc_callback_ptr = &crsf_pin5_tc_callback;
+#if !(defined ESP32)
+    uart_cc1_callback_ptr = &crsf_pin5_cc1_callback;
+#endif
 
     tPin5BridgeBase::Init();
 }
@@ -391,12 +397,29 @@ bool tTxCrsf::TelemetryUpdate(uint8_t* const task, uint16_t frame_rate_ms)
     if (telemetry_start_next_tick) {
         telemetry_start_next_tick = false;
 
-        // slow it down if frame time is too short
-        if (frame_rate_ms <= 19) {
+        // throttle telemetry restart based on CRSF baud rate to equalize param loading
+        // reduces link stats updates to make more slots available for param/telemetry frames
+        // CRSF rates: 115200→62.5Hz, 400000→250Hz, 921600+→500Hz
+        //                          FLRC   50Hz   31Hz   19Hz
+        // throttle_factors[baud]   [0]    [1]    [2]    [3]
+        static const uint8_t throttle_115200[] = { 20, 10, 7, 4 };  // ~48 param slots/sec
+        static const uint8_t throttle_400000[] = { 3,  3, 2, 1 };  // ~200 param slots/sec
+        static const uint8_t throttle_921600[] = { 3,  2, 1, 1 };  // ~400 param slots/sec
+
+        uint8_t mode_idx = (frame_rate_ms <= 19) ? 0 : (frame_rate_ms <= 25) ? 1 : (frame_rate_ms <= 40) ? 2 : 3;
+        uint8_t throttle_factor;
+        if (crsf_baud_rate <= 115200) {
+            throttle_factor = throttle_115200[mode_idx];
+        } else if (crsf_baud_rate <= 400000) {
+            throttle_factor = throttle_400000[mode_idx];
+        } else {
+            throttle_factor = throttle_921600[mode_idx];
+        }
+        if (throttle_factor > 1) {
             static uint8_t cnt = 0;
             if (!cnt) telemetry_state = 0;
             cnt++;
-            if (cnt > 2) cnt = 0;
+            if (cnt >= throttle_factor) cnt = 0;
         } else {
             telemetry_state = 0;
         }

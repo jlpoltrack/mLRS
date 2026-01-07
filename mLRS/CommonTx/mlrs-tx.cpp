@@ -274,6 +274,11 @@ void init_hw(void)
     systembootloader_init(); // after delay_init() since it may need delay
     timer_init();
 
+#if defined DEVICE_HAS_JRPIN5 && !(defined ESP32)
+    // enable MICROS_TIMx CC1 interrupt for non-blocking TX delay on JR Pin5
+    nvic_irq_enable_w_priority(MICROS_TIMx_IRQn, UART_IRQ_PRIORITY);
+#endif
+
     leds_init();
     button_init();
     esp_init();
@@ -294,11 +299,11 @@ void init_hw(void)
     sx.Init(); // these take time
     sx2.Init();
 
+    __enable_irq(); // enable before interface init for autobaud
+
     mbridge.Init(Config.UseMbridge, Config.UseCrsf); // these affect peripherals, hence do here
     crsf.Init(Config.UseCrsf);
     in.Init(Config.UseIn);
-
-    __enable_irq();
 }
 
 
@@ -342,6 +347,16 @@ void SX2_DIO_EXTI_IRQHandler(void)
             sx2.ReadBuffer(0, (uint8_t*)&sync_word, 2);
             if (sync_word != Config.FrameSyncWord) irq2_status = 0;
         }
+    }
+})
+#endif
+
+#if defined DEVICE_HAS_JRPIN5 && !(defined ESP32)
+IRQHANDLER(
+void MICROS_TIMx_IRQHandler(void)
+{
+    if (LL_TIM_IsActiveFlag_CC1(MICROS_TIMx) && LL_TIM_IsEnabledIT_CC1(MICROS_TIMx)) {
+        UART_CC1_CALLBACK();
     }
 })
 #endif
@@ -1169,7 +1184,7 @@ IF_CRSF(
         rc_data_updated = true;
     }
     uint8_t crsftask; uint8_t crsfcmd;
-    uint8_t mbcmd; static uint8_t do_cnt = 0; // if it's too fast Lua script gets out of sync
+    uint8_t mbcmd; static uint8_t do_cnt = 0; // was used for telemetry frame pacing
     uint8_t* buf; uint8_t len;
     if (crsf.TelemetryUpdate(&crsftask, Config.frame_rate_ms)) {
         switch (crsftask) {
@@ -1177,7 +1192,7 @@ IF_CRSF(
         case TXCRSF_SEND_LINK_STATISTICS_TX: crsf.SendLinkStatisticsTx(); break;
         case TXCRSF_SEND_LINK_STATISTICS_RX: crsf.SendLinkStatisticsRx(); break;
         case TXCRSF_SEND_TELEMETRY_FRAME:
-            if (!do_cnt && mbridge.CommandInFifo(&mbcmd)) {
+            if (mbridge.CommandInFifo(&mbcmd)) {
                 mbridge_send_cmd(mbcmd);
             }
             if (mbridge.CrsfFrameAvailable(&buf, &len)) {

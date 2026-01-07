@@ -45,6 +45,8 @@
 #define EE_START_PAGE             124 // 128 kB flash, 1 kB page
 
 #define MICROS_TIMx               TIM3
+#define MICROS_TIMx_IRQn          TIM3_IRQn
+#define MICROS_TIMx_IRQHandler    TIM3_IRQHandler
 
 
 //-- UARTS

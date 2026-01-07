@@ -56,12 +56,15 @@ extern volatile uint32_t millis32(void);
 
 void uart_rx_callback_dummy(uint8_t c) {}
 void uart_tc_callback_dummy(void) {}
+void uart_cc1_callback_dummy(void) {}
 
 void (*uart_rx_callback_ptr)(uint8_t) = &uart_rx_callback_dummy;
 void (*uart_tc_callback_ptr)(void) = &uart_tc_callback_dummy;
+void (*uart_cc1_callback_ptr)(void) = &uart_cc1_callback_dummy;
 
 #define UART_RX_CALLBACK_FULL(c)    (*uart_rx_callback_ptr)(c)
 #define UART_TC_CALLBACK()          (*uart_tc_callback_ptr)()
+#define UART_CC1_CALLBACK()         (*uart_cc1_callback_ptr)()
 
 #if defined ESP32 || defined ESP8266
 #include "jr_pin5_interface_esp.h"
@@ -122,6 +125,7 @@ class tPin5BridgeBase
     // actual isr functions
     void pin5_rx_callback(uint8_t c);
     void pin5_tc_callback(void);
+    void pin5_cc1_callback(void);  // MICROS_TIMx CC1 ISR for TX delay
 
     // parser
     typedef enum {
@@ -141,6 +145,7 @@ class tPin5BridgeBase
 
         // transmit states, used by all
         STATE_TRANSMIT_START,
+        STATE_TRANSMIT_PENDING,  // waiting for TX delay timer
         STATE_TRANSMITING,
     } STATE_ENUM;
 
@@ -156,6 +161,51 @@ class tPin5BridgeBase
     // can't hurt generally as safety net
     uint32_t nottransmiting_tlast_ms;
     void CheckAndRescue(void);
+
+  protected:
+    // detected CRSF baud rate for telemetry throttling
+    uint32_t crsf_baud_rate = UART_BAUD;
+
+    // blocking autobaud detection - called once during init
+    void DoAutobaud(void)
+    {
+        static const uint32_t probing_bauds[6] = {400000, 115200, 921600, 1870000, 3750000, 5250000};
+        static const uint32_t probing_timeouts_ms[6] = {
+            12,  // 400K:    250 Hz → 4ms × 3 packets
+            48,  // 115200:  62.5 Hz → 16ms × 3 packets
+            6,   // 921600:  500 Hz → 2ms × 3 packets
+            6,   // 1870000: 500 Hz → 2ms × 3 packets
+            6,   // 3750000: 500 Hz → 2ms × 3 packets
+            6    // 5250000: 500 Hz → 2ms × 3 packets
+        };
+
+#if defined STM32G4
+        static const uint8_t AUTOBAUD_PROBE_COUNT = 6;  // STM32G4 supports up to 5.25MBaud. WL and L4 could with 8X oversampling?
+#elif defined STM32F1 || defined STM32WL || defined STM32L4
+        static const uint8_t AUTOBAUD_PROBE_COUNT = 4;  // STM32F1, STM32WL, STM32L4 up to 1.87MBaud
+#elif defined STM32F0   
+        static const uint8_t AUTOBAUD_PROBE_COUNT = 0;  // STM32F0 skip autobaud, use default 400K
+#endif
+
+        for (uint8_t i = 0; i < AUTOBAUD_PROBE_COUNT; i++) {
+            uart_setbaudrate(probing_bauds[i]);
+            uart_rx_enableisr(ENABLE);  // re-enable RX interrupt after baud change
+            valid_frame_received = false;
+            uint32_t start_ms = millis32();
+            
+            while ((millis32() - start_ms) <= probing_timeouts_ms[i]) {
+                if (valid_frame_received) {
+                    crsf_baud_rate = probing_bauds[i];
+                    return;
+                }
+            }
+        }
+        // no valid frame at any baud - crsf_baud_rate keeps default UART_BAUD
+        autobaud_done = true;
+    }
+
+    volatile bool valid_frame_received = false;
+    volatile bool autobaud_done = false;
 };
 
 
@@ -170,6 +220,10 @@ void tPin5BridgeBase::Init(void)
     telemetry_state = 0;
 
     nottransmiting_tlast_ms = 0;
+
+    // reset autobaud state for proper detection after restart
+    valid_frame_received = false;
+    autobaud_done = false;
 
     pin5_init();
 }
@@ -187,6 +241,10 @@ void tPin5BridgeBase::TelemetryStart(void)
 
 void tPin5BridgeBase::pin5_init(void)
 {
+// ensure CC1 interrupt is disabled and cleared from any previous state (e.g., after restart)
+    LL_TIM_DisableIT_CC1(MICROS_TIMx);
+    LL_TIM_ClearFlag_CC1(MICROS_TIMx);
+
 // TX & RX XOR method, F103
 #if defined JRPIN5_TX_XOR && defined JRPIN5_RX_XOR
     gpio_init(JRPIN5_TX_XOR, IO_MODE_OUTPUT_PP_HIGH, IO_SPEED_VERYFAST);
@@ -256,6 +314,8 @@ void tPin5BridgeBase::pin5_init(void)
 
     pin5_tx_enable(false); // also enables rx isr
 
+    DoAutobaud();
+
 #ifdef TX_FRM303_F072CB
     gpio_init_outpp(IO_PB9);
 #endif
@@ -322,14 +382,22 @@ void tPin5BridgeBase::pin5_tx_enable(bool enable_flag)
 }
 
 
-// we do not add a delay here before we transmit
-// the logic analyzer shows this gives a 30-35 us gap nevertheless, which is perfect
+// non-blocking delay before TX using MICROS_TIMx CC1 compare interrupt
+// this gives the radio time to switch from TX to RX before we start transmitting
 
 void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
 {
     parse_nextchar(c);
 
+    // only set valid_frame_received during autobaud detection
+    if (!autobaud_done && state == STATE_TRANSMIT_START) {
+        valid_frame_received = true;
+        autobaud_done = true;
+    }
+
     if (state < STATE_TRANSMIT_START) return; // we are in receiving
+
+    if (state == STATE_TRANSMIT_PENDING) return; // already waiting for TX delay
 
     if (state != STATE_TRANSMIT_START) { // we are in transmitting, should not happen! (does appear to not happen)
         state = STATE_IDLE;
@@ -337,9 +405,11 @@ void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
     }
 
     if (transmit_start()) { // check if a transmission waits, put it into buf and return true to start
-        pin5_tx_enable(true);
-        state = STATE_TRANSMITING;
-        pin5_tx_start();
+        // schedule TX after PIN5_TX_DELAY_US using timer CC1 interrupt
+        MICROS_TIMx->CCR1 = (uint16_t)(MICROS_TIMx->CNT + 100);  // 100us delay, should be plenty
+        LL_TIM_ClearFlag_CC1(MICROS_TIMx);
+        LL_TIM_EnableIT_CC1(MICROS_TIMx);
+        state = STATE_TRANSMIT_PENDING;
     } else {
         state = STATE_IDLE;
     }
@@ -350,6 +420,19 @@ void tPin5BridgeBase::pin5_tc_callback(void)
 {
     pin5_tx_enable(false); // switches on rx
     state = STATE_IDLE;
+}
+
+
+void tPin5BridgeBase::pin5_cc1_callback(void)
+{
+    LL_TIM_DisableIT_CC1(MICROS_TIMx);
+    LL_TIM_ClearFlag_CC1(MICROS_TIMx);
+
+    if (state == STATE_TRANSMIT_PENDING) {
+        pin5_tx_enable(true);
+        state = STATE_TRANSMITING;
+        pin5_tx_start();
+    }
 }
 
 

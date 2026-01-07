@@ -74,6 +74,8 @@ static inline void delay_ns(uint32_t ns) {} // LA log shows, no delay needed
 #define EE_START_PAGE             60 // 128 kB flash, 2 kB page
 
 #define MICROS_TIMx               TIM3
+#define MICROS_TIMx_IRQn          TIM3_IRQn
+#define MICROS_TIMx_IRQHandler    TIM3_IRQHandler
 
 
 //-- UARTS

@@ -100,6 +100,63 @@ class tPin5BridgeBase
     // check and rescue, is here for compatibility, not needed
     void CheckAndRescue(void) {}
 
+  protected:
+    // detected CRSF baud rate for telemetry throttling
+    // used by TelemetryUpdate() to adjust slot pacing for slow baud rates
+    uint32_t crsf_baud_rate = UART_BAUD;
+
+    // blocking autobaud detection - called once during init
+    void DoAutobaud(void)
+    {
+        static const uint8_t AUTOBAUD_PROBE_COUNT = 6;
+        static const uint32_t probing_bauds[6] = {400000, 115200, 921600, 1870000, 3750000, 5250000};
+        
+        // timeout per baud based on CRSF packet rate: 3 packet periods
+        // 115200→62.5Hz(16ms), 400K→250Hz(4ms), 921600+→500Hz(2ms)
+        static const uint32_t probing_timeouts_ms[6] = {
+            12,  // 400K:    250 Hz → 4ms × 3 packets
+            48,  // 115200:  62.5 Hz → 16ms × 3 packets
+            6,   // 921600:  500 Hz → 2ms × 3 packets
+            6,   // 1870000: 500 Hz → 2ms × 3 packets
+            6,   // 3750000: 500 Hz → 2ms × 3 packets
+            6    // 5250000: 500 Hz → 2ms × 3 packets
+        };
+
+        for (uint8_t i = 0; i < AUTOBAUD_PROBE_COUNT; i++) {
+            uart_setbaudrate(probing_bauds[i]);
+#ifndef JR_PIN5_FULL_DUPLEX
+            pin5_rx_enable();
+#endif
+            state = STATE_IDLE;
+            
+            uint32_t start_ms = millis32();
+            
+            while ((millis32() - start_ms) <= probing_timeouts_ms[i]) {
+                while (uart_rx_bytesavailable()) {
+                    parse_nextchar(uart_getc());
+                    if (state == STATE_TRANSMIT_START) {
+                        crsf_baud_rate = probing_bauds[i];
+                        state = STATE_IDLE;
+                        return;
+                    }
+                }
+            }
+
+            // Final sweep to catch anything that arrived at the very end of the timeout
+            while (uart_rx_bytesavailable()) {
+                parse_nextchar(uart_getc());
+                if (state == STATE_TRANSMIT_START) {
+                    crsf_baud_rate = probing_bauds[i];
+                    state = STATE_IDLE;
+                    return;
+                }
+            }
+        }
+        // no valid frame at any baud - crsf_baud_rate keeps default UART_BAUD
+    }
+
+    volatile bool valid_frame_received = false;
+
   private:
     tFifo<char,128> pin5_fifo; // enough for 2 full CRSF messages
     bool pin5_clock_initialized = false; // must be inited only once at power up
@@ -140,10 +197,6 @@ void tPin5BridgeBase::TelemetryStart(void)
 void tPin5BridgeBase::pin5_init(void)
 {
     uart_init();
-
-    // onReceive uses the pin5_rx_callback function
-    // true means trigger only on a symbol timeout
-    UART_SERIAL_NO.onReceive((void (*)(void)) uart_rx_callback_ptr, true);
     
 #ifndef JR_PIN5_FULL_DUPLEX
 
@@ -167,6 +220,12 @@ void tPin5BridgeBase::pin5_init(void)
 
     pin5_clock_initialized = true;
 #endif
+
+    DoAutobaud();
+
+    // register the receiver callback now that we have a locked baud rate
+    // true means trigger only on a symbol timeout
+    UART_SERIAL_NO.onReceive((void (*)(void)) uart_rx_callback_ptr, true);
 }
 
 
@@ -207,6 +266,11 @@ IRAM_ATTR void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
     while (pin5_fifo.Available()) {
         if (state >= STATE_TRANSMIT_START) break; // read at most 1 message
         parse_nextchar(pin5_fifo.Get());
+    }
+
+    // if parser reached STATE_TRANSMIT_START, we have a complete valid frame
+    if (state == STATE_TRANSMIT_START) {
+        valid_frame_received = true;
     }
 
     // send telemetry after every received message

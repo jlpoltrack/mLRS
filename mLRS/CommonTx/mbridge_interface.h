@@ -114,6 +114,9 @@ tMBridge mbridge;
 // to avoid error: ISO C++ forbids taking the address of a bound member function to form a pointer to member function
 void mbridge_pin5_rx_callback(uint8_t c) { mbridge.pin5_rx_callback(c); }
 void mbridge_pin5_tc_callback(void) { mbridge.pin5_tc_callback(); }
+#if !(defined ESP32)
+void mbridge_pin5_cc1_callback(void) { mbridge.pin5_cc1_callback(); }
+#endif
 
 
 // is called in isr context
@@ -343,6 +346,9 @@ void tMBridge::Init(bool enable_flag, bool crsf_emulation_flag)
     if (!crsf_emulation) {
         uart_rx_callback_ptr = &mbridge_pin5_rx_callback;
         uart_tc_callback_ptr = &mbridge_pin5_tc_callback;
+#if !(defined ESP32)
+        uart_cc1_callback_ptr = &mbridge_pin5_cc1_callback;
+#endif
 
         tPin5BridgeBase::Init();
         tSerialBase::Init();
