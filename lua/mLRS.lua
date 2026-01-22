@@ -11,7 +11,7 @@
 -- works with mLRS v1.3.03 and later, mOTX v33
 
 local VERSION = {
-    SCRIPT = '2026-01-07.00',
+    SCRIPT = '2026-01-23.00',
     REQUIRED_TX = 10303,  -- 'v1.3.03'
     REQUIRED_RX = 10303,  -- 'v1.3.03'
 }
@@ -30,7 +30,7 @@ local DEFAULTS = {
 -- TX16, T16, etc.:    480 x 272
 -- T15, TX15:          480 x 320
 -- PA01:               320 x 240
--- ????:               800 x 480
+-- TX16S MK3:          800 x 480
 
 local THEME = {
     screenSize = nil,
@@ -791,14 +791,13 @@ local function doParamLoop()
     local t_10ms = getTime()
     local time_since_last = t_10ms - LOAD.loop_t_last
     
-    local interval = 4 -- default 50ms (idle/maintenance)
+    local interval = 10 -- default 100ms (idle/maintenance)
     if LOAD.is_running then interval = 0 end -- 0ms (fastest) during download
     
     if time_since_last > interval then 
       LOAD.loop_t_last = t_10ms
       if t_10ms < LOAD.save_t_last + DEFAULTS.SAVE_DELAY then
           -- skip, we don't send a cmd if the last Save was recent
-          -- TODO: we could make deadtime dependend on whether a receiver was connected before the Save
       elseif DEVICE.ITEM_TX == nil then
           DEVICE.request_count = DEVICE.request_count + 1
           if DEVICE.request_count > 10 then
@@ -910,12 +909,7 @@ local function doParamLoop()
             if DEVICE.PARAM_LIST == nil then
                 paramsError()
             elseif index < 128 then
-                -- sanity check: if we've already filled too many params, something is wrong
-                if #DEVICE.PARAM_LIST > 200 then  -- reasonable upper bound
-                    paramsError()
-                    setPopupWTmo("Too many parameters\nCheck firmware", 500)
-                    LOAD.is_running = false
-                else
+
                     DEVICE.PARAM_LIST[index] = cmd
                     DEVICE.PARAM_LIST[index].typ = mb_to_u8(cmd.payload, 1)
                     DEVICE.PARAM_LIST[index].typ = mb_to_u8(cmd.payload, 1)
@@ -942,7 +936,7 @@ local function doParamLoop()
                             LOAD.is_running = false
                         end
                     end
-                end
+
             elseif index == 255 then -- eol (end of list :)
                 LOAD.complete = true
                 LOAD.request_t_last = 0  -- stop retry timer
@@ -1878,12 +1872,6 @@ local function scriptInit()
     setupBridge()
 
     LOAD.is_running = true -- we start the script with this
-    local tnow_10ms = getTime()
-    if tnow_10ms < DEFAULTS.SAVE_DELAY then
-        LOAD.save_t_last = DEFAULTS.SAVE_DELAY - tnow_10ms -- treat script start like a Save
-    else
-        LOAD.save_t_last = 0
-    end
 end
 
 
