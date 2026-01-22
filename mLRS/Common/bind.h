@@ -116,6 +116,13 @@ void tBindBase::ConfigForBind(void)
     // used by both the Tx and Rx, switch to 19 Hz mode, select lowest possible power
     // we technically have to distinguish between MODE_19HZ or MODE_19HZ_7X
     // configure_mode() however does currently do the same for both cases
+
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
+    // for dual-band devices, enable both antennas during bind to allow binding on any band
+    Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
+    Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
+#endif
+
     if (Config.Mode == MODE_19HZ_7X) {
         mode_mask = 0xFFFF;
         configure_mode(MODE_19HZ_7X, Config.FrequencyBand);
@@ -125,6 +132,14 @@ void tBindBase::ConfigForBind(void)
         configure_mode(MODE_19HZ, Config.FrequencyBand);
         mode_mask |= (1 << Config.FrequencyBand); // set bit for current frequency band
     }
+
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    // configure_mode() only sets Config.Sx2 when frequency band is dual-band or 2.4 GHz
+    // for binding when stored config is sub-GHz, we need to explicitly configure Sx2 for 2.4 GHz
+    Config.Sx2.LoraConfigIndex = SX128x_LORA_CONFIG_BW800_SF7_CRLI4_5; // 19 Hz for 2.4 GHz
+    Config.Sx2.is_lora = true;
+    Config.Sx2.FrequencyBand = SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ;
+#endif
 
     config_rf();
 }
@@ -318,7 +333,9 @@ void tBindBase::handle_receive(uint8_t antenna, uint8_t rx_status)
 
     strstrbufcpy(Setup.Common[0].BindPhrase, txBindFrame.BindPhrase_6, 6);
     // only update FrequencyBand if set; older firmware leaves this at 0
-    if (txBindFrame.FrequencyBand != 0) {
+    // but value 0 is valid (SETUP_FREQUENCY_BAND_2P4_GHZ), so check against valid range instead?
+    // compatability with older firmware can not be guaranteed?
+    if (txBindFrame.FrequencyBand < SETUP_FREQUENCY_BAND_NUM) {
         Setup.Common[0].FrequencyBand = (SETUP_FREQUENCY_BAND_ENUM)txBindFrame.FrequencyBand;
     }
     Setup.Common[0].Mode = txBindFrame.Mode;

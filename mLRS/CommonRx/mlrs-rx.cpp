@@ -551,8 +551,14 @@ RESTARTCONTROLLER
     if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
     if (!sx2.isOk()) { FAILALWAYS(BLINK_GR_RD_OFF, "Sx2 not ok"); } // fail!
     irq_status = irq2_status = 0;
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
+    // for dual-band devices, always start both chips to support binding on all bands
+    sx.StartUp(&Config.Sx);
+    sx2.StartUp(&Config.Sx2);
+#else
     IF_SX(sx.StartUp(&Config.Sx));
     IF_SX2(sx2.StartUp(&Config.Sx2));
+#endif
     bind.Init();
     fhss.Init(&Config.Fhss, &Config.Fhss2);
     fhss.Start();
