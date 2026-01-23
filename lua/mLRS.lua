@@ -11,11 +11,10 @@
 -- works with mLRS v1.3.03 and later, mOTX v33
 
 local VERSION = {
-    SCRIPT = '2026-01-23.00',
+    SCRIPT = '2026-01-23.01',
     REQUIRED_TX = 10303,  -- 'v1.3.03'
     REQUIRED_RX = 10303,  -- 'v1.3.03'
 }
-
 
 -- timing defaults
 local DEFAULTS = {
@@ -88,7 +87,7 @@ local function setupScreen()
     THEME.screenSize = LCD_W * 1000 + LCD_H
     if THEME.screenSize == 320240 then -- 320x240, PA01
         LAYOUT.PAGE_N1 = 7
-        page_N = 7 -- single column
+        LAYOUT.PAGE_N = 7 -- single column
         LAYOUT.POPUP_X = 10
         LAYOUT.POPUP_W = 300
         LAYOUT.WARN_X = 10
@@ -108,7 +107,7 @@ local function setupScreen()
         LAYOUT.INFO_RIGHT_VAL_X = 245
     elseif THEME.screenSize == 800480 then -- 800x480
         LAYOUT.PAGE_N1 = 15
-        page_N = 2 * LAYOUT.PAGE_N1
+        LAYOUT.PAGE_N = 2 * LAYOUT.PAGE_N1
         -- text sizing for larger screen
         LAYOUT.TEXT_SIZE = MIDSIZE
         LAYOUT.TEXT_DY = 28
@@ -145,10 +144,10 @@ local function setupScreen()
         LAYOUT.INFO_RIGHT_VAL_X = 180 + LAYOUT.W_HALF
     elseif THEME.screenSize == 480320 then -- 480x320, T15
         LAYOUT.PAGE_N1 = 11
-        page_N = 2 * LAYOUT.PAGE_N1
+        LAYOUT.PAGE_N = 2 * LAYOUT.PAGE_N1
     else
         LAYOUT.PAGE_N1 = 9
-        page_N = 2 * LAYOUT.PAGE_N1
+        LAYOUT.PAGE_N = 2 * LAYOUT.PAGE_N1
     end
 end
 
@@ -276,25 +275,21 @@ local MB = {
     CMD_FLASH_ESP          = 18,
 }
 
+local CMD_LEN = {
+    [MB.CMD_TX_LINK_STATS] = MB.LEN_TX_LINK_STATS,
+    [MB.CMD_DEVICE_ITEM_TX] = MB.LEN_DEVICE_ITEM,
+    [MB.CMD_DEVICE_ITEM_RX] = MB.LEN_DEVICE_ITEM,
+    [MB.CMD_PARAM_ITEM]     = MB.LEN_PARAM_ITEM,
+    [MB.CMD_PARAM_ITEM2]    = MB.LEN_PARAM_ITEM,
+    [MB.CMD_PARAM_ITEM3]    = MB.LEN_PARAM_ITEM,
+    [MB.CMD_REQUEST_CMD]    = MB.LEN_REQUEST_CMD,
+    [MB.CMD_INFO]           = MB.LEN_INFO,
+    [MB.CMD_PARAM_SET]      = MB.LEN_PARAM_SET,
+    [MB.CMD_MODELID_SET]    = MB.LEN_MODELID_SET,
+}
+
 local function mbridgeCmdLen(cmd)
-    if cmd == MB.CMD_TX_LINK_STATS then return MB.LEN_TX_LINK_STATS; end
-    if cmd == MB.CMD_REQUEST_INFO then return 0; end
-    if cmd == MB.CMD_DEVICE_ITEM_TX then return MB.LEN_DEVICE_ITEM; end
-    if cmd == MB.CMD_DEVICE_ITEM_RX then return MB.LEN_DEVICE_ITEM; end
-    if cmd == MB.CMD_PARAM_REQUEST_LIST then return 0; end
-    if cmd == MB.CMD_PARAM_ITEM then return MB.LEN_PARAM_ITEM; end
-    if cmd == MB.CMD_PARAM_ITEM2 then return MB.LEN_PARAM_ITEM; end
-    if cmd == MB.CMD_PARAM_ITEM3 then return MB.LEN_PARAM_ITEM; end
-    if cmd == MB.CMD_REQUEST_CMD then return MB.LEN_REQUEST_CMD; end
-    if cmd == MB.CMD_INFO then return MB.LEN_INFO; end
-    if cmd == MB.CMD_PARAM_SET then return MB.LEN_PARAM_SET; end
-    if cmd == MB.CMD_PARAM_STORE then return 0; end
-    if cmd == MB.CMD_BIND_START then return 0; end
-    if cmd == MB.CMD_BIND_STOP then return 0; end
-    if cmd == MB.CMD_MODELID_SET then return MB.LEN_MODELID_SET; end
-    if cmd == MB.CMD_SYSTEM_BOOTLOADER then return 0; end
-    if cmd == MB.CMD_FLASH_ESP then return 0; end
-    return 0;
+    return CMD_LEN[cmd] or 0
 end
 
 local function crsfIsConnected()
@@ -588,7 +583,7 @@ local function mb_to_u24(payload, pos)
 end
 
 local function mb_to_u32(payload, pos)
-    return payload[pos+0] + payload[pos+1]*256 + payload[pos+2]*256*256 + payload[pos+2]*256*256*256
+    return payload[pos+0] + payload[pos+1]*256 + payload[pos+2]*256*256 + payload[pos+3]*256*256*256
 end
 
 local function mb_to_value(payload, pos, typ)
@@ -912,7 +907,6 @@ local function doParamLoop()
 
                     DEVICE.PARAM_LIST[index] = cmd
                     DEVICE.PARAM_LIST[index].typ = mb_to_u8(cmd.payload, 1)
-                    DEVICE.PARAM_LIST[index].typ = mb_to_u8(cmd.payload, 1)
                     DEVICE.PARAM_LIST[index].name = mb_to_string(cmd.payload, 2, 16)
                     DEVICE.PARAM_LIST[index].value = mb_to_value_or_str6(cmd.payload, 18, DEVICE.PARAM_LIST[index].typ)
                     DEVICE.PARAM_LIST[index].min = 0
@@ -1040,17 +1034,24 @@ local function sendParamSet(idx)
     if DEVICE.PARAM_LIST == nil then return end -- needed here??
     local p = DEVICE.PARAM_LIST[idx]
     if p == nil then return end
-    if p.typ < MB.TYPE_LIST then
-        cmdPush(MB.CMD_PARAM_SET, {idx, p.value})
-    elseif p.typ == MB.TYPE_LIST then
-        cmdPush(MB.CMD_PARAM_SET, {idx, p.value})
+    
+    local payload = {idx}
+    local val = p.value
+
+    if p.typ == MB.TYPE_UINT8 or p.typ == MB.TYPE_LIST then
+        payload[2] = bit32.band(val, 0xFF)
+    elseif p.typ == MB.TYPE_INT8 then
+        payload[2] = bit32.band(val, 0xFF)
+    elseif p.typ == MB.TYPE_UINT16 or p.typ == MB.TYPE_INT16 then
+        payload[2] = bit32.band(val, 0xFF)
+        payload[3] = bit32.band(bit32.rshift(val, 8), 0xFF)
     elseif p.typ == MB.TYPE_STR6 then
-        local cmd = {idx}
         for i = 1,6 do
-            cmd[i+1] = string.byte(string.sub(p.value, i,i))
+            payload[i+1] = string.byte(string.sub(p.value, i,i))
         end
-        cmdPush(MB.CMD_PARAM_SET, cmd)
     end
+
+    cmdPush(MB.CMD_PARAM_SET, payload)
 end
 
 
@@ -1331,14 +1332,14 @@ local function drawPageEdit(page_str)
     local text_attr = THEME.textColor + LAYOUT.TEXT_SIZE
 
     if CURSOR.idx < CURSOR.top_idx then CURSOR.top_idx = CURSOR.idx end
-    if CURSOR.idx >= CURSOR.top_idx + page_N then CURSOR.top_idx = CURSOR.idx - page_N + 1 end
+    if CURSOR.idx >= CURSOR.top_idx + LAYOUT.PAGE_N then CURSOR.top_idx = CURSOR.idx - LAYOUT.PAGE_N + 1 end
 
     CURSOR.param_cnt = #CURSOR.param_list
     if CURSOR.param_list[CURSOR.idx + 1] then
         CURSOR.pidx = CURSOR.param_list[CURSOR.idx + 1]
     end
 
-    local loop_end = CURSOR.top_idx + page_N
+    local loop_end = CURSOR.top_idx + LAYOUT.PAGE_N
     if loop_end > CURSOR.param_cnt then loop_end = CURSOR.param_cnt end
 
     for idx = CURSOR.top_idx, loop_end - 1 do
@@ -1359,7 +1360,7 @@ local function drawPageEdit(page_str)
         local should_balance = (page_str == "Tx" and THEME.screenSize ~= 320240) or
                                (page_str == "Rx" and THEME.screenSize == 800480)
         if should_balance then
-            local items_on_page = math.min(page_N, CURSOR.param_cnt - CURSOR.top_idx)
+            local items_on_page = math.min(LAYOUT.PAGE_N, CURSOR.param_cnt - CURSOR.top_idx)
             rows_in_col1 = math.ceil(items_on_page / 2)
         end
         if shifted_idx >= rows_in_col1 then y = y - rows_in_col1*dy; xofs = col2_offset end
@@ -1378,7 +1379,7 @@ local function drawPageEdit(page_str)
         --lcd.drawFilledTriangle(x_mid-6, y_base, x_mid+6, y_base, x_mid, y_base-6, THEME.textColor)
         drawFilledTriangle(x_mid-6, y_base, x_mid+6, y_base, x_mid, y_base-6, THEME.textColor)
     end
-    if CURSOR.param_cnt > CURSOR.top_idx + page_N then
+    if CURSOR.param_cnt > CURSOR.top_idx + LAYOUT.PAGE_N then
         local y_base = y0 + LAYOUT.PAGE_N1*dy + 4
         --lcd.drawFilledTriangle(x_mid-6, y_base, x_mid+6, y_base, x_mid, y_base+6, THEME.textColor)
         drawFilledTriangle(x_mid-6, y_base, x_mid+6, y_base, x_mid, y_base+6, THEME.textColor)
@@ -1566,7 +1567,7 @@ local function drawPageMain()
             lcd.drawText(x, y, c, attr)
             --x = x + lcd.getTextWidth(c,1,attr)+1
             x = x + getCharWidth(c) + 1
-            if i == 6 and DEVICE.PARAM_LIST[2].value == 0 then -- do only for 2.4GHz band
+            if i == 6 and DEVICE.PARAM_LIST[2] ~= nil and DEVICE.PARAM_LIST[2].value == 0 then -- do only for 2.4GHz band
                 lcd.drawText(LAYOUT.TEXT_VAL_X + LAYOUT.EXCEPT_STR_OFFSET, y, getExceptStrFromChar(c), THEME.textColor + LAYOUT.TEXT_SIZE)
             end
         end
@@ -1900,7 +1901,7 @@ local function scriptRun(event)
         return 2
     end
 
-    if not CURSOR.edit and page_nr == UI.PAGE_MAIN then
+    if not CURSOR.edit and CURSOR.page == UI.PAGE_MAIN then
         if event == EVT_VIRTUAL_EXIT then
             return 2
         end
