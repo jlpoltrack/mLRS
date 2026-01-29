@@ -964,8 +964,17 @@ void setup_init(void)
 EE_STATUS_ENUM ee_status;
 bool doEEPROMwrite;
 
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("  setup_init: setup_clear()");
+#endif
     setup_clear();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("  setup_init: ee_init()...");
+#endif
     ee_status = ee_init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("  setup_init: ee_init() done");
+#endif
     if (ee_status == EE_STATUS_OK) { ee_status = setup_retrieve_from_EEPROM(); }
     if (ee_status != EE_STATUS_OK) { // try it a 2nd time
         setup_clear();

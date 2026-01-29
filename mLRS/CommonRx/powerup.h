@@ -91,6 +91,13 @@ void tPowerupCounter::Init(void)
     powerup_do = true;
     task = POWERUPCNT_TASK_NONE;
 
+#ifdef ARDUINO_ARCH_RP2040
+    // RP2040 doesn't support direct flash memory access like STM32
+    // Skip powerup counter functionality for now
+    powerup_do = false;
+    return;
+#endif
+
     // check if this really was a power up, or just a reset
     if (powerup_counter_signature == POWERUPCNT_SIGNATURE_B) {
         powerup_do = false;

@@ -201,19 +201,43 @@ class Sx126xDriverCommon : public Sx126xDriverBase
     {
         gconfig = global_config;
 
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  Configure: start, status=0x");
+        Serial1.println(GetLastStatus(), HEX);
+#endif
+
         if (gconfig->modeIsLora()) {
             SetPacketType(SX126X_PACKET_TYPE_LORA);
         } else {
             SetPacketType(SX126X_PACKET_TYPE_GFSK);
         }
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  Configure: after SetPacketType, status=0x");
+        Serial1.println(GetLastStatus(), HEX);
+#endif
 
         SetTxClampConfig(); // workaround 15.2.2, datasheet p.105
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  Configure: after SetTxClampConfig, status=0x");
+        Serial1.println(GetLastStatus(), HEX);
+#endif
 
         ClearDeviceError(); // XOSC_START_ERR is raised, datasheet 13.3.6 SetDIO3AsTCXOCtrl, p.84
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  Configure: after ClearDeviceError, status=0x");
+        Serial1.println(GetLastStatus(), HEX);
+#endif
 
         // set DIO3 as TCXO control
         if (osc_configuration != SX12xx_OSCILLATOR_CONFIG_CRYSTAL) {
+#ifdef ARDUINO_ARCH_RP2040
+            DBG_BOOT("  Configure: calling SetDio3AsTcxoControl...");
+#endif
             SetDio3AsTcxoControl(osc_configuration, 250); // set output to 1.6V-3.3V, ask specification of TCXO to maker board
+#ifdef ARDUINO_ARCH_RP2040
+            DBG_BOOT("  Configure: after SetDio3AsTcxoControl, status=0x");
+            Serial1.println(GetLastStatus(), HEX);
+#endif
         }
 
         // Image calibration per datasheet 9.2.1
@@ -228,6 +252,10 @@ class Sx126xDriverCommon : public Sx126xDriverBase
             default:
                 while(1){} // protection
         }
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  Configure: after CalibrateImage, status=0x");
+        Serial1.println(GetLastStatus(), HEX);
+#endif
 
         // set DIO2 as RF control switching
         // check the RF module if antenna switching is internally connected to DIO2
@@ -262,6 +290,10 @@ class Sx126xDriverCommon : public Sx126xDriverBase
         ClearIrqStatus(SX126X_IRQ_ALL);
 
         SetFs();
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  Configure: complete, status=0x");
+        Serial1.println(GetLastStatus(), HEX);
+#endif
     }
 
     //-- this are the API functions used in the loop
@@ -449,34 +481,97 @@ class Sx126xDriver : public Sx126xDriverCommon
     void _reset(void)
     {
 #ifndef SX_HAS_NO_RESET
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  _reset: BUSY before reset=");
+        Serial1.println(sx_busy_read() ? "HIGH" : "LOW");
+        DBG_BOOT("  _reset: gpio_low(RESET)");
+#endif
         gpio_low(SX_RESET);
         delay_ms(5); // datasheet says > 100 us
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  _reset: gpio_high(RESET)");
+        DBG_BOOT("  _reset: BUSY immediately after RESET high=");
+        Serial1.println(sx_busy_read() ? "HIGH" : "LOW");
+#endif
         gpio_high(SX_RESET);
+#ifdef ARDUINO_ARCH_RP2040
+        // Check BUSY state over time
+        DBG_BOOT("  _reset: waiting, checking BUSY...");
+        for (int i = 0; i < 10; i++) {
+            delay_ms(10);
+            Serial1.print("    ");
+            Serial1.print(i * 10);
+            Serial1.print("ms: BUSY=");
+            Serial1.println(sx_busy_read() ? "HIGH" : "LOW");
+        }
+#else
         delay_ms(50);
+#endif
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  _reset: WaitOnBusy()...");
+#endif
         WaitOnBusy();
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  _reset: WaitOnBusy() done, BUSY=");
+        Serial1.println(sx_busy_read() ? "HIGH" : "LOW");
+#endif
 #endif
     }
 
     void Init(void)
     {
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  sx Init: start");
+#endif
         Sx126xDriverCommon::Init();
 #ifdef SX_USE_CRYSTALOSCILLATOR
         osc_configuration = SX12xx_OSCILLATOR_CONFIG_CRYSTAL;
 #endif
 
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  sx Init: spi_init");
+#endif
         spi_init();
         spi_setnop(0x00); // 0x00 = NOP
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  sx Init: sx_init_gpio");
+#endif
         sx_init_gpio();
         sx_dio_exti_isr_clearflag();
         sx_dio_init_exti_isroff();
 
         // no idea how long the SX126x takes to boot up, so give it some good time
         // we could probably speed up by using WaitOnBusy()
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  sx Init: delay 300ms");
+#endif
         delay_ms(300);
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  sx Init: calling _reset()");
+#endif
         _reset(); // this is super crucial ! was so for SX1280, is it also for the SX1262 ??
+        delay_ms(10); // additional stabilization after reset for RP2040
+
+        // prime the SPI interface - first few transactions after reset may return stale data
+        GetStatus(); // dummy read 1
+        delay_ms(1);
+        GetStatus(); // dummy read 2
+        delay_ms(1);
+
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  sx Init: _reset() done, getting status...");
+        uint8_t status_after_reset = GetStatus();
+        DBG_BOOT("  sx Init: status after reset=0x");
+        Serial1.println(status_after_reset, HEX);
+#endif
 
         SetStandby(SX126X_STDBY_CONFIG_STDBY_RC); // should be in STDBY_RC after reset
         delay_us(1000); // is this needed ????
+#ifdef ARDUINO_ARCH_RP2040
+        DBG_BOOT("  sx Init: after SetStandby, status=0x");
+        Serial1.println(GetLastStatus(), HEX);
+        DBG_BOOT("  sx Init: complete");
+#endif
     }
 
     //-- high level API functions

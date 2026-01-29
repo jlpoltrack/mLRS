@@ -263,6 +263,8 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
 
 #if defined ESP8266 || defined ESP32
 #include "esp/esp-hal.h"
+#elif defined ARDUINO_ARCH_RP2040
+#include "rp/rp-hal.h"
 #endif
 
 

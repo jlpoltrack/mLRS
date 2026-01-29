@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; padding: 20px; font-family: 'Segoe UI', Arial, sans-serif; background: white; }
+        .diagram-container { width: 800px; height: 600px; margin: 0 auto; }
+    </style>
+</head>
+<body>
+
+<div class="diagram-container">
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+    <!-- Definitions -->
+    <defs>
+        <filter id="shadow">
+            <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+        </filter>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#333" />
+        </marker>
+    </defs>
+    
+    <!-- Background Grid -->
+    <rect width="100%" height="100%" fill="#f8f9fa"/>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e9ecef" stroke-width="1"/>
+    </pattern>
+    <rect width="100%" height="100%" fill="url(#grid)" />
+
+    <!-- Center Coordinate for Pico Group: x=320, y=50 -->
+    <g transform="translate(320, 50)" filter="url(#shadow)">
+        <!-- PCB Board -->
+        <rect x="0" y="0" width="160" height="480" rx="4" fill="#2d5a27" stroke="#1e3a1a" stroke-width="2"/>
+        
+        <!-- Mounting Holes -->
+        <circle cx="10" cy="10" r="5" fill="#e0c060"/>
+        <circle cx="150" cy="10" r="5" fill="#e0c060"/>
+        <circle cx="10" cy="470" r="5" fill="#e0c060"/>
+        <circle cx="150" cy="470" r="5" fill="#e0c060"/>
+
+        <!-- USB Connector -->
+        <rect x="50" y="-10" width="60" height="25" fill="#c0c0c0" stroke="#808080" rx="2"/>
+        <rect x="55" y="-10" width="50" height="18" fill="#e0e0e0"/>
+
+        <!-- Main Chip -->
+        <rect x="50" y="200" width="60" height="60" fill="#1a1a1a"/>
+        <text x="80" y="235" text-anchor="middle" fill="#808080" font-size="10" font-family="monospace">RP2040</text>
+        
+        <!-- Logo Text -->
+        <text x="80" y="180" text-anchor="middle" fill="white" font-weight="bold" font-size="14">Raspberry Pi</text>
+        <text x="80" y="290" text-anchor="middle" fill="white" font-size="12">Pico</text>
+
+        <!-- PINS & PADS -->
+        <g font-family="monospace" font-size="11" font-weight="bold">
+            
+            <!-- --- LEFT SIDE PINS (1-20) --- -->
+            
+            <!-- Pin 1 GP0 -->
+            <g transform="translate(0, 45)"><path d="M 8 0 A 7 7 0 0 1 8 0" transform="translate(0,0)" fill="#d4af37"/><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP0</text><text x="-15" y="4" fill="#666" font-size="10">1</text></g>
+            <!-- Pin 2 GP1 -->
+            <g transform="translate(0, 65)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP1</text><text x="-15" y="4" fill="#666" font-size="10">2</text></g>
+            <!-- Pin 3 GND -->
+            <g transform="translate(0, 85)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GND</text><text x="-15" y="4" fill="#666" font-size="10">3</text></g>
+        
+            <!-- Pin 4 GP2 -->
+            <g transform="translate(0, 105)">
+                <circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP2</text><text x="-15" y="4" fill="#666" font-size="10">4</text>
+                <!-- Wire -->
+                <line x1="-15" y1="0" x2="-100" y2="0" stroke="#50e3c2" stroke-width="3" marker-end="url(#arrow)"/>
+                <!-- Label -->
+                <g transform="translate(-210, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: BUSY</text>
+                </g>
+            </g>
+
+            <!-- Pin 5 GP3 -->
+            <g transform="translate(0, 125)">
+                <circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP3</text><text x="-15" y="4" fill="#666" font-size="10">5</text>
+                <line x1="-15" y1="0" x2="-100" y2="0" stroke="#9013fe" stroke-width="3" marker-end="url(#arrow)"/>
+                <g transform="translate(-210, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: RESET</text>
+                </g>
+            </g>
+
+            <!-- Pin 6 GP4 -->
+            <g transform="translate(0, 145)">
+                <circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP4</text><text x="-15" y="4" fill="#666" font-size="10">6</text>
+                <line x1="-15" y1="0" x2="-100" y2="0" stroke="#7ed321" stroke-width="3" marker-end="url(#arrow)"/>
+                <g transform="translate(-210, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: DIO1</text>
+                </g>
+            </g>
+
+            <!-- Pin 7 GP5 -->
+            <g transform="translate(0, 165)">
+                <circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP5</text><text x="-15" y="4" fill="#666" font-size="10">7</text>
+                <line x1="-15" y1="0" x2="-100" y2="0" stroke="#d0021b" stroke-width="3" marker-end="url(#arrow)"/>
+                <g transform="translate(-210, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: TXEN</text>
+                </g>
+            </g>
+
+            <!-- Pin 8 GND -->
+            <g transform="translate(0, 185)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GND</text><text x="-15" y="4" fill="#666" font-size="10">8</text></g>
+
+            <!-- Pin 9 GP6 -->
+            <g transform="translate(0, 205)">
+                <circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP6</text><text x="-15" y="4" fill="#666" font-size="10">9</text>
+                <line x1="-15" y1="0" x2="-100" y2="0" stroke="#000000" stroke-width="3" marker-end="url(#arrow)"/>
+                <g transform="translate(-210, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: RXEN</text>
+                </g>
+            </g>
+            
+            <!-- Filler Left -->
+            <g transform="translate(0, 225)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP7</text><text x="-15" y="4" fill="#666" font-size="10">10</text></g>
+            <g transform="translate(0, 245)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP8</text><text x="-15" y="4" fill="#666" font-size="10">11</text></g>
+            <g transform="translate(0, 265)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP9</text><text x="-15" y="4" fill="#666" font-size="10">12</text></g>
+            <g transform="translate(0, 285)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GND</text><text x="-15" y="4" fill="#666" font-size="10">13</text></g>
+            <g transform="translate(0, 305)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP10</text><text x="-15" y="4" fill="#666" font-size="10">14</text></g>
+            <g transform="translate(0, 325)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP11</text><text x="-15" y="4" fill="#666" font-size="10">15</text></g>
+            <g transform="translate(0, 345)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP12</text><text x="-15" y="4" fill="#666" font-size="10">16</text></g>
+            <g transform="translate(0, 365)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP13</text><text x="-15" y="4" fill="#666" font-size="10">17</text></g>
+            <g transform="translate(0, 385)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GND</text><text x="-15" y="4" fill="#666" font-size="10">18</text></g>
+            <g transform="translate(0, 405)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP14</text><text x="-15" y="4" fill="#666" font-size="10">19</text></g>
+            <g transform="translate(0, 425)"><circle cx="8" cy="0" r="7" fill="#d4af37"/><text x="25" y="4" fill="white">GP15</text><text x="-15" y="4" fill="#666" font-size="10">20</text></g>
+
+            
+            <!-- --- RIGHT SIDE PINS (21-40, Top-Down relative to board) --- -->
+            <!-- Note: GP16 is pin 21 (Bottom Right). I will list them bottom-up for easier coord calc or top-down -->
+            
+            <!-- Pin 21 GP16 (Bottom Right) -->
+            <g transform="translate(152, 425)">
+                <circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP16</text><text x="15" y="4" fill="#666" font-size="10">21</text>
+                <line x1="25" y1="0" x2="110" y2="0" stroke="#f5a623" stroke-width="3" marker-end="url(#arrow)"/>
+                 <g transform="translate(115, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: MISO</text>
+                </g>
+            </g>
+            
+            <!-- Pin 22 GP17 -->
+            <g transform="translate(152, 405)">
+                <circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP17</text><text x="15" y="4" fill="#666" font-size="10">22</text>
+                <line x1="25" y1="0" x2="110" y2="0" stroke="#bd10e0" stroke-width="3" marker-end="url(#arrow)"/>
+                 <g transform="translate(115, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: NSS</text>
+                </g>
+            </g>
+
+            <!-- Pin 23 GND -->
+            <g transform="translate(152, 385)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-35" y="4" fill="white">GND</text><text x="15" y="4" fill="#666" font-size="10">23</text></g>
+
+            <!-- Pin 24 GP18 -->
+            <g transform="translate(152, 365)">
+                <circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP18</text><text x="15" y="4" fill="#666" font-size="10">24</text>
+                <line x1="25" y1="0" x2="110" y2="0" stroke="#f8e71c" stroke-width="3" marker-end="url(#arrow)"/>
+                 <g transform="translate(115, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: SCK</text>
+                </g>
+            </g>
+
+            <!-- Pin 25 GP19 -->
+            <g transform="translate(152, 345)">
+                <circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP19</text><text x="15" y="4" fill="#666" font-size="10">25</text>
+                <line x1="25" y1="0" x2="110" y2="0" stroke="#4a90e2" stroke-width="3" marker-end="url(#arrow)"/>
+                 <g transform="translate(115, -10)">
+                    <rect width="100" height="20" rx="3" fill="#2a4b7c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: MOSI</text>
+                </g>
+            </g>
+
+            <!-- Filler Right -->
+             <g transform="translate(152, 325)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP20</text><text x="15" y="4" fill="#666" font-size="10">26</text></g>
+             <g transform="translate(152, 305)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP21</text><text x="15" y="4" fill="#666" font-size="10">27</text></g>
+             <g transform="translate(152, 285)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GND</text><text x="15" y="4" fill="#666" font-size="10">28</text></g>
+             
+             <!-- Pin 29 GP22 (Button) -->
+             <g transform="translate(152, 265)">
+                 <circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP22</text><text x="15" y="4" fill="#666" font-size="10">29</text>
+                 <line x1="25" y1="0" x2="110" y2="0" stroke="#999" stroke-width="3" marker-end="url(#arrow)"/>
+                 <g transform="translate(115, -10)">
+                    <rect width="100" height="20" rx="3" fill="#666"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">BUTTON</text>
+                </g>
+             </g>
+
+             <g transform="translate(152, 245)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-35" y="4" fill="white">RUN</text><text x="15" y="4" fill="#666" font-size="10">30</text></g>
+             <g transform="translate(152, 225)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP26</text><text x="15" y="4" fill="#666" font-size="10">31</text></g>
+             <g transform="translate(152, 205)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP27</text><text x="15" y="4" fill="#666" font-size="10">32</text></g>
+             <g transform="translate(152, 185)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-35" y="4" fill="white">GND</text><text x="15" y="4" fill="#666" font-size="10">33</text></g>
+             <g transform="translate(152, 165)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">GP28</text><text x="15" y="4" fill="#666" font-size="10">34</text></g>
+             <g transform="translate(152, 145)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">ADC</text><text x="15" y="4" fill="#666" font-size="10">35</text></g>
+             
+             <!-- Pin 36 3V3 -->
+             <g transform="translate(152, 125)">
+                 <circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">3V3</text><text x="15" y="4" fill="#666" font-size="10">36</text>
+                 <line x1="25" y1="0" x2="110" y2="0" stroke="#ff4444" stroke-width="3" marker-end="url(#arrow)"/>
+                 <g transform="translate(115, -10)">
+                    <rect width="100" height="20" rx="3" fill="#b71c1c"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: VCC</text>
+                </g>
+             </g>
+             
+             <g transform="translate(152, 105)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-45" y="4" fill="white">3V3_EN</text><text x="15" y="4" fill="#666" font-size="10">37</text></g>
+             
+             <!-- Pin 38 GND -->
+             <g transform="translate(152, 85)">
+                 <circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-35" y="4" fill="white">GND</text><text x="15" y="4" fill="#666" font-size="10">38</text>
+                 <line x1="25" y1="0" x2="110" y2="0" stroke="#000" stroke-width="3" marker-end="url(#arrow)"/>
+                 <g transform="translate(115, -10)">
+                    <rect width="100" height="20" rx="3" fill="#333"/>
+                    <text x="50" y="14" text-anchor="middle" fill="white" font-family="Arial" font-size="12">SX: GND</text>
+                </g>
+             </g>
+             
+             <g transform="translate(152, 65)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">VSYS</text><text x="15" y="4" fill="#666" font-size="10">39</text></g>
+             <g transform="translate(152, 45)"><circle cx="0" cy="0" r="7" fill="#d4af37"/><text x="-40" y="4" fill="white">VBUS</text><text x="15" y="4" fill="#666" font-size="10">40</text></g>
+        </g>
+    </g>
+
+</svg>
+</div>
+</body>
+</html>

@@ -92,8 +92,8 @@
 #define BIND_PHRASE                     "mlrs.0" // string of 6 characters, allowed are 'a'-'z','0'-'9','_','-','#','.'
 
 
-#define SETUP_MODE                      MODE_50HZ
-//#define SETUP_MODE                      MODE_31HZ
+//#define SETUP_MODE                      MODE_50HZ
+#define SETUP_MODE                      MODE_31HZ
 //#define SETUP_MODE                      MODE_19HZ
 
 

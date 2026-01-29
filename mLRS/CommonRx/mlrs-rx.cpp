@@ -27,7 +27,31 @@
 #include "../Common/common_conf.h"
 #include "../Common/common_types.h"
 
-#if defined ESP8266 || defined ESP32
+#if defined ARDUINO_ARCH_RP2040
+
+#include "../Common/hal/rp-glue.h"
+#include "../modules/stm32ll-lib/src/stdstm32.h"
+#include "../Common/rp-lib/rp-peripherals.h"
+#include "../Common/rp-lib/rp-mcu.h"
+#include "../Common/rp-lib/rp-stack.h"
+#include "../Common/hal/hal.h"
+#include "../Common/rp-lib/rp-delay.h"
+#include "../Common/rp-lib/rp-eeprom.h"
+#include "../Common/rp-lib/rp-spi.h"
+#ifdef USE_SERIAL
+#include "../Common/rp-lib/rp-uartb.h"
+#endif
+#ifdef USE_DEBUG
+#include "../Common/rp-lib/rp-uartf.h"
+#endif
+#include "../Common/hal/rp-timer.h"
+#include "powerup.h"
+#include "../Common/hal/rp-powerup.h"
+#include "../Common/hal/rp-rxclock.h"
+
+volatile uint32_t uwTick = 0;
+
+#elif defined ESP8266 || defined ESP32
 
 #include "../Common/hal/esp-glue.h"
 #include "../modules/stm32ll-lib/src/stdstm32.h"
@@ -139,29 +163,66 @@ tRxDroneCan dronecan;
 
 void init_hw(void)
 {
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("init_hw() start");
+#endif
     delay_init();
     systembootloader_init(); // after delay_init() since it may need delay
     timer_init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("timer_init done");
+#endif
 
     leds_init();
     button_init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("leds/button done");
+#endif
 
     serial.Init();
     out.Init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("serial/out done");
+#endif
 
     fan.Init();
     dbg.Init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("fan/dbg done");
+#endif
 
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("calling sx.Init()...");
+#endif
     sx.Init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("sx.Init() done");
+#endif
     sx2.Init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("sx2.Init() done");
+    DBG_BOOT("calling setup_init()...");
+#endif
 
     setup_init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("setup_init() done");
+#endif
     powerup.Init();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("powerup.Init() done");
+#endif
 
     rxclock.Init(Config.frame_rate_ms); // rxclock needs Config, so call after setup_init()
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("rxclock done");
+#endif
 
     dronecan.Init(Setup.Rx.SerialPort == RX_SERIAL_PORT_CAN); // after delay_init() since it needs delay
     serial.SetSerialIsSource(Setup.Rx.SerialPort != RX_SERIAL_PORT_CAN);
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("init_hw() complete");
+#endif
 }
 
 
@@ -172,20 +233,37 @@ void init_hw(void)
 volatile uint16_t irq_status;
 volatile uint16_t irq2_status;
 
+// Debug counters for both platforms
+volatile uint32_t dbg_irq_count = 0;        // Total DIO1 interrupts
+volatile uint32_t dbg_irq_rxdone = 0;       // RX_DONE events
+volatile uint32_t dbg_irq_filtered = 0;     // Filtered (sync word mismatch)
+volatile uint16_t dbg_last_raw_irq = 0;     // Last raw IRQ status before filtering
+
 IRQHANDLER(
 void SX_DIO_EXTI_IRQHandler(void)
 {
+    dbg_irq_count++;
     sx_dio_exti_isr_clearflag();
     irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
+    dbg_last_raw_irq = irq_status;
+    if (irq_status & SX_IRQ_RX_DONE) {
+        dbg_irq_rxdone++;
+    }
     if (irq_status & SX_IRQ_RX_DONE) {
         if (bind.IsInBind()) {
             uint64_t bind_signature;
             sx.ReadBuffer(0, (uint8_t*)&bind_signature, 8);
-            if (bind_signature != bind.TxSignature) irq_status = 0; // not binding frame, so ignore it
+            if (bind_signature != bind.TxSignature) {
+                dbg_irq_filtered++;
+                irq_status = 0; // not binding frame, so ignore it
+            }
         } else {
             uint16_t sync_word;
             sx.ReadBuffer(0, (uint8_t*)&sync_word, 2); // rxStartBufferPointer is always 0, so no need for sx.GetRxBufferStatus()
-            if (sync_word != Config.FrameSyncWord) irq_status = 0; // not for us, so ignore it
+            if (sync_word != Config.FrameSyncWord) {
+                dbg_irq_filtered++;
+                irq_status = 0; // not for us, so ignore it
+            }
         }
     }
 })
@@ -546,18 +624,76 @@ RESTARTCONTROLLER
     leds.Init();
 
     // start up sx
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("Checking sx.isOk()...");
+    uint16_t sx_status = sx.GetLastStatus();
+    Serial1.print("  SX status byte: 0x");
+    Serial1.println(sx_status, HEX);
+#else
+    dbg.puts("\nChecking sx.isOk()...\n");
+    dbg.puts("  SX status byte: 0x");
+    dbg.puts(u16toHEX_s(sx.GetLastStatus()));
+    dbg.puts("\n");
+#endif
     if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("sx.isOk() passed!");
+#else
+    dbg.puts("sx.isOk() passed!\n");
+#endif
     if (!sx2.isOk()) { FAILALWAYS(BLINK_GR_RD_OFF, "Sx2 not ok"); } // fail!
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("sx2.isOk() passed, calling StartUp...");
+#else
+    dbg.puts("sx2.isOk() passed, calling StartUp...\n");
+#endif
     irq_status = irq2_status = 0;
     IF_SX(sx.StartUp(&Config.Sx));
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("sx.StartUp() done");
+#else
+    dbg.puts("sx.StartUp() done\n");
+#endif
     IF_SX2(sx2.StartUp(&Config.Sx2));
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("sx2.StartUp() done");
+#else
+    dbg.puts("sx2.StartUp() done\n");
+#endif
     bind.Init();
     fhss.Init(&Config.Fhss, &Config.Fhss2);
     fhss.Start();
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("FHSS started");
+    Serial1.print("  Initial frequency: ");
+    Serial1.println(fhss.GetCurrFreq());
+    Serial1.print("  Config.FrameSyncWord: 0x");
+    Serial1.println(Config.FrameSyncWord, HEX);
+    Serial1.print("  Config.frame_rate_ms: ");
+    Serial1.println(Config.frame_rate_ms);
+    Serial1.print("  Bind phrase: ");
+    Serial1.println(Setup.Common[0].BindPhrase);
+#else
+    dbg.puts("FHSS started\n");
+    dbg.puts("  Initial frequency: ");
+    dbg.puts(u32toBCD_s(fhss.GetCurrFreq()));
+    dbg.puts("\n  Config.FrameSyncWord: 0x");
+    dbg.puts(u16toHEX_s(Config.FrameSyncWord));
+    dbg.puts("\n  Config.frame_rate_ms: ");
+    dbg.puts(u16toBCD_s(Config.frame_rate_ms));
+    dbg.puts("\n  Bind phrase: ");
+    dbg.puts(Setup.Common[0].BindPhrase);
+    dbg.puts("\n");
+#endif
     rfpower.Init();
 
     sx.SetRfFrequency(fhss.GetCurrFreq());
     sx2.SetRfFrequency(fhss.GetCurrFreq2());
+#ifdef ARDUINO_ARCH_RP2040
+    DBG_BOOT("RF frequency set, entering main loop");
+#else
+    dbg.puts("RF frequency set, entering main loop\n");
+#endif
 
     link_state = LINK_STATE_RECEIVE;
     connect_state = CONNECT_STATE_LISTEN;
@@ -609,7 +745,72 @@ INITCONTROLLER_END
         dronecan.Tick_ms();
 
         if (!tick_1hz) {
-            dbg.puts(".");
+            // Debug output once per second
+#ifdef ARDUINO_ARCH_RP2040
+            // Check DIO1 pin state directly and manually read IRQ register
+            bool dio1_state = sx_dio1_read();
+            uint16_t manual_irq = sx.GetIrqStatus();
+            uint8_t chip_status = sx.GetStatus();
+            // Decode chip mode: bits [6:4] -> 2=STDBY_RC, 3=STDBY_XOSC, 4=FS, 5=RX, 6=TX
+            uint8_t chip_mode = (chip_status >> 4) & 0x07;
+            const char* mode_str = "???";
+            switch(chip_mode) {
+                case 2: mode_str = "STDBY_RC"; break;
+                case 3: mode_str = "STDBY_XOSC"; break;
+                case 4: mode_str = "FS"; break;
+                case 5: mode_str = "RX"; break;
+                case 6: mode_str = "TX"; break;
+            }
+            // Check RF switch states
+            bool rx_en_state = digitalRead(SX_RX_EN);
+            bool tx_en_state = digitalRead(SX_TX_EN);
+
+            Serial1.print("\n[1Hz] IRQ:");
+            Serial1.print(dbg_irq_count);
+            Serial1.print(" RxDone:");
+            Serial1.print(dbg_irq_rxdone);
+            Serial1.print(" Filt:");
+            Serial1.print(dbg_irq_filtered);
+            Serial1.print(" last_raw:0x");
+            Serial1.print(dbg_last_raw_irq, HEX);
+            Serial1.print("\n      link=");
+            Serial1.print(link_state);
+            Serial1.print(" conn=");
+            Serial1.print(connect_state);
+            Serial1.print(" bind=");
+            Serial1.print(bind.IsInBind() ? "Y" : "N");
+            Serial1.print(" DIO1=");
+            Serial1.print(dio1_state ? "H" : "L");
+            Serial1.print(" IRQreg:0x");
+            Serial1.print(manual_irq, HEX);
+            Serial1.print(" Mode=");
+            Serial1.print(mode_str);
+            Serial1.print("(0x");
+            Serial1.print(chip_status, HEX);
+            Serial1.print(")");
+            Serial1.print("\n      RX_EN=");
+            Serial1.print(rx_en_state ? "H" : "L");
+            Serial1.print(" TX_EN=");
+            Serial1.print(tx_en_state ? "H" : "L");
+            Serial1.print(" Freq=");
+            Serial1.println(fhss.GetCurrFreq());
+#else
+            dbg.puts("\n[1Hz] IRQ:");
+            dbg.puts(u32toBCD_s(dbg_irq_count));
+            dbg.puts(" RxDone:");
+            dbg.puts(u32toBCD_s(dbg_irq_rxdone));
+            dbg.puts(" Filt:");
+            dbg.puts(u32toBCD_s(dbg_irq_filtered));
+            dbg.puts(" last_raw:0x");
+            dbg.puts(u16toHEX_s(dbg_last_raw_irq));
+            dbg.puts("\n      link=");
+            dbg.puts(u8toBCD_s(link_state));
+            dbg.puts(" conn=");
+            dbg.puts(u8toBCD_s(connect_state));
+            dbg.puts(" bind=");
+            dbg.puts(bind.IsInBind() ? "Y" : "N");
+            dbg.puts("\n");
+#endif
 /*            dbg.puts("\nRX: ");
             dbg.puts(u8toBCD_s(stats.GetLQ_rc())); dbg.putc(',');
             dbg.puts(u8toBCD_s(stats.GetLQ_serial()));
