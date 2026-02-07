@@ -258,11 +258,13 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
 
 
 //-------------------------------------------------------
-// ESP Boards
+// ESP & RP Boards
 //-------------------------------------------------------
 
 #if defined ESP8266 || defined ESP32
 #include "esp/esp-hal.h"
+#elif defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+#include "rp/rp-hal.h"
 #endif
 
 
@@ -344,7 +346,7 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
 
 #if defined DEVICE_HAS_I2C_DAC || defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180
   #define USE_I2C
-  #ifndef HAL_I2C_MODULE_ENABLED
+  #if !defined HAL_I2C_MODULE_ENABLED && !defined ARDUINO_ARCH_RP2040 && !defined ARDUINO_ARCH_RP2350 && !defined ESP32
     #error HAL_I2C_MODULE_ENABLED is not defined, but I2C is used!
   #endif
 #endif

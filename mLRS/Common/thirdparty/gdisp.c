@@ -17,6 +17,7 @@
 
 
 #include <string.h>
+#include <stdbool.h>
 #include "../../modules/stm32ll-lib/src/stdstm32.h"
 #include "gdisp.h"
 
@@ -167,6 +168,7 @@ static const uint8_t ssd1306_initstream[] = {
 };
 
 
+#if defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180
 void ssd1306_init()
 {
     i2c_setdeviceadr(SSD1306_ADR);
@@ -219,13 +221,23 @@ HAL_StatusTypeDef ssd1306_put(uint8_t* buf, uint16_t len)
 } */
 
 
-#if !(defined ESP8266 || defined ESP32)
+// RP: DMA sends full 1024-byte framebuffer in one transaction.
+// SSD1306 horizontal addressing mode auto-wraps, so cmdhome() is not needed
+// after init sets column range (0x21,0,127) and page range (0x22,0,7).
+#if defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+HAL_StatusTypeDef ssd1306_put_noblock(uint8_t* const buf, uint16_t len)
+{
+    return i2c_put(SSD1306_DATA, buf, len);
+}
+// STM32: single i2c_put (hardware handles long transfers)
+#elif !(defined ESP8266 || defined ESP32)
 HAL_StatusTypeDef ssd1306_put_noblock(uint8_t* const buf, uint16_t len)
 {
     ssd1306_cmdhome();
     return i2c_put(SSD1306_DATA, buf, len);
 }
 #else
+// ESP32: split into 128-byte chunks with page addressing
 HAL_StatusTypeDef ssd1306_put_noblock(uint8_t* buf, uint16_t len)
 {
     HAL_StatusTypeDef ret = HAL_OK;
@@ -243,6 +255,8 @@ HAL_StatusTypeDef ssd1306_put_noblock(uint8_t* buf, uint16_t len)
 #endif
 
 
+#endif // DEVICE_HAS_I2C_DISPLAY || DEVICE_HAS_I2C_DISPLAY_ROT180
+
 //-------------------------------------------------------
 // Graphical display API
 //-------------------------------------------------------
@@ -254,6 +268,7 @@ tGDisplay gdisp;
 // HAL
 //-------------------------------------------------------
 
+#if defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180
 void gdisp_hal_init(uint16_t type)
 {
     gdisp.type = type;
@@ -310,6 +325,17 @@ void gdisp_hal_contrast(uint8_t c)
     }
 }
 
+#else // no display - stubs
+
+void gdisp_hal_init(uint16_t type) { gdisp.type = type; }
+void gdisp_hal_cmdhome(void) {}
+HAL_StatusTypeDef gdisp_hal_put(uint8_t* const buf, uint16_t len) { return HAL_OK; }
+void gdisp_hal_contraststart(void) {}
+void gdisp_hal_contrastend(void) {}
+void gdisp_hal_contrast(uint8_t c) {}
+
+#endif // DEVICE_HAS_I2C_DISPLAY || DEVICE_HAS_I2C_DISPLAY_ROT180
+
 
 //-------------------------------------------------------
 // Low-level API
@@ -327,9 +353,6 @@ void gdisp_update(void)
     if (!gdisp.needsupdate) return;
 
     HAL_StatusTypeDef res = gdisp_hal_put(gdisp.buf, GDISPLAY_BUFSIZE);
-//    HAL_StatusTypeDef res = ssd1306_put(gdisp.buf, GDISPLAY_BUFSIZE);
-//    HAL_StatusTypeDef res = ssd1306_put_noblock(gdisp.buf, GDISPLAY_BUFSIZE);
-//    while (i2c_device_ready() == HAL_BUSY) {};
 
     if (res != HAL_OK) return; // retry, needs update is not reset, so it will be tried next time again
 
