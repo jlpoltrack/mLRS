@@ -161,12 +161,16 @@ extern "C" void i2c_setdeviceadr(uint8_t dev_adr)
 
 
 // blocking transfer via Wire - used for display init commands
+// disable DMA IRQ to prevent handler from clearing STOP_DET before
+// the SDK's i2c_write_blocking_internal can poll it (race on RP2350)
 extern "C" HAL_StatusTypeDef i2c_put_blocked(uint8_t reg_adr, uint8_t* buf, uint16_t len)
 {
+    irq_set_enabled(I2C_IRQ, false);
     I2C_WIRE.beginTransmission(i2c_dev_adr);
     I2C_WIRE.write(reg_adr);
     I2C_WIRE.write(buf, len);
     uint8_t error = I2C_WIRE.endTransmission(true);
+    irq_set_enabled(I2C_IRQ, true);
     return (error == 0) ? HAL_OK : HAL_ERROR;
 }
 
