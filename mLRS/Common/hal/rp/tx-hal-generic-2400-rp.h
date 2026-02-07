@@ -13,7 +13,6 @@
 #define DEVICE_HAS_SERIAL_OR_COM // hold 5-way in down direction at boot to enable CLI
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
-#define DEVICE_HAS_I2C_DISPLAY
 #define DEVICE_HAS_FIVEWAY
 
 
