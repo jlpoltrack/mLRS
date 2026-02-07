@@ -17,7 +17,7 @@ extern bool connected_and_rx_setup_available(void);
 class tTxSxSerial : public tSerialBase
 {
   public:
-    void Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port);
+    void Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port, tSerialBase* const _wifiport);
 
     bool available(void) override;
     char getc(void) override;
@@ -29,7 +29,7 @@ class tTxSxSerial : public tSerialBase
 };
 
 
-void tTxSxSerial::Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port)
+void tTxSxSerial::Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port, tSerialBase* const _wifiport)
 {
     tSerialBase::Init();
 
@@ -42,6 +42,9 @@ void tTxSxSerial::Init(tSerialBase* const _serialport, tSerialBase* const _mbrid
         break;
     case SERIAL_DESTINATION_MBRIDGE:
         ser = _mbridge;
+        break;
+    case SERIAL_DESTINATION_WIFI:
+        ser = _wifiport;
         break;
     default:
         while(1){} // must not happen

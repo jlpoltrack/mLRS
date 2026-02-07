@@ -137,6 +137,9 @@
 #include "../Common/sx-drivers/sx12xx.h"
 #include "../Common/mavlink/fmav.h"
 #include "../Common/setup.h"
+#ifdef DEVICE_HAS_WIFI_NATIVE
+#include "rp-wifi.h"
+#endif
 #include "../Common/common.h"
 #include "../Common/channel_order.h"
 #include "../Common/diversity.h"
@@ -306,6 +309,7 @@ void init_hw(void)
 
     setup_init();
 
+    wifi_init();
     esp_enable(Setup.Tx[Config.ConfigId].SerialDestination);
 
     sx.Init(); // these take time
@@ -777,9 +781,17 @@ RESTARTCONTROLLER
     rarq.Init();
 
     in.Configure(Setup.Tx[Config.ConfigId].InMode);
-    mavlink.Init(&serial, &mbridge, &serial2); // ports selected by SerialDestination, ChannelsSource
-    msp.Init(&serial, &serial2); // ports selected by SerialDestination
-    sx_serial.Init(&serial, &mbridge, &serial2); // ports selected by SerialDestination, ChannelsSource
+
+#ifdef DEVICE_HAS_WIFI_NATIVE
+    extern tTxWifiNative wifi;
+    tSerialBase* wifiport = &wifi;
+#else
+    tSerialBase* wifiport = nullptr;
+#endif
+
+    mavlink.Init(&serial, &mbridge, &serial2, wifiport); // ports selected by SerialDestination, ChannelsSource
+    msp.Init(&serial, &serial2, wifiport); // ports selected by SerialDestination
+    sx_serial.Init(&serial, &mbridge, &serial2, wifiport); // ports selected by SerialDestination, ChannelsSource
     cli.Init(&comport, Config.frame_rate_ms);
 #ifdef USE_ESP_WIFI_BRIDGE
   #ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_JRPIN5

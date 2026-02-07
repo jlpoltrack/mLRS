@@ -52,11 +52,13 @@ inline void __enable_irq(void)  { interrupts(); }
 
 static uint8_t restart_controller = 0;
 void main_loop(void);
+void wifi_loop(void);
 
 void setup() {}
 
 void loop()
 {
+    wifi_loop();
     // DMA handles I2C display transfers asynchronously via IRQ,
     // Core 0 is free for WiFi stack processing
     delay(1);

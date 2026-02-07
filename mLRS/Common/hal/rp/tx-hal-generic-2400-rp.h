@@ -13,6 +13,10 @@
 #define DEVICE_HAS_SERIAL_OR_COM // hold 5-way in down direction at boot to enable CLI
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
+
+#ifdef ARDUINO_ARCH_RP2350  // Pico 2 W has CYW43439
+#define DEVICE_HAS_WIFI_NATIVE
+#endif
 #define DEVICE_HAS_I2C_DISPLAY
 #define DEVICE_HAS_FIVEWAY
 

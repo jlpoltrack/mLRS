@@ -187,7 +187,10 @@ void setup_configure_metadata(void)
 #endif
 
     // Tx Bridge WiFi Protocol : "TCP,UDP,BT,UDPSTA,BLE"
-#if defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
+#if defined DEVICE_HAS_WIFI_NATIVE
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b00010; // UDP only for native WiFi (Phase 1)
+    SetupMetaData.Tx_SerialDestination_allowed_mask |= (1 << SERIAL_DESTINATION_WIFI); // add wifi
+#elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b01011; // TCP, UDP, UDPSTA (no BT, no BLE)
 #elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b11011; // all except BT (no classic BT on C3)
@@ -446,7 +449,7 @@ void setup_sanitize_config(uint8_t config_id)
         }
     }
 
-#ifdef USE_ESP_WIFI_BRIDGE_RST_GPIO0
+#if defined USE_ESP_WIFI_BRIDGE_RST_GPIO0 || defined DEVICE_HAS_WIFI_NATIVE
     SANITIZE(Tx[config_id].WifiProtocol, WIFI_PROTOCOL_NUM, WIFI_PROTOCOL_UDP, WIFI_PROTOCOL_UDP);
     TST_NOTALLOWED(Tx_WiFiProt_allowed_mask, Tx[config_id].WifiProtocol, WIFI_PROTOCOL_UDP);
     SANITIZE(Tx[config_id].WifiChannel, WIFI_CHANNEL_NUM, WIFI_CHANNEL_6, WIFI_CHANNEL_6);

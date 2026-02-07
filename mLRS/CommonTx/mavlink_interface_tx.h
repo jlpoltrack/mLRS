@@ -71,7 +71,7 @@ class tTxVehicle
 class tTxMavlink
 {
   public:
-    void Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port);
+    void Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port, tSerialBase* const _wifiport);
     void Do(void);
     uint8_t Task(void);
     uint8_t VehicleState(void);
@@ -148,7 +148,7 @@ class tTxMavlink
 };
 
 
-void tTxMavlink::Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port)
+void tTxMavlink::Init(tSerialBase* const _serialport, tSerialBase* const _mbridge, tSerialBase* const _serial2port, tSerialBase* const _wifiport)
 {
     // if ChannelsSource = MBRIDGE:
     //   SerialDestination = SERIAL or SERIAL2 => router with ser = mbridge & ser2 = serial/serial2
@@ -166,6 +166,10 @@ void tTxMavlink::Init(tSerialBase* const _serialport, tSerialBase* const _mbridg
     case SERIAL_DESTINATION_MBRIDGE:
         ser = _mbridge;
         ser2 = nullptr;
+        break;
+    case SERIAL_DESTINATION_WIFI:
+        ser = _wifiport;
+        ser2 = (Setup.Tx[Config.ConfigId].ChannelsSource == CHANNEL_SOURCE_MBRIDGE) ? _mbridge : nullptr;
         break;
     default:
         while(1){} // must not happen

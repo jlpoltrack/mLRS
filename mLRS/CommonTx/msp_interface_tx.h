@@ -29,7 +29,7 @@ extern bool connected_and_rx_setup_available(void);
 class tTxMsp
 {
   public:
-    void Init(tSerialBase* const _serialport, tSerialBase* const _serial2port);
+    void Init(tSerialBase* const _serialport, tSerialBase* const _serial2port, tSerialBase* const _wifiport);
     void Do(void);
     void FrameLost(void);
 
@@ -57,7 +57,7 @@ class tTxMsp
 };
 
 
-void tTxMsp::Init(tSerialBase* const _serialport, tSerialBase* const _serial2port)
+void tTxMsp::Init(tSerialBase* const _serialport, tSerialBase* const _serial2port, tSerialBase* const _wifiport)
 {
     switch (Setup.Tx[Config.ConfigId].SerialDestination) {
     case SERIAL_DESTINATION_SERIAL:
@@ -68,6 +68,9 @@ void tTxMsp::Init(tSerialBase* const _serialport, tSerialBase* const _serial2por
         break;
     case SERIAL_DESTINATION_MBRIDGE:
         ser = nullptr;
+        break;
+    case SERIAL_DESTINATION_WIFI:
+        ser = _wifiport;
         break;
     default:
         while(1){} // must not happen
@@ -213,7 +216,7 @@ void tTxMsp::flush(void)
 class tTxMsp
 {
   public:
-    void Init(tSerialBase* const _serialport, tSerialBase* const _serial2port) {}
+    void Init(tSerialBase* const _serialport, tSerialBase* const _serial2port, tSerialBase* const _wifiport) {}
     void Do(void) {}
     void FrameLost(void) {}
 

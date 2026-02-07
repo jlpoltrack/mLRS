@@ -485,6 +485,11 @@ Note: Some "high-level" features are set for each device in the device_conf.h fi
   void esp_init(void) {}
 #endif
 
+#ifndef DEVICE_HAS_WIFI_NATIVE
+  void wifi_init(void) {}
+  void wifi_loop(void) {}
+#endif
+
 #if !defined DEVICE_HAS_FIVEWAY && !defined USE_DISPLAY
   void fiveway_init(void) {}
 #endif
