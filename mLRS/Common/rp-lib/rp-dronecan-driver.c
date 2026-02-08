@@ -14,6 +14,9 @@
 #include "can2040.h"
 #include "rp-dronecan-driver.h"
 
+#define DC_HAL_PIO_NUM    1           // PIO1 — PIO0 may be used by PIO UARTs
+#define DC_HAL_PIO_IRQ    PIO1_IRQ_0
+
 
 //-------------------------------------------------------
 // rx ring buffer
@@ -128,8 +131,8 @@ int16_t dc_hal_init(
         dc_hal_bitrate = 1000000; // 1 mbit/s default
     }
 
-    // set up can2040 on PIO1
-    can2040_setup(&dc_hal_cbus, 1); // pio_num = 1 (PIO1)
+    // set up can2040 on selected PIO instance
+    can2040_setup(&dc_hal_cbus, DC_HAL_PIO_NUM);
     can2040_callback_config(&dc_hal_cbus, dc_hal_can2040_cb);
 
     return 0;
@@ -142,6 +145,10 @@ int16_t dc_hal_start(void)
 
     can2040_start(&dc_hal_cbus, sys_clock, dc_hal_bitrate,
                   dc_hal_gpio_rx, dc_hal_gpio_tx);
+
+    // enable the IRQ now that can2040 is fully initialized.
+    // the handler was already registered on core 0 by dc_hal_enable_isr().
+    irq_set_enabled(DC_HAL_PIO_IRQ, true);
 
     return 0;
 }
@@ -211,11 +218,11 @@ int16_t dc_hal_receive(CanardCANFrame* const frame)
 
 void dc_hal_rx_flush(void)
 {
-    irq_set_enabled(PIO1_IRQ_0, false);
+    irq_set_enabled(DC_HAL_PIO_IRQ, false);
     dc_hal_rxbuf.writepos = 0;
     dc_hal_rxbuf.readpos = 0;
     dc_hal_stats.rx_overflow_count = 0;
-    irq_set_enabled(PIO1_IRQ_0, true);
+    irq_set_enabled(DC_HAL_PIO_IRQ, true);
 }
 
 
@@ -225,10 +232,13 @@ void dc_hal_rx_flush(void)
 
 int16_t dc_hal_enable_isr(void)
 {
-    // PIO1_IRQ_0 for can2040 on PIO1
-    irq_set_exclusive_handler(PIO1_IRQ_0, dc_hal_pio1_irq_handler);
-    irq_set_priority(PIO1_IRQ_0, DRONECAN_IRQ_PRIORITY);
-    irq_set_enabled(PIO1_IRQ_0, true);
+    // register handler and set priority — must be called from core 0
+    // so the IRQ runs on core 0, keeping core 1 for the radio loop.
+    // irq is NOT enabled here; dc_hal_start() enables it after can2040
+    // is fully initialized, avoiding a window with an armed handler on
+    // uninitialized state.
+    irq_set_exclusive_handler(DC_HAL_PIO_IRQ, dc_hal_pio1_irq_handler);
+    irq_set_priority(DC_HAL_PIO_IRQ, DRONECAN_IRQ_PRIORITY);
 
     return 0;
 }
@@ -284,12 +294,12 @@ int16_t dc_hal_compute_timings(
 {
     (void)peripheral_clock_rate;
 
-    if (target_bit_rate != 1000000) {
-        return -DC_HAL_ERROR_UNSUPPORTED_BIT_RATE;
-    }
-
     if (timings == NULL) {
         return -DC_HAL_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (target_bit_rate != 1000000) {
+        return -DC_HAL_ERROR_UNSUPPORTED_BIT_RATE;
     }
 
     // store bitrate in prescaler field as a convention

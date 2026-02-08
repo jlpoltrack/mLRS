@@ -108,9 +108,6 @@ static volatile uint16_t uarte_rxreadpos;
 
 #ifdef UARTE_IS_HW_SERIAL
 
-// track if RX IRQ is enabled
-static volatile bool uarte_rx_irq_enabled = true;
-
 void __not_in_flash_func(uarte_irq_handler)(void)
 {
     uart_hw_t* hw = uart_get_hw(UARTE_UART_INST);
@@ -335,7 +332,6 @@ void _uarte_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbit
     irq_set_enabled(UARTE_UART_IRQ, true);
 
     // enable RX IRQ only (TX enabled on demand when data to send)
-    uarte_rx_irq_enabled = true;
     uart_set_irq_enables(UARTE_UART_INST, true, false);
 }
 

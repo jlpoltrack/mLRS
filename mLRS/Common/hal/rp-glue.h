@@ -59,9 +59,9 @@ extern "C" int16_t dc_hal_enable_isr(void);
 
 void setup()
 {
-    // can2040 pio irq must be enabled from core 0 so the
-    // handler runs on this core, keeping core 1 for the
-    // main radio loop
+    // can2040 pio irq handler must be registered from core 0
+    // so it runs on this core, keeping core 1 for the main
+    // radio loop. the irq is enabled later by dc_hal_start().
 #ifdef DEVICE_HAS_DRONECAN
     dc_hal_enable_isr();
 #endif

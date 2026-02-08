@@ -50,8 +50,6 @@ extern tGlobalConfig Config;
 
 #define CANARD_POOL_SIZE  4096
 
-#define DRONECAN_BUF_SIZE  512 // needs to be larger than the largest DroneCAN frame size
-
 CanardInstance canard;
 uint8_t canard_memory_pool[CANARD_POOL_SIZE]; // doing this static leads to crash in full mLRS code !?
 
@@ -183,7 +181,8 @@ void tRxDroneCan::Init(bool ser_over_can_enable_flag)
         DBG_DC(dbg.puts("\nERROR: filter config failed");)
     }
 
-    // on RP, isr is enabled from setup() (core 0) in rp-glue.h
+    // on RP, isr handler is registered from setup() (core 0) in rp-glue.h
+    // and enabled by dc_hal_start() below
 #if !defined ARDUINO_ARCH_RP2040 && !defined ARDUINO_ARCH_RP2350
     res = dc_hal_enable_isr();
     if (res < 0) {
@@ -732,7 +731,8 @@ void tRxDroneCan::send_tunnel_targetted(void)
     _p.tunnel_targetted.baudrate = Config.SerialBaudrate; // this is ignored by ArduPilot (as it should)
 
     uint16_t data_len = fifo_ser_to_fc.Available();
-    _p.tunnel_targetted.buffer.len = (data_len < 120) ? data_len : 120;
+    if (data_len > 120) data_len = 120;
+    _p.tunnel_targetted.buffer.len = data_len;
     for (uint8_t n = 0; n < data_len; n++) _p.tunnel_targetted.buffer.data[n] = fifo_ser_to_fc.Get();
 
     uint16_t len = uavcan_tunnel_Targetted_encode(&_p.tunnel_targetted, _buf);
