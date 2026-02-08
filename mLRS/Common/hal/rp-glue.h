@@ -53,12 +53,23 @@ inline void __enable_irq(void)  { interrupts(); }
 static uint8_t restart_controller = 0;
 void main_loop(void);
 
-void setup() {}
+#ifdef DEVICE_HAS_DRONECAN
+extern "C" int16_t dc_hal_enable_isr(void);
+#endif
+
+void setup()
+{
+    // can2040 pio irq must be enabled from core 0 so the
+    // handler runs on this core, keeping core 1 for the
+    // main radio loop
+#ifdef DEVICE_HAS_DRONECAN
+    dc_hal_enable_isr();
+#endif
+}
 
 void loop()
 {
-    // DMA handles I2C display transfers asynchronously via IRQ,
-    // Core 0 is free for WiFi stack processing
+    // core 0: idle loop, CAN2040 PIO IRQ runs in background
     delay(1);
 }
 

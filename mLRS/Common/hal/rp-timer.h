@@ -42,6 +42,8 @@ void micros_init(void) {}
 
 uint16_t micros16(void) { return (uint16_t)micros(); }
 
+uint64_t micros64(void) { return to_us_since_boot(get_absolute_time()); }
+
 //-------------------------------------------------------
 // Callback
 //-------------------------------------------------------

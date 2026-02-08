@@ -11,6 +11,12 @@
 
 #define DEVICE_HAS_SINGLE_LED
 #define DEVICE_HAS_OUT
+#define DEVICE_HAS_DRONECAN
+
+//-- CAN bus (DroneCAN via can2040 PIO)
+
+#define CAN_RX_PIN                14
+#define CAN_TX_PIN                15
 
 //-- UARTS
 // UARTB = serial port
