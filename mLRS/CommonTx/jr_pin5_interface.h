@@ -65,6 +65,8 @@ void (*uart_tc_callback_ptr)(void) = &uart_tc_callback_dummy;
 
 #if defined ESP32 || defined ESP8266
 #include "jr_pin5_interface_esp.h"
+#elif defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+#include "jr_pin5_interface_rp.h"
 #else
 #include "../modules/stm32ll-lib/src/stdstm32-uart.h"
 
@@ -407,6 +409,6 @@ void tPin5BridgeBase::CheckAndRescue(void)
 }
 
 
-#endif // !(defined ESP32 || defined ESP8266)
+#endif // !(defined ESP32 || defined ESP8266 || defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350)
 
 #endif // JRPIN5_INTERFACE_H
