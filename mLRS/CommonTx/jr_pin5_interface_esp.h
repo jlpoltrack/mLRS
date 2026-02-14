@@ -134,6 +134,7 @@ void tPin5BridgeBase::Init(void)
     len = 0;
     cnt = 0;
     tlast_us = 0;
+    tx_len = 0;
 
     telemetry_start_next_tick = false;
     telemetry_state = 0;
@@ -229,9 +230,12 @@ IRAM_ATTR void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
     // can transmit now that entire message has been parsed
     if (state == STATE_TRANSMIT_START) {
         pin5_tx_enable();
-        transmit_start();
-        uart_is_transmitting = true;
-        pin5_start_tc_timer(tx_len);
+        if (transmit_start()) {
+            uart_is_transmitting = true;
+            pin5_start_tc_timer(tx_len);
+        } else {
+            pin5_rx_enable();
+        }
     }
     
     state = STATE_IDLE;
