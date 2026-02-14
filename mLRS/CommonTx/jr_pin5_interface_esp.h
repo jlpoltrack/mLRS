@@ -15,26 +15,34 @@
 
 
 //-------------------------------------------------------
-// 100 us ISR timer to check for end of transmit in half-duplex mode
-// need to know when the UART has finished transmitting, so can switch back to receive
-// Arduino doesn't expose a UART transmit complete interrupt / callback like STM32
-// so poll the UART state machine every 100 us using an interrupt on Core 0
-// mLRS uses Core 1, so this shouldn't have any impact
+// one-shot timer ISR for end of transmit in half-duplex mode
+// armed per-transmission with a calculated delay based on the tx length
+// when it fires, unconditionally switches the pin back to receive mode
 
-volatile bool uart_is_transmitting;
+static volatile bool uart_is_transmitting;
+static hw_timer_t* pin5_tc_timer = nullptr;
 
 IRQHANDLER(
-void CLOCK100US_IRQHandler(void)
+void PIN5_TC_IRQHandler(void)
 {
     if (!uart_is_transmitting) return;
 
-    if (uart_ll_is_tx_idle(UART_LL_GET_HW(1))) {
-        uart_is_transmitting = false;
-        gpio_set_direction((gpio_num_t)UART_USE_TX_IO, GPIO_MODE_INPUT);
-        gpio_matrix_in((gpio_num_t)UART_USE_TX_IO, U1RXD_IN_IDX, true);
-        uart_ll_rxfifo_rst(UART_LL_GET_HW(1)); // discards ghost byte caused by switching
-    }
+    uart_is_transmitting = false;
+    gpio_set_direction((gpio_num_t)UART_USE_TX_IO, GPIO_MODE_INPUT);
+    gpio_matrix_in((gpio_num_t)UART_USE_TX_IO, U1RXD_IN_IDX, true);
+    uart_ll_rxfifo_rst(UART_LL_GET_HW(1)); // discards ghost byte caused by switching
 })
+
+
+IRAM_ATTR void pin5_start_tc_timer(uint16_t len)
+{
+    // at UART_BAUD, each byte is 10,000,000 / UART_BAUD us (10 bits: start + 8 data + stop)
+    // add 4 bytes for shift register completion
+    uint32_t delay_us = (uint32_t)(len + 4) * 10000000UL / UART_BAUD;
+    timerWrite(pin5_tc_timer, 0);
+    timerAlarmWrite(pin5_tc_timer, delay_us, false); // false = one-shot
+    timerAlarmEnable(pin5_tc_timer);
+}
 
 
 //-------------------------------------------------------
@@ -65,7 +73,7 @@ class tPin5BridgeBase
 
     // interface to the uart hardware peripheral used for the bridge
     void pin5_init(void);
-    void pin5_putbuf(uint8_t* const buf, uint16_t len) { uart_putbuf(buf, len); }
+    void pin5_putbuf(uint8_t* const buf, uint16_t len) { tx_len = len; uart_putbuf(buf, len); }
     void pin5_getbuf(char* const buf, uint16_t len) { uart_getbuf(buf, len); }
     uint16_t pin5_bytes_available(void) { return uart_rx_bytesavailable(); }
 
@@ -109,6 +117,7 @@ class tPin5BridgeBase
     uint8_t len;
     uint8_t cnt;
     uint16_t tlast_us;
+    uint16_t tx_len;
 
     // check and rescue, is here for compatibility, not needed
     void CheckAndRescue(void) {}
@@ -166,17 +175,11 @@ void tPin5BridgeBase::pin5_init(void)
     
     pin5_rx_enable();  // configure the pin for receive  
     
-    // setup timer interrupt, only needs to be done on first boot
+    // setup one-shot timer, only needs to be done on first boot
     if (pin5_clock_initialized) return;
-    
-    xTaskCreatePinnedToCore([](void *parameter) {
-        hw_timer_t* timer1_cfg = nullptr;
-        timer1_cfg = timerBegin(1, 800, 1); // Timer 1, APB clock is 80 Mhz | divide by 800 is 100 KHz / 10 us, count up
-        timerAttachInterrupt(timer1_cfg, &CLOCK100US_IRQHandler, true);
-        timerAlarmWrite(timer1_cfg, 10, true); // 10 * 10 = 100 us
-        timerAlarmEnable(timer1_cfg);
-        vTaskDelete(NULL);
-    }, "TimerSetup", 2048, NULL, 1, NULL, 0); // last argument here is Core 0, ignored on ESP32C3
+
+    pin5_tc_timer = timerBegin(1, 80, 1); // Timer 1, 80 MHz / 80 = 1 MHz (1 us resolution)
+    timerAttachInterrupt(pin5_tc_timer, &PIN5_TC_IRQHandler, true);
 
     pin5_clock_initialized = true;
 #endif
@@ -228,6 +231,7 @@ IRAM_ATTR void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
         pin5_tx_enable();
         transmit_start();
         uart_is_transmitting = true;
+        pin5_start_tc_timer(tx_len);
     }
     
     state = STATE_IDLE;
