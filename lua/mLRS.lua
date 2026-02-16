@@ -13,7 +13,7 @@
 -- Tables are less efficient memory and cpu wise, but are being used to avoid the 200 local limit.
 
 local VERSION = {
-    script = '2026-02-15', -- add a '.01' if needed for the day
+    script = '2026-02-16.01', -- add a '.01' if needed for the day
     required_tx_version_int = 10303,  -- 'v1.3.03'
     required_rx_version_int = 10303,  -- 'v1.3.03'
 }
@@ -583,34 +583,31 @@ end
 local function doParamLoop()
     -- trigger getting device items and param items
     local t_10ms = getTime()
-    if t_10ms - paramloop_t_last > 33 then -- 330 ms
-      paramloop_t_last = t_10ms
-      if t_10ms < DEVICE_SAVE_t_last + paramLoadDeadTime_10ms then
-          -- skip, we don't send a cmd if the last Save was recent
-          -- TODO: we could make deadtime dependend on whether a receiver was connected before the Save
-      elseif DEVICE_ITEM_TX == nil then
-          cmdPush(MBRIDGE_CMD.REQUEST_INFO, {}) -- triggers sending DEVICE_ITEM_TX, DEVICE_ITEM_RX, DEVICE_INFO
-          --cmdPush(MBRIDGE_CMD.REQUEST_CMD, {MBRIDGE_CMD.REQUEST_INFO) -- alternative command for the same effect
-          -- these should have been set when we nil-ed DEVICE_PARAM_LIST
-          DEVICE_PARAM_LIST_expected_index = 0
-          DEVICE_PARAM_LIST_current_index = -1
-          DEVICE_PARAM_LIST_errors = 0
-          DEVICE_PARAM_LIST_complete = false
-      elseif DEVICE_PARAM_LIST == nil then
-          if DEVICE_INFO ~= nil then -- wait for DEVICE_INFO to be populated, indicates that MBRIDGE_CMD.REQUEST_INFO is completed
-              DEVICE_PARAM_LIST = {}
-              -- Old:
-              --cmdPush(MBRIDGE_CMD.PARAM_REQUEST_LIST, {}) -- triggers sending full list of PARAM_ITEMs
-              --cmdPush(MBRIDGE_CMD.REQUEST_CMD, {MBRIDGE_CMD.PARAM_REQUEST_LIST}) -- alternative command for the same effect
-              -- New: request parameters by index (request-response protocol)
-              -- request first parameter by index (is index = 0)
-              cmdPush(MBRIDGE_CMD.REQUEST_CMD, {MBRIDGE_CMD.PARAM_ITEM, DEVICE_PARAM_LIST_expected_index})
-          end
-      end
+    if t_10ms < DEVICE_SAVE_t_last + paramLoadDeadTime_10ms then
+        -- skip, we don't send a cmd if the last Save was recent
+        -- TODO: we could make deadtime dependend on whether a receiver was connected before the Save
+    elseif DEVICE_ITEM_TX == nil then
+        cmdPush(MBRIDGE_CMD.REQUEST_INFO, {}) -- triggers sending DEVICE_ITEM_TX, DEVICE_ITEM_RX, DEVICE_INFO
+        --cmdPush(MBRIDGE_CMD.REQUEST_CMD, {MBRIDGE_CMD.REQUEST_INFO) -- alternative command for the same effect
+        -- these should have been set when we nil-ed DEVICE_PARAM_LIST
+        DEVICE_PARAM_LIST_expected_index = 0
+        DEVICE_PARAM_LIST_current_index = -1
+        DEVICE_PARAM_LIST_errors = 0
+        DEVICE_PARAM_LIST_complete = false
+    elseif DEVICE_PARAM_LIST == nil then
+        if DEVICE_INFO ~= nil then -- wait for DEVICE_INFO to be populated, indicates that MBRIDGE_CMD.REQUEST_INFO is completed
+            DEVICE_PARAM_LIST = {}
+            -- Old:
+            --cmdPush(MBRIDGE_CMD.PARAM_REQUEST_LIST, {}) -- triggers sending full list of PARAM_ITEMs
+            --cmdPush(MBRIDGE_CMD.REQUEST_CMD, {MBRIDGE_CMD.PARAM_REQUEST_LIST}) -- alternative command for the same effect
+            -- New: request parameters by index (request-response protocol)
+            -- request first parameter by index (is index = 0)
+            cmdPush(MBRIDGE_CMD.REQUEST_CMD, {MBRIDGE_CMD.PARAM_ITEM, DEVICE_PARAM_LIST_expected_index})
+        end
     end
 
     -- handle received commands
-    for ijk = 1,24 do -- handle only up to 24 per lua cycle
+    while true do
         local cmd = cmdPop()
         if cmd == nil then break end
         if cmd.cmd == MBRIDGE_CMD.DEVICE_ITEM_TX then
@@ -644,7 +641,6 @@ local function doParamLoop()
             DEVICE_INFO.tx_diversity = mb_to_u8_bits(cmd.payload, 7, 0, 0x0F)
             DEVICE_INFO.rx_diversity = mb_to_u8_bits(cmd.payload, 7, 4, 0x0F)
             DEVICE_INFO.param_num = mb_to_u8(cmd.payload, 8)
-            paramloop_t_last = 0 -- bypass throttle so first param request fires immediately
         elseif cmd.cmd == MBRIDGE_CMD.PARAM_ITEM then
             -- MBRIDGE_CMD.PARAM_ITEM
             local index = cmd.payload[0]
@@ -881,7 +877,7 @@ local IDX = {
 
 local CURSOR = {
     page_nr = PAGENR.MAIN, -- 0: main, 1: edit Tx, 2: edit Rx, 3: tools
-    idx = IDX.BindPhrase_idx,
+    idx = IDX.EditTx_idx,
     edit = false,
     pidx = 0, -- parameter idx which corresponds to the current CURSOR.idx
     param_cnt = 0, -- number of parameters available on page
@@ -1377,12 +1373,12 @@ local function doPageMain(event)
         if event == EVT_VIRTUAL_EXIT then
             -- nothing to do
         elseif event == EVT_VIRTUAL_ENTER then
-            if CURSOR.idx == IDX.EditTx_idx and DEVICE_PARAM_LIST_tx_ready then -- EditTX pressed
+            if CURSOR.idx == IDX.EditTx_idx and DEVICE_PARAM_LIST_complete then -- EditTX pressed
                 CURSOR.page_nr = PAGENR.EDIT_TX
                 CURSOR.idx = 0
                 CURSOR.top_idx = 0
                 return
-            elseif CURSOR.idx == IDX.EditRx_idx and DEVICE_PARAM_LIST_rx_ready then -- EditRX pressed
+            elseif CURSOR.idx == IDX.EditRx_idx and DEVICE_PARAM_LIST_complete then -- EditRX pressed
                 CURSOR.page_nr = PAGENR.EDIT_RX
                 CURSOR.idx = 0
                 CURSOR.top_idx = 0
@@ -1399,7 +1395,7 @@ local function doPageMain(event)
                 CURSOR.idx = 0
                 CURSOR.top_idx = 0
                 return
-            elseif DEVICE_PARAM_LIST_main_ready then -- edit option
+            elseif DEVICE_PARAM_LIST_complete then -- edit option
                 CURSOR.sidx = 0
                 CURSOR.edit = true
             end
@@ -1410,19 +1406,12 @@ local function doPageMain(event)
             if CURSOR.idx == IDX.Mode_idx and not param_focusable(1) then CURSOR.idx = CURSOR.idx + 1 end
             if CURSOR.idx == IDX.RFBand_idx and not param_focusable(2) then CURSOR.idx = CURSOR.idx + 1 end
             if CURSOR.idx == IDX.RFOrtho_idx and not param_focusable(3) then CURSOR.idx = CURSOR.idx + 1 end
-            if CURSOR.idx == IDX.EditTx_idx and not DEVICE_PARAM_LIST_tx_ready then CURSOR.idx = CURSOR.idx + 1 end
-            if CURSOR.idx == IDX.EditRx_idx and (not connected or not DEVICE_PARAM_LIST_rx_ready) then CURSOR.idx = CURSOR.idx + 1 end
-            if CURSOR.idx == IDX.Save_idx and not DEVICE_PARAM_LIST_complete then CURSOR.idx = CURSOR.idx + 1 end
-            -- reload and bind are always accessible
-            if CURSOR.idx == IDX.Tools_idx and not DEVICE_PARAM_LIST_complete then CURSOR.idx = IDX.MAIN_CURSOR_IDX_MAX end
+            if CURSOR.idx == IDX.EditRx_idx and not connected then CURSOR.idx = CURSOR.idx + 1 end
         elseif event == EVT_VIRTUAL_PREV then -- and DEVICE_PARAM_LIST_complete then
             CURSOR.idx = CURSOR.idx - 1
             if CURSOR.idx < 0 then CURSOR.idx = 0 end
 
-            if CURSOR.idx == IDX.Tools_idx and not DEVICE_PARAM_LIST_complete then CURSOR.idx = CURSOR.idx - 1 end
-            if CURSOR.idx == IDX.Save_idx and not DEVICE_PARAM_LIST_complete then CURSOR.idx = CURSOR.idx - 1 end
-            if CURSOR.idx == IDX.EditRx_idx and (not connected or not DEVICE_PARAM_LIST_rx_ready) then CURSOR.idx = CURSOR.idx - 1 end
-            if CURSOR.idx == IDX.EditTx_idx and not DEVICE_PARAM_LIST_tx_ready then CURSOR.idx = CURSOR.idx - 1 end
+            if CURSOR.idx == IDX.EditRx_idx and not connected then CURSOR.idx = CURSOR.idx - 1 end
             if CURSOR.idx == IDX.RFOrtho_idx and not param_focusable(3) then CURSOR.idx = CURSOR.idx - 1 end
             if CURSOR.idx == IDX.RFBand_idx and not param_focusable(2) then CURSOR.idx = CURSOR.idx - 1 end
             if CURSOR.idx == IDX.Mode_idx and not param_focusable(1) then CURSOR.idx = CURSOR.idx - 1 end
@@ -1485,6 +1474,9 @@ local function Do(event)
 
     doParamLoop()
 
+    -- don't draw until main page params are loaded, avoids placeholder pop-in
+    if not DEVICE_PARAM_LIST_main_ready then return end
+
     lcd.clear()
 
     if CURSOR.page_nr == PAGENR.EDIT_TX then
@@ -1514,12 +1506,7 @@ local function scriptInit()
     setupBridge()
 
     DEVICE_DOWNLOAD_is_running = true -- we start the script with this
-    local tnow_10ms = getTime()
-    if tnow_10ms < 300 then
-        DEVICE_SAVE_t_last = 300 - tnow_10ms -- treat script start like a Save
-    else
-        DEVICE_SAVE_t_last = 0
-    end
+    DEVICE_SAVE_t_last = 0
 end
 
 
