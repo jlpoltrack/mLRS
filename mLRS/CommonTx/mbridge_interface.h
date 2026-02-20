@@ -481,6 +481,8 @@ void tMBridge::Unlock(void)
 void mbridge_start_ParamRequestList(void);
 void mbridge_start_ParamRequestByIndex(uint8_t idx);
 
+tMBridgeBridgeCmdResponse bridge_cmd_response;
+
 
 uint8_t tMBridge::HandleRequestCmd(uint8_t* const payload)
 {
@@ -514,6 +516,13 @@ tMBridgeRequestCmd* request = (tMBridgeRequestCmd*)payload;
         //if (request->name[0] != 0) { // name is specified, so search for index of parameter
         //}
         mbridge_start_ParamRequestByIndex(idx);
+        break; }
+
+    case MBRIDGE_CMD_BRIDGE_CMD_RESPONSE: {
+        uint8_t subcmd = request->cmd_request_data[0];
+        memset(&bridge_cmd_response, 0, sizeof(bridge_cmd_response));
+        bridge_cmd_response.cmd_type = subcmd;
+        // payload is passed through for mlrs-tx.cpp to handle
         break; }
     }
 
@@ -868,6 +877,9 @@ void mbridge_send_cmd(uint8_t cmd)
         break;
     case MBRIDGE_CMD_INFO:
         mbridge_send_Info();
+        break;
+    case MBRIDGE_CMD_BRIDGE_CMD_RESPONSE:
+        mbridge.SendCommand(MBRIDGE_CMD_BRIDGE_CMD_RESPONSE, (uint8_t*)&bridge_cmd_response);
         break;
     }
 }

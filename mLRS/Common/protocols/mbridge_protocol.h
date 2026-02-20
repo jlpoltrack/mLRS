@@ -76,6 +76,7 @@ typedef enum {
     MBRIDGE_CMD_MODELID_SET           = 16,
     MBRIDGE_CMD_SYSTEM_BOOTLOADER     = 17, // len = 0
     MBRIDGE_CMD_FLASH_ESP             = 18, // len = 0
+    MBRIDGE_CMD_BRIDGE_CMD_RESPONSE   = 19,
 } MBRIDGE_CMD_ENUM;
 
 
@@ -86,6 +87,7 @@ typedef enum {
 #define MBRIDGE_CMD_INFO_LEN                  24
 #define MBRIDGE_CMD_PARAM_SET_LEN             7
 #define MBRIDGE_CMD_MODELID_SET_LEN           3
+#define MBRIDGE_CMD_BRIDGE_CMD_RESPONSE_LEN   24
 
 
 uint8_t mbridge_cmd_payload_len(uint8_t cmd)
@@ -108,6 +110,7 @@ uint8_t mbridge_cmd_payload_len(uint8_t cmd)
     case MBRIDGE_CMD_MODELID_SET: return MBRIDGE_CMD_MODELID_SET_LEN; break;
     case MBRIDGE_CMD_SYSTEM_BOOTLOADER: return 0;
     case MBRIDGE_CMD_FLASH_ESP: return 0;
+    case MBRIDGE_CMD_BRIDGE_CMD_RESPONSE: return MBRIDGE_CMD_BRIDGE_CMD_RESPONSE_LEN;
     }
     return 0;
 }
@@ -333,6 +336,22 @@ typedef struct
 }) tMBridgeParamSet; // 7 bytes
 
 
+// subcommand types for bridge cmd request/response
+typedef enum {
+    MBRIDGE_BRIDGE_CMD_ESP_GET_WIFIDEVNAME = 1,
+    MBRIDGE_BRIDGE_CMD_ESP_GET_PSWD     = 2,
+    MBRIDGE_BRIDGE_CMD_ESP_SET_PSWD     = 3,
+} MBRIDGE_BRIDGE_CMD_ENUM;
+
+
+MBRIDGE_PACKED(
+typedef struct
+{
+    uint8_t cmd_type; // MBRIDGE_BRIDGE_CMD_ENUM
+    char data_23[23];
+}) tMBridgeBridgeCmdResponse; // 24 bytes
+
+
 //-- check some sizes
 
 STATIC_ASSERT(sizeof(tMBridgeChannelBuffer) == MBRIDGE_CHANNELPACKET_SIZE, "tMBridgeChannelBuffer len missmatch")
@@ -344,6 +363,7 @@ STATIC_ASSERT(sizeof(tMBridgeParamItem) == MBRIDGE_CMD_PARAM_ITEM_LEN, "tMBridge
 STATIC_ASSERT(sizeof(tMBridgeParamItem2) == MBRIDGE_CMD_PARAM_ITEM_LEN, "tMBridgeParamItem2 len missmatch")
 STATIC_ASSERT(sizeof(tMBridgeParamItem3) == MBRIDGE_CMD_PARAM_ITEM_LEN, "tMBridgeParamItem3 len missmatch")
 STATIC_ASSERT(sizeof(tMBridgeParamSet) == MBRIDGE_CMD_PARAM_SET_LEN, "tMBridgeParamSet len missmatch")
+STATIC_ASSERT(sizeof(tMBridgeBridgeCmdResponse) == MBRIDGE_CMD_BRIDGE_CMD_RESPONSE_LEN, "tMBridgeBridgeCmdResponse len missmatch")
 
 
 #endif // MBRIDGE_PROTOCOL_H

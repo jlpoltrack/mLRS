@@ -13,7 +13,7 @@
 -- Tables are less efficient memory and cpu wise, but are being used to avoid the 200 local limit.
 
 local VERSION = {
-    script = '2026-02-14', -- add a '.01' if needed for the day
+    script = '2026-02-19', -- add a '.01' if needed for the day
     required_tx_version_int = 10303,  -- 'v1.3.03'
     required_rx_version_int = 10303,  -- 'v1.3.03'
 }
@@ -211,6 +211,7 @@ local MBRIDGE_CMD = {
     MODELID_SET        = 16,
     SYSTEM_BOOTLOADER  = 17,
     FLASH_ESP          = 18,
+    BRIDGE_CMD_RESPONSE = 19,
 }
 
 local MBRIDGE_CMD_LEN = {
@@ -224,6 +225,7 @@ local MBRIDGE_CMD_LEN = {
     [MBRIDGE_CMD.INFO]            = 24, -- MBRIDGE_CMD_INFO_LEN
     [MBRIDGE_CMD.PARAM_SET]       = 7,  -- MBRIDGE_CMD_PARAM_SET_LEN
     [MBRIDGE_CMD.MODELID_SET]     = 3,  -- MBRIDGE_CMD_MODELID_SET_LEN
+    [MBRIDGE_CMD.BRIDGE_CMD_RESPONSE] = 24, -- MBRIDGE_CMD_BRIDGE_CMD_RESPONSE_LEN
 }
     
 local MBRIDGE_PARAM_TYPE = {
@@ -393,6 +395,27 @@ local DEVICE_PARAM_LIST_errors = 0
 local DEVICE_PARAM_LIST_complete = false
 local DEVICE_DOWNLOAD_is_running = true -- we start the script with this
 local DEVICE_SAVE_t_last = 0
+
+-- bridge command subcommands and state
+local BRIDGE_CMD = {
+    ESP_GET_WIFIDEVNAME = 1,
+    ESP_GET_PSWD    = 2,
+    ESP_SET_PSWD    = 3,
+}
+
+local BRIDGE_RESULT = {
+    pending = false,
+    received = false,
+    cmd_type = 0,
+    data = "",
+}
+
+-- tools page field data (populated by sequential auto-GET on page entry)
+local TOOLS_DATA = {
+    wifi_name = "...",
+    password = "...",
+    load_step = 0, -- 0=start, 1=waiting wifi name, 2=send pswd, 3=waiting pswd, 4=done
+}
 
 
 local function clearParams()
@@ -752,9 +775,39 @@ local function doParamLoop()
                     cmdPush(MBRIDGE_CMD.REQUEST_CMD, {MBRIDGE_CMD.PARAM_ITEM, DEVICE_PARAM_LIST_expected_index})
                 end
             end
+        elseif cmd.cmd == MBRIDGE_CMD.BRIDGE_CMD_RESPONSE then
+            -- MBRIDGE_CMD.BRIDGE_CMD_RESPONSE
+            local cmd_type = cmd.payload[0]
+            local data_str = mb_to_string(cmd.payload, 1, 23)
+            BRIDGE_RESULT.pending = false
+            BRIDGE_RESULT.received = true
+            BRIDGE_RESULT.cmd_type = cmd_type
+            BRIDGE_RESULT.data = data_str
+            -- dispatch to tools data fields and advance load step
+            if cmd_type == BRIDGE_CMD.ESP_GET_WIFIDEVNAME then
+                TOOLS_DATA.wifi_name = data_str
+                if TOOLS_DATA.load_step == 1 then TOOLS_DATA.load_step = 2 end
+            elseif cmd_type == BRIDGE_CMD.ESP_GET_PSWD then
+                TOOLS_DATA.password = data_str
+                if TOOLS_DATA.load_step == 3 then TOOLS_DATA.load_step = 4 end
+            end
         end
         cmd = nil
     end --for
+end
+
+
+local function sendBridgeCmd(subcmd, payload)
+    if DEVICE_DOWNLOAD_is_running then return end
+    local data = {MBRIDGE_CMD.BRIDGE_CMD_RESPONSE, subcmd}
+    if payload then
+        for i = 1, #payload do data[#data + 1] = payload[i] end
+    end
+    BRIDGE_RESULT.pending = true
+    BRIDGE_RESULT.received = false
+    BRIDGE_RESULT.cmd_type = subcmd
+    BRIDGE_RESULT.data = ""
+    cmdPush(MBRIDGE_CMD.REQUEST_CMD, data)
 end
 
 
@@ -843,7 +896,10 @@ local IDX = {
     -- Page Tools, idxes of options on tools page
     Tools_Boot_idx = 0,
     Tools_FlashEsp_idx = 1,
-    TOOLS_CURSOR_IDX_MAX = 1,
+    Tools_WifiName_idx = 2,
+    Tools_Password_idx = 3,
+    Tools_Save_idx = 4,
+    TOOLS_CURSOR_IDX_MAX = 4,
 }
 
 local CURSOR = {
@@ -1091,35 +1147,150 @@ end
 -- Page Tools
 ----------------------------------------------------------------------
 
-local function drawPageTools()
-    local x, y;
+local function tools_value_x() return 170 end
 
-    y = 60
+local function drawToolsField(y, label, value, idx)
+    lcd.drawText(10, y, label, THEME.textColor)
+    if CURSOR.edit and CURSOR.idx == idx then
+        -- character editing mode
+        local sx = tools_value_x()
+        for i = 1, #value do
+            local c = string.sub(value, i, i)
+            local attr = THEME.textColor
+            if i - 1 == CURSOR.sidx then attr = attr + BLINK + INVERS end
+            lcd.drawText(sx, y, c, attr)
+            sx = sx + getCharWidth(c)
+        end
+        local max_len = 24
+        if CURSOR.sidx >= #value and #value < max_len then
+            lcd.drawText(sx, y, "+", THEME.textColor + BLINK + INVERS)
+        end
+    else
+        local v = value ~= "" and value or "(empty)"
+        lcd.drawText(tools_value_x(), y, v, cur_attr(idx))
+    end
+end
+
+local function drawPageTools()
+    local y = 60
     lcd.drawText(10, y, "System Bootloader", cur_attr(IDX.Tools_Boot_idx))
     y = y + LAYOUT.DY
     lcd.drawText(10, y, "Flash ESP", cur_attr(IDX.Tools_FlashEsp_idx))
+    y = y + LAYOUT.DY
+    lcd.drawText(10, y, "WiFi Name", THEME.textColor)
+    lcd.drawText(tools_value_x(), y, TOOLS_DATA.wifi_name, THEME.textDisableColor)
+    y = y + LAYOUT.DY
+    drawToolsField(y, "Password", TOOLS_DATA.password, IDX.Tools_Password_idx)
+    y = y + LAYOUT.DY
+    lcd.drawText(10, y, "Save", cur_attr(IDX.Tools_Save_idx))
 end
 
+
+local tools_edit_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_#-.!@$%^&*() "
+
+local function tools_get_field()
+    if CURSOR.idx == IDX.Tools_Password_idx then return TOOLS_DATA.password end
+    return ""
+end
+
+local function tools_set_field(s)
+    if CURSOR.idx == IDX.Tools_Password_idx then TOOLS_DATA.password = s end
+end
+
+local function tools_save()
+    local payload = {}
+    for i = 1, #TOOLS_DATA.password do
+        payload[i] = string.byte(TOOLS_DATA.password, i)
+    end
+    sendBridgeCmd(BRIDGE_CMD.ESP_SET_PSWD, payload)
+    setPopupWTmo("Saving...", 100)
+end
 
 local function doPageTools(event)
     lcd.drawFilledRectangle(0, 0, LAYOUT.W, 30, THEME.titleBgColor)
     lcd.drawText(5, 5, "mLRS Configurator: Tools Page", THEME.menuTitleColor)
 
+    -- sequential auto-fetch: even steps send, odd steps wait for response
+    if TOOLS_DATA.load_step == 0 then
+        TOOLS_DATA.load_step = 1
+        sendBridgeCmd(BRIDGE_CMD.ESP_GET_WIFIDEVNAME)
+    elseif TOOLS_DATA.load_step == 2 then
+        TOOLS_DATA.load_step = 3
+        sendBridgeCmd(BRIDGE_CMD.ESP_GET_PSWD)
+    end
+
     drawPageTools()
 
+    -- handle character editing
+    if CURSOR.edit then
+        local chars = tools_edit_chars
+        local s = tools_get_field()
+        local max_len = 24
+
+        if event == EVT_VIRTUAL_EXIT then
+            CURSOR.edit = false
+            return
+        elseif event == EVT_VIRTUAL_ENTER then
+            CURSOR.sidx = CURSOR.sidx + 1
+            if CURSOR.sidx >= #s and CURSOR.sidx >= max_len then
+                CURSOR.edit = false
+            end
+            return
+        elseif event == EVT_VIRTUAL_NEXT then
+            if CURSOR.sidx < #s then
+                local c = string.sub(s, CURSOR.sidx + 1, CURSOR.sidx + 1)
+                local ci = string.find(chars, c, 1, true)
+                if ci then ci = ci % #chars + 1 else ci = 1 end
+                local nc = string.sub(chars, ci, ci)
+                s = string.sub(s, 1, CURSOR.sidx) .. nc .. string.sub(s, CURSOR.sidx + 2)
+                tools_set_field(s)
+            else
+                if #s < max_len then
+                    tools_set_field(s .. string.sub(chars, 1, 1))
+                end
+            end
+        elseif event == EVT_VIRTUAL_PREV then
+            if CURSOR.sidx < #s then
+                local c = string.sub(s, CURSOR.sidx + 1, CURSOR.sidx + 1)
+                local ci = string.find(chars, c, 1, true)
+                if ci then ci = ci - 1; if ci < 1 then ci = #chars end else ci = #chars end
+                local nc = string.sub(chars, ci, ci)
+                s = string.sub(s, 1, CURSOR.sidx) .. nc .. string.sub(s, CURSOR.sidx + 2)
+                tools_set_field(s)
+            else
+                if #s > 0 then
+                    tools_set_field(string.sub(s, 1, #s - 1))
+                end
+            end
+        end
+        return
+    end
+
+    -- normal navigation
     if event == EVT_VIRTUAL_ENTER then
-        if CURSOR.idx == IDX.Tools_Boot_idx then -- Boot
+        if CURSOR.idx == IDX.Tools_Boot_idx then
             CURSOR.page_nr = PAGENR.MAIN
             CURSOR.idx = IDX.EditTx_idx
             sendBoot()
-        elseif CURSOR.idx == IDX.Tools_FlashEsp_idx then -- Flash ESP
+        elseif CURSOR.idx == IDX.Tools_FlashEsp_idx then
             CURSOR.page_nr = PAGENR.MAIN
             CURSOR.idx = IDX.EditTx_idx
             sendFlashEsp()
+        elseif CURSOR.idx == IDX.Tools_WifiName_idx then
+            -- read-only, re-fetch
+            sendBridgeCmd(BRIDGE_CMD.ESP_GET_WIFIDEVNAME)
+        elseif CURSOR.idx == IDX.Tools_Password_idx then
+            CURSOR.edit = true
+            CURSOR.sidx = 0
+        elseif CURSOR.idx == IDX.Tools_Save_idx then
+            tools_save()
         end
     elseif event == EVT_VIRTUAL_EXIT then
         CURSOR.page_nr = PAGENR.MAIN
         CURSOR.idx = IDX.EditTx_idx
+        TOOLS_DATA.load_step = 0
+        TOOLS_DATA.wifi_name = "..."
+        TOOLS_DATA.password = "..."
         return
     elseif event == EVT_VIRTUAL_NEXT then
         CURSOR.idx = CURSOR.idx + 1

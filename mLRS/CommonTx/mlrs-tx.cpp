@@ -1136,7 +1136,29 @@ IF_MBRIDGE_OR_CRSF( // to allow CRSF mBridge emulation
             }
             break;
         case MBRIDGE_CMD_PARAM_REQUEST_LIST: mbridge.HandleCmd(MBRIDGE_CMD_PARAM_REQUEST_LIST); break;
-        case MBRIDGE_CMD_REQUEST_CMD: mbridge.HandleRequestCmd(mbridge.GetPayloadPtr()); break;
+        case MBRIDGE_CMD_REQUEST_CMD: {
+            uint8_t* payload = mbridge.GetPayloadPtr();
+            uint8_t cmd_requested = mbridge.HandleRequestCmd(payload);
+            if (cmd_requested == MBRIDGE_CMD_BRIDGE_CMD_RESPONSE) {
+                tMBridgeRequestCmd* request = (tMBridgeRequestCmd*)payload;
+                uint8_t subcmd = request->cmd_request_data[0];
+                switch (subcmd) {
+                case MBRIDGE_BRIDGE_CMD_ESP_GET_PSWD:
+                    esp.GetPasswordToBuffer(bridge_cmd_response.data_23);
+                    break;
+                case MBRIDGE_BRIDGE_CMD_ESP_SET_PSWD: {
+                    char str[25];
+                    memset(str, 0, sizeof(str));
+                    memcpy(str, &request->cmd_request_data[1], 16);
+                    esp.SetPasswordFromBuffer(str, bridge_cmd_response.data_23);
+                    break; }
+                case MBRIDGE_BRIDGE_CMD_ESP_GET_WIFIDEVNAME:
+                    esp.GetWifiDeviceNameToBuffer(bridge_cmd_response.data_23);
+                    break;
+                }
+                mbridge.cmd_fifo.Put(MBRIDGE_CMD_BRIDGE_CMD_RESPONSE);
+            }
+            }break;
         case MBRIDGE_CMD_PARAM_SET: {
             bool rx_param_changed;
             bool param_changed = mbridge_do_ParamSet(mbridge.GetPayloadPtr(), &rx_param_changed);

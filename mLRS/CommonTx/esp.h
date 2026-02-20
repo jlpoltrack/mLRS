@@ -89,6 +89,9 @@ class tTxEspWifiBridge
     void SetPassword(char* str) {}
     void GetNetSsid(void) {}
     void SetNetSsid(char* str) {}
+    void GetPasswordToBuffer(char* buf) { strcpy(buf, "N/A"); }
+    void SetPasswordFromBuffer(char* str, char* result_buf) { strcpy(result_buf, "N/A"); }
+    void GetWifiDeviceNameToBuffer(char* buf) { strcpy(buf, "N/A"); }
 };
 
 #else
@@ -129,11 +132,17 @@ class tTxEspWifiBridge
     void SetPassword(char* str);
     void GetNetSsid(void);
     void SetNetSsid(char* str);
+    void GetPasswordToBuffer(char* buf);
+    void SetPasswordFromBuffer(char* str, char* result_buf);
+    void GetWifiDeviceNameToBuffer(char* buf);
 #else
     void GetPassword(void) {}
     void SetPassword(char* str) {}
     void GetNetSsid(void) {}
     void SetNetSsid(char* str) {}
+    void GetPasswordToBuffer(char* buf) { strcpy(buf, "N/A"); }
+    void SetPasswordFromBuffer(char* str, char* result_buf) { strcpy(result_buf, "N/A"); }
+    void GetWifiDeviceNameToBuffer(char* buf) { strcpy(buf, "N/A"); }
 #endif
 
   private:
@@ -142,6 +151,8 @@ class tTxEspWifiBridge
     void esp_wait_after_read(const char* const res);
     void esp_get_ssidpswd(const char* const net_cmd);
     void esp_set_ssidpswd(const char* const net_cmd, char* const str);
+    void esp_get_ssidpswd_to_buffer(const char* const net_cmd, char* buf);
+    void esp_set_ssidpswd_from_buffer(const char* const net_cmd, char* const str, char* result_buf);
     void esp_configure_baudrate(void);
     void esp_configure_wifiprotocol(void);
     void esp_configure_wifichannel(void);
@@ -525,6 +536,98 @@ void tTxEspWifiBridge::GetPassword(void) { esp_get_ssidpswd("PSWD"); }
 void tTxEspWifiBridge::SetPassword(char* str) { esp_set_ssidpswd("PSWD", str); }
 void tTxEspWifiBridge::GetNetSsid(void) { esp_get_ssidpswd("NETSSID"); }
 void tTxEspWifiBridge::SetNetSsid(char* str) { esp_set_ssidpswd("NETSSID", str); }
+
+
+void tTxEspWifiBridge::esp_get_ssidpswd_to_buffer(const char* const net_cmd, char* buf)
+{
+char cmd_str[64];
+char s[ESP_CMDRES_LEN+2];
+uint8_t len;
+
+    esp_gpio0_low();
+    delay_ms(10);
+
+    strcpy(cmd_str, "AT+"); strcat(cmd_str, net_cmd); strcat(cmd_str, "=?");
+    if (!esp_read(cmd_str, s, &len)) {
+        strcpy(buf, "err");
+        esp_gpio0_high();
+        return;
+    }
+    esp_wait_after_read(s);
+    // response is like "OK+PSWD=mypassword\r\n", extract the value after '='
+    s[len-2] = '\0';
+    char* eq = strchr(s, '=');
+    if (eq) {
+        strncpy(buf, eq + 1, 22);
+        buf[22] = '\0';
+    } else {
+        strncpy(buf, s, 22);
+        buf[22] = '\0';
+    }
+
+    esp_gpio0_high();
+}
+
+
+void tTxEspWifiBridge::esp_set_ssidpswd_from_buffer(const char* const net_cmd, char* const str, char* result_buf)
+{
+char cmd_str[64];
+char s[ESP_CMDRES_LEN+2];
+uint8_t len;
+
+    esp_gpio0_low();
+    delay_ms(10);
+
+    strcpy(cmd_str, "AT+"); strcat(cmd_str, net_cmd); strcat(cmd_str, "="); strncat(cmd_str, str, 62);
+    len = 3 + strlen(net_cmd) + 1 + 24;
+    for (uint8_t i = strlen(cmd_str); i < len; i++) cmd_str[i] = 255;
+    cmd_str[len] = '\0';
+    if (!esp_read(cmd_str, s, &len)) {
+        strcpy(result_buf, "err");
+        esp_gpio0_high();
+        return;
+    }
+    esp_wait_after_read(s);
+    strcpy(result_buf, "ok");
+    if (esp_read("AT+RESTART", s, &len)) delay_ms(1500);
+
+    esp_gpio0_high();
+}
+
+
+void tTxEspWifiBridge::GetPasswordToBuffer(char* buf) { esp_get_ssidpswd_to_buffer("PSWD", buf); }
+void tTxEspWifiBridge::SetPasswordFromBuffer(char* str, char* result_buf) { esp_set_ssidpswd_from_buffer("PSWD", str, result_buf); }
+
+
+void tTxEspWifiBridge::GetWifiDeviceNameToBuffer(char* buf)
+{
+char cmd_str[32];
+char s[ESP_CMDRES_LEN+2];
+uint8_t len;
+
+    esp_gpio0_low();
+    delay_ms(10);
+
+    strcpy(cmd_str, "AT+WIFIDEVICENAME=?");
+    if (!esp_read(cmd_str, s, &len)) {
+        strcpy(buf, "err");
+        esp_gpio0_high();
+        return;
+    }
+    esp_wait_after_read(s);
+    // response is like "OK+WIFIDEVICENAME=mLRS-xxxxx-Wifi\r\n"
+    s[len-2] = '\0';
+    char* eq = strchr(s, '=');
+    if (eq) {
+        strncpy(buf, eq + 1, 22);
+        buf[22] = '\0';
+    } else {
+        strncpy(buf, s, 22);
+        buf[22] = '\0';
+    }
+
+    esp_gpio0_high();
+}
 
 
 void tTxEspWifiBridge::esp_configure_baudrate(void)
