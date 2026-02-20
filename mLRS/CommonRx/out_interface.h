@@ -25,6 +25,8 @@ extern tStats stats;
 
 #ifdef ESP32
 #include "../Common/esp-lib/esp-uart.h"
+#elif defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+#include "../Common/rp-lib/rp-uart.h"
 #else
 #include "../modules/stm32ll-lib/src/stdstm32-uart.h"
 #endif
