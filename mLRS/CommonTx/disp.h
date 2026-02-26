@@ -310,6 +310,7 @@ uint16_t keys, i, keys_new;
     // finish startup page
     if (page == PAGE_STARTUP && page_startup_tmo) {
         page_startup_tmo--;
+        page_update = true; // force redraw for animation
         if (!page_startup_tmo) {
             page = PAGE_MAIN;
             subpage = SUBPAGE_DEFAULT;
@@ -657,20 +658,29 @@ char s[32];
 
 void tTxDisp::draw_page_startup(void)
 {
-    if (!page_modified) return;
+    if (!page_modified && !page_update) return;
 
     gdisp_clear();
-/*
-    gdisp_setcurXY(0, 6);
-    gdisp_setfont(&FreeMono12pt7b);
-    gdisp_setcurY(33-10); gdisp_puts_XCentered("mLRS");
-    gdisp_unsetfont();
-    gdisp_setcurY(48); gdisp_puts_XCentered(DEVICE_NAME);
-    gdisp_setcurY(60); gdisp_puts_XCentered(VERSIONONLYSTR);
-*/
+    
+    // draw the static content
     gdisp_drawbitmap(23, 0, mlrs_logo_91x38_bw, 91, 38, 1);
     gdisp_setcurY(52); gdisp_puts_XCentered(DEVICE_NAME);
     gdisp_setcurY(63); gdisp_puts_XCentered(VERSIONONLYSTR);
+
+    // total timeout is 1500 ms, first 1000 is sweep then 500 is pause
+    uint16_t elapsed = DISP_START_PAGE_TMO_MS - page_startup_tmo; 
+    uint16_t anim_duration = SYSTICK_DELAY_MS(1000);
+    
+    if (elapsed < anim_duration) {
+        uint16_t hide_width = 91 - ((elapsed * 91) / anim_duration);
+        
+        if (hide_width > 0 && hide_width <= 91) {
+            // black rectangle obscuring the right side of the logo
+            gdisp_fillrect_WH(23 + (91 - hide_width), 0, hide_width, 38, 0); 
+            // white line at the scanning edge (sweeps left to right)
+            gdisp_drawline_V(23 + (91 - hide_width), 0, 38, 1); 
+        }
+    }
 }
 
 

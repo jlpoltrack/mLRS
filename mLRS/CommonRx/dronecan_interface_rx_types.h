@@ -14,7 +14,11 @@
 
 #include "../Common/libs/fifo.h"
 
+#if defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+#include "../Common/rp-lib/rp-dronecan-driver.h"
+#else
 #include "../../../modules/stm32-dronecan-lib/stm32-dronecan-driver.h"
+#endif
 #include "../../../modules/stm32-dronecan-lib/stm32-dronecan-protocol.h"
 #include "../Common/dronecan/out/include/uavcan.protocol.NodeStatus.h"
 #include "../Common/dronecan/out/include/uavcan.protocol.GetNodeInfo.h"

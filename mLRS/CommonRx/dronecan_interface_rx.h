@@ -34,14 +34,20 @@
 #endif
 
 #include "../Common/hal/hal.h"
+#if defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+#include "../Common/rp-lib/rp-can.h"
+#else
 #include "../Common/thirdparty/stdstm32-can.h"
+#endif
 
 #ifndef DRONECAN_USE_RX_ISR
 #error DRONECAN_USE_RX_ISR not defined !
 #endif
 
+#if !defined ARDUINO_ARCH_RP2040 && !defined ARDUINO_ARCH_RP2350
 #if FDCAN_IRQ_PRIORITY != DRONECAN_IRQ_PRIORITY
 #error FDCAN_IRQ_PRIORITY not eq DRONECAN_IRQ_PRIORITY !
+#endif
 #endif
 
 extern tRxMavlink mavlink;
@@ -61,6 +67,8 @@ extern tGlobalConfig Config;
 #define CANARD_POOL_SIZE  4096
 #elif defined STM32F1
 #define CANARD_POOL_SIZE  1024
+#elif defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+#define CANARD_POOL_SIZE  4096
 #endif
 
 #define DRONECAN_BUF_SIZE  512 // needs to be larger than the largest DroneCAN frame size
@@ -192,11 +200,14 @@ void tRxDroneCan::Init(bool ser_over_can_enable_flag)
     }
 
     // it appears to not matter if first isr is enabled and then start, or vice versa
+#if !defined ARDUINO_ARCH_RP2040 && !defined ARDUINO_ARCH_RP2350
     res = dc_hal_enable_isr();
     if (res < 0) {
         DBG_DC(dbg.puts("\nERROR: can isr config failed");)
     }
+#endif
 
+    // on RP, isr handler is registered from setup() (core 0) in rp-glue.h and enabled by dc_hal_start()
     res = dc_hal_start();
     if (res < 0) {
         DBG_DC(dbg.puts("\nERROR: can start failed");)
