@@ -18,11 +18,11 @@
 
 // library configuration
 #define DRONECAN_USE_RX_ISR
-#define DRONECAN_RXFRAMEBUFSIZE   32 // actual size is RXFRAMEBUFSIZE * sizeof(tDcRxFifoElement)
+#define DRONECAN_RXFRAMEBUFSIZE   64 // actual size is RXFRAMEBUFSIZE * sizeof(tDcRxFifoElement)
 #define DRONECAN_IRQ_PRIORITY     14
 
 // CAN 2.0B EXT frame = 131 bits (1 SOF + 32 arbitration + 6 control + 64 data + 16 CRC + 2 ACK + 7 EOF + 3 IFS)
-// 32 frames * 131 bits = 4192 bits -> 4.2 ms at 1 Mbit/s
+// 64 frames * 131 bits = 8384 bits -> 8.4 ms at 1 Mbit/s
 
 
 #ifdef __cplusplus
