@@ -169,43 +169,21 @@ void init_hw(void)
 // SX12xx
 //-------------------------------------------------------
 
-volatile uint16_t irq_status;
-volatile uint16_t irq2_status;
+volatile uint32_t irq_status;
+volatile uint32_t irq2_status;
 
 IRQHANDLER(
 void SX_DIO_EXTI_IRQHandler(void)
 {
     sx_dio_exti_isr_clearflag();
-    irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
-    if (irq_status & SX_IRQ_RX_DONE) {
-        if (bind.IsInBind()) {
-            uint64_t bind_signature;
-            sx.ReadBuffer(0, (uint8_t*)&bind_signature, 8);
-            if (bind_signature != bind.TxSignature) irq_status = 0; // not binding frame, so ignore it
-        } else {
-            uint16_t sync_word;
-            sx.ReadBuffer(0, (uint8_t*)&sync_word, 2); // rxStartBufferPointer is always 0, so no need for sx.GetRxBufferStatus()
-            if (sync_word != Config.FrameSyncWord) irq_status = 0; // not for us, so ignore it
-        }
-    }
+    irq_status = 1; // flag that DIO fired, query details in main loop
 })
 #ifdef USE_SX2
 IRQHANDLER(
 void SX2_DIO_EXTI_IRQHandler(void)
 {
     sx2_dio_exti_isr_clearflag();
-    irq2_status = sx2.GetAndClearIrqStatus(SX2_IRQ_ALL);
-    if (irq2_status & SX2_IRQ_RX_DONE) {
-        if (bind.IsInBind()) {
-            uint64_t bind_signature;
-            sx2.ReadBuffer(0, (uint8_t*)&bind_signature, 8);
-            if (bind_signature != bind.TxSignature) irq2_status = 0;
-        } else {
-            uint16_t sync_word;
-            sx2.ReadBuffer(0, (uint8_t*)&sync_word, 2);
-            if (sync_word != Config.FrameSyncWord) irq2_status = 0;
-        }
-    }
+    irq2_status = 1; // flag that DIO fired, query details in main loop
 })
 #endif
 
@@ -473,8 +451,6 @@ uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was rec
         return bind.do_receive(antenna, do_clock_reset);
     }
 
-    // we don't need to read sx.GetRxBufferStatus(), but hey
-    // we could save 2 byte's time by not reading sync_word again, but hey
     sxReadFrame(antenna, &txFrame, &txFrame2, FRAME_TX_RX_LEN);
     res = (antenna == ANTENNA_1) ? check_txframe(&txFrame) : check_txframe(&txFrame2);
 
@@ -658,6 +634,7 @@ INITCONTROLLER_END
 
 IF_SX(
     if (irq_status) {
+        irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
                 irq_status = 0;
@@ -695,6 +672,7 @@ IF_SX(
 );
 IF_SX2(
     if (irq2_status) {
+        irq2_status = sx2.GetAndClearIrqStatus(SX2_IRQ_ALL);
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 irq2_status = 0;
