@@ -172,10 +172,18 @@ void init_hw(void)
 volatile uint32_t irq_status;
 volatile uint32_t irq2_status;
 
+// irq-to-handler timing instrumentation
+volatile uint16_t irq_tstamp;
+volatile uint16_t irq2_tstamp;
+
+uint32_t irq_lat_min, irq_lat_max, irq_lat_total, irq_lat_count;
+uint32_t irq2_lat_min, irq2_lat_max, irq2_lat_total, irq2_lat_count;
+
 IRQHANDLER(
 void SX_DIO_EXTI_IRQHandler(void)
 {
     sx_dio_exti_isr_clearflag();
+    irq_tstamp = micros16();
     irq_status = 1; // flag that DIO fired, query details in main loop
 })
 #ifdef USE_SX2
@@ -183,6 +191,7 @@ IRQHANDLER(
 void SX2_DIO_EXTI_IRQHandler(void)
 {
     sx2_dio_exti_isr_clearflag();
+    irq2_tstamp = micros16();
     irq2_status = 1; // flag that DIO fired, query details in main loop
 })
 #endif
@@ -563,6 +572,11 @@ RESTARTCONTROLLER
 
     tick_1hz = 0;
     tick_1hz_commensurate = 0;
+    // init irq latency tracking
+    irq_lat_min = irq2_lat_min = UINT32_MAX;
+    irq_lat_max = irq2_lat_max = 0;
+    irq_lat_total = irq2_lat_total = 0;
+    irq_lat_count = irq2_lat_count = 0;
     resetSysTask(); // helps in avoiding too short first loop
 INITCONTROLLER_END
 
@@ -585,23 +599,30 @@ INITCONTROLLER_END
         dronecan.Tick_ms();
 
         if (!tick_1hz) {
-            dbg.puts(".");
-/*            dbg.puts("\nRX: ");
-            dbg.puts(u8toBCD_s(stats.GetLQ_rc())); dbg.putc(',');
-            dbg.puts(u8toBCD_s(stats.GetLQ_serial()));
-            dbg.puts(" (");
-            dbg.puts(u8toBCD_s(stats.frames_received.GetLQ())); dbg.putc(',');
-            dbg.puts(u8toBCD_s(stats.valid_crc1_received.GetLQ())); dbg.putc(',');
-            dbg.puts(u8toBCD_s(stats.valid_frames_received.GetLQ()));
-            dbg.puts("),");
-            dbg.puts(u8toBCD_s(stats.received_LQ_serial)); dbg.puts(", ");
-
-            dbg.puts(s8toBCD_s(stats.last_rssi1)); dbg.putc(',');
-            dbg.puts(s8toBCD_s(stats.received_rssi)); dbg.puts(", ");
-            dbg.puts(s8toBCD_s(stats.last_snr1)); dbg.puts("; ");
-
-            dbg.puts(u16toBCD_s(stats.bytes_transmitted.GetBytesPerSec())); dbg.puts(", ");
-            dbg.puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec())); dbg.puts("; "); */
+            dbg.puts("\nSX  irq lat(us) ");
+            if (irq_lat_count) {
+                dbg.puts("min:"); dbg.puts(u16toBCD_s(irq_lat_min));
+                dbg.puts(" avg:"); dbg.puts(u16toBCD_s(irq_lat_total / irq_lat_count));
+                dbg.puts(" max:"); dbg.puts(u16toBCD_s(irq_lat_max));
+                dbg.puts(" n:"); dbg.puts(u16toBCD_s(irq_lat_count));
+            } else {
+                dbg.puts("--");
+            }
+            dbg.puts("\nSX2 irq lat(us) ");
+            if (irq2_lat_count) {
+                dbg.puts("min:"); dbg.puts(u16toBCD_s(irq2_lat_min));
+                dbg.puts(" avg:"); dbg.puts(u16toBCD_s(irq2_lat_total / irq2_lat_count));
+                dbg.puts(" max:"); dbg.puts(u16toBCD_s(irq2_lat_max));
+                dbg.puts(" n:"); dbg.puts(u16toBCD_s(irq2_lat_count));
+            } else {
+                dbg.puts("--");
+            }
+            dbg.putc('\n');
+            // reset stats for next 1s window
+            irq_lat_min = irq2_lat_min = UINT32_MAX;
+            irq_lat_max = irq2_lat_max = 0;
+            irq_lat_total = irq2_lat_total = 0;
+            irq_lat_count = irq2_lat_count = 0;
         }
     }
 
@@ -634,6 +655,11 @@ INITCONTROLLER_END
 
 IF_SX(
     if (irq_status) {
+        uint16_t irq_lat = micros16() - irq_tstamp;
+        irq_lat_total += irq_lat;
+        irq_lat_count++;
+        if (irq_lat < irq_lat_min) irq_lat_min = irq_lat;
+        if (irq_lat > irq_lat_max) irq_lat_max = irq_lat;
         irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
@@ -672,6 +698,11 @@ IF_SX(
 );
 IF_SX2(
     if (irq2_status) {
+        uint16_t irq2_lat = micros16() - irq2_tstamp;
+        irq2_lat_total += irq2_lat;
+        irq2_lat_count++;
+        if (irq2_lat < irq2_lat_min) irq2_lat_min = irq2_lat;
+        if (irq2_lat > irq2_lat_max) irq2_lat_max = irq2_lat;
         irq2_status = sx2.GetAndClearIrqStatus(SX2_IRQ_ALL);
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {
