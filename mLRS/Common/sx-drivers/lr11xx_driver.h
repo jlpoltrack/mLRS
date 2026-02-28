@@ -479,7 +479,7 @@ class Lr11xxDriver : public Lr11xxDriverCommon
 #endif
         Configure(global_config);
         
-        sx_dio_enable_exti_isr();
+        //sx_dio_enable_exti_isr();
     }
 
     //-- this are the API functions used in the loop
@@ -619,7 +619,7 @@ class Lr11xxDriver2 : public Lr11xxDriverCommon
 #endif
         Configure(global_config);
 
-        sx2_dio_enable_exti_isr();
+        //sx2_dio_enable_exti_isr();
     }
 
     //-- this are the API functions used in the loop

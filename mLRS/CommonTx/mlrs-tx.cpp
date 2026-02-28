@@ -295,32 +295,6 @@ void init_hw(void)
 // SX12xx
 //-------------------------------------------------------
 
-volatile uint32_t irq_status;
-volatile uint32_t irq2_status;
-
-// irq-to-handler timing instrumentation
-volatile uint16_t irq_tstamp;
-volatile uint16_t irq2_tstamp;
-
-uint32_t irq_lat_min, irq_lat_max, irq_lat_total, irq_lat_count;
-uint32_t irq2_lat_min, irq2_lat_max, irq2_lat_total, irq2_lat_count;
-
-IRQHANDLER(
-void SX_DIO_EXTI_IRQHandler(void)
-{
-    sx_dio_exti_isr_clearflag();
-    irq_tstamp = micros16();
-    irq_status = 1; // flag that DIO fired, query details in main loop
-})
-#ifdef USE_SX2
-IRQHANDLER(
-void SX2_DIO_EXTI_IRQHandler(void)
-{
-    sx2_dio_exti_isr_clearflag();
-    irq2_tstamp = micros16();
-    irq2_status = 1; // flag that DIO fired, query details in main loop
-})
-#endif
 
 
 uint8_t link_rx1_status;
@@ -704,7 +678,7 @@ RESTARTCONTROLLER
     // start up sx
     if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
     if (!sx2.isOk()) { FAILALWAYS(BLINK_GR_RD_OFF, "Sx2 not ok"); } // fail!
-    irq_status = irq2_status = 0;
+
     IF_SX(sx.StartUp(&Config.Sx));
     IF_SX2(sx2.StartUp(&Config.Sx2));
     bind.Init();
@@ -762,11 +736,6 @@ RESTARTCONTROLLER
 
     tick_1hz = 0;
     tick_1hz_commensurate = 0;
-    // init irq latency tracking
-    irq_lat_min = irq2_lat_min = UINT32_MAX;
-    irq_lat_max = irq2_lat_max = 0;
-    irq_lat_total = irq2_lat_total = 0;
-    irq_lat_count = irq2_lat_count = 0;
     resetSysTask(); // helps in avoiding too short first loop
 INITCONTROLLER_END
 
@@ -809,32 +778,7 @@ INITCONTROLLER_END
             fan.Tick_ms();
             esp.Tick_ms();
 
-            if (!tick_1hz) {
-                dbg.puts("\nSX  irq lat(us) ");
-                if (irq_lat_count) {
-                    dbg.puts("min:"); dbg.puts(u16toBCD_s(irq_lat_min));
-                    dbg.puts(" avg:"); dbg.puts(u16toBCD_s(irq_lat_total / irq_lat_count));
-                    dbg.puts(" max:"); dbg.puts(u16toBCD_s(irq_lat_max));
-                    dbg.puts(" n:"); dbg.puts(u16toBCD_s(irq_lat_count));
-                } else {
-                    dbg.puts("--");
-                }
-                dbg.puts("\nSX2 irq lat(us) ");
-                if (irq2_lat_count) {
-                    dbg.puts("min:"); dbg.puts(u16toBCD_s(irq2_lat_min));
-                    dbg.puts(" avg:"); dbg.puts(u16toBCD_s(irq2_lat_total / irq2_lat_count));
-                    dbg.puts(" max:"); dbg.puts(u16toBCD_s(irq2_lat_max));
-                    dbg.puts(" n:"); dbg.puts(u16toBCD_s(irq2_lat_count));
-                } else {
-                    dbg.puts("--");
-                }
-                dbg.putc('\n');
-                // reset stats for next 1s window
-                irq_lat_min = irq2_lat_min = UINT32_MAX;
-                irq_lat_max = irq2_lat_max = 0;
-                irq_lat_total = irq2_lat_total = 0;
-                irq_lat_count = irq2_lat_count = 0;
-            }
+
         } // end of if (!doPreTransmit)
     }
 
@@ -861,7 +805,7 @@ INITCONTROLLER_END
         do_transmit_send(tdiversity.Antenna());
         link_state = LINK_STATE_TRANSMIT_WAIT;
         link_tx_status = TX_STATUS_NONE;
-        irq_status = irq2_status = 0;
+
         DBG_MAIN_SLIM(dbg.puts(">");)
         // auxiliaries
         crsf.TelemetryStart();
@@ -873,19 +817,14 @@ INITCONTROLLER_END
         IF_ANTENNA2(sx2.SetToRx());
         link_state = LINK_STATE_RECEIVE_WAIT;
         link_rx1_status = link_rx2_status = RX_STATUS_NONE;
-        irq_status = irq2_status = 0;
+
         DBG_MAIN_SLIM(dbg.puts("r");)
         break;
     }//end of switch(link_state)
 
 IF_SX(
-    if (irq_status) {
-        uint16_t irq_lat = micros16() - irq_tstamp;
-        irq_lat_total += irq_lat;
-        irq_lat_count++;
-        if (irq_lat < irq_lat_min) irq_lat_min = irq_lat;
-        if (irq_lat > irq_lat_max) irq_lat_max = irq_lat;
-        irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
+    if (gpio_read_activehigh(SX_DIO1)) {
+        uint32_t irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
                 irq_status = 0;
@@ -911,21 +850,15 @@ IF_SX(
             if (irq_status & SX_IRQ_TX_DONE) {
                 FAIL_WSTATE(BLINK_GR_RD_OFF, "IRQ TX DONE FAIL", irq_status, link_state, link_rx1_status, link_rx2_status);
             }
-            irq_status = 0;
             link_state = LINK_STATE_IDLE;
             link_rx1_status = link_rx2_status = RX_STATUS_NONE;
             DBG_MAIN_SLIM(dbg.puts("1?");)
         }
-    }//end of if(irq_status)
+    }
 );
 IF_SX2(
-    if (irq2_status) {
-        uint16_t irq2_lat = micros16() - irq2_tstamp;
-        irq2_lat_total += irq2_lat;
-        irq2_lat_count++;
-        if (irq2_lat < irq2_lat_min) irq2_lat_min = irq2_lat;
-        if (irq2_lat > irq2_lat_max) irq2_lat_max = irq2_lat;
-        irq2_status = sx2.GetAndClearIrqStatus(SX2_IRQ_ALL);
+    if (gpio_read_activehigh(SX2_DIO1)) {
+        uint32_t irq2_status = sx2.GetAndClearIrqStatus(SX2_IRQ_ALL);
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 irq2_status = 0;
@@ -951,12 +884,11 @@ IF_SX2(
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 FAIL_WSTATE(BLINK_GR_RD_ON, "IRQ2 TX DONE FAIL", irq2_status, link_state, link_rx1_status, link_rx2_status);
             }
-            irq2_status = 0;
             link_state = LINK_STATE_IDLE;
             link_rx1_status = link_rx2_status = RX_STATUS_NONE;
             DBG_MAIN_SLIM(dbg.puts("2?");)
         }
-    }//end of if(irq2_status)
+    }
 );
 
     // this happens before switching to transmit, i.e. after a frame was or should have been received
