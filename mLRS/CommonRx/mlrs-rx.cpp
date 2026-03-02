@@ -27,7 +27,31 @@
 #include "../Common/common_conf.h"
 #include "../Common/common_types.h"
 
-#if defined ESP8266 || defined ESP32
+#if defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+
+#include "../Common/hal/rp-glue.h"
+#include "../modules/stm32ll-lib/src/stdstm32.h"
+#include "../Common/rp-lib/rp-peripherals.h"
+#include "../Common/rp-lib/rp-mcu.h"
+#include "../Common/rp-lib/rp-stack.h"
+#include "../Common/hal/hal.h"
+#include "../Common/rp-lib/rp-delay.h"
+#include "../Common/rp-lib/rp-eeprom.h"
+#include "../Common/rp-lib/rp-spi.h"
+#ifdef USE_SX2
+#include "../Common/rp-lib/rp-spib.h"
+#endif
+#ifdef USE_SERIAL
+#include "../Common/rp-lib/rp-uartb.h"
+#endif
+#ifdef USE_DEBUG
+#include "../Common/rp-lib/rp-uartf.h"
+#endif
+#include "../Common/hal/rp-timer.h"
+#include "../Common/hal/rp-powerup.h"
+#include "../Common/hal/rp-rxclock.h"
+
+#elif defined ESP8266 || defined ESP32
 
 #include "../Common/hal/esp-glue.h"
 #include "../modules/stm32ll-lib/src/stdstm32.h"

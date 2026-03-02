@@ -222,7 +222,7 @@ HAL_StatusTypeDef ssd1306_put(uint8_t* buf, uint16_t len)
 #if !(defined ESP8266 || defined ESP32)
 HAL_StatusTypeDef ssd1306_put_noblock(uint8_t* const buf, uint16_t len)
 {
-    ssd1306_cmdhome();
+    //ssd1306_cmdhome();  // not needed: full buffer always sent, horizontal mode auto-wraps to (0,0)
     return i2c_put(SSD1306_DATA, buf, len);
 }
 #else
