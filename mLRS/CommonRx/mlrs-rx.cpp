@@ -616,8 +616,9 @@ INITCONTROLLER_END
     }//end of switch(link_state)
 
 IF_SX(
-    if (gpio_read_activehigh(SX_DIO1)) {
+    if (sx_dio_read()) {
         uint32_t irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
+        sx_dio_exti_isr_clearflag();
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
                 irq_status = 0;
@@ -653,8 +654,9 @@ IF_SX(
     }
 );
 IF_SX2(
-    if (gpio_read_activehigh(SX2_DIO1)) {
+    if (sx2_dio_read()) {
         uint32_t irq2_status = sx2.GetAndClearIrqStatus(SX2_IRQ_ALL);
+        sx2_dio_exti_isr_clearflag();
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 irq2_status = 0;

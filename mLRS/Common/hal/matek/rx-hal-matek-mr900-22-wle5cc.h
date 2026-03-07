@@ -117,26 +117,26 @@ void sx_amp_receive(void)
 
 void sx_dio_init_exti_isroff(void)
 {
-    // there is no EXTI_LINE_44 interrupt flag
-    //LL_EXTI_DisableEvent_32_63(SX_DIO_EXTI_LINE_x);
-    //LL_EXTI_DisableIT_32_63(SX_DIO_EXTI_LINE_x);
-
     NVIC_SetPriority(SX_DIO_EXTI_IRQn, SX_DIO_EXTI_IRQ_PRIORITY);
-    //NVIC_EnableIRQ(SX_DIO_EXTI_IRQn);
+    // do not enable NVIC IRQ — we poll via NVIC_GetPendingIRQ instead
 }
 
 void sx_dio_enable_exti_isr(void)
 {
-    // there is no EXTI_LINE_44 interrupt flag
-    //LL_EXTI_ClearFlag_32_63(SX_DIO_EXTI_LINE_x);
-    //LL_EXTI_EnableIT_32_63(SX_DIO_EXTI_LINE_x);
+    // clear any stale pending bit before starting
+    NVIC_ClearPendingIRQ(SX_DIO_EXTI_IRQn);
+}
 
-    NVIC_EnableIRQ(SX_DIO_EXTI_IRQn);
+bool sx_dio_read(void)
+{
+    // poll the NVIC pending bit — set when radio asserts IRQ via EXTI line 44
+    return NVIC_GetPendingIRQ(SX_DIO_EXTI_IRQn) ? true : false;
 }
 
 void sx_dio_exti_isr_clearflag(void)
 {
-    // there is no EXTI_LINE_44 interrupt flag
+    // clear the latched NVIC pending bit after reading radio IRQ status via SPI
+    NVIC_ClearPendingIRQ(SX_DIO_EXTI_IRQn);
 }
 
 
