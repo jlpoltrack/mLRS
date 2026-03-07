@@ -36,7 +36,7 @@
 ENTRY(Reset_Handler)
 
 /* Highest address of the user mode stack */
-_estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
+_estack = ORIGIN(RAM) + 0x18000; /* 96K (SRAM1+SRAM2), required for BFB2 bootloader SP validation */
 
 _Min_Heap_Size = 0x0; /* required amount of heap */
 _Min_Stack_Size = 0x400; /* required amount of stack */
@@ -45,7 +45,7 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 112K
-  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 496K
+  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 240K  /* one bank minus EEPROM pages */
 }
 
 /* Sections */
