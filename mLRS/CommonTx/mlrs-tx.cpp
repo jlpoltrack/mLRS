@@ -778,7 +778,23 @@ INITCONTROLLER_END
             fan.Tick_ms();
             esp.Tick_ms();
 
+            if (!tick_1hz) {
+                dbg.puts(".");
+/*                dbg.puts("\nTX: ");
+                dbg.puts(u8toBCD_s(stats.GetLQ_serial()));
+                dbg.puts("(");
+                dbg.puts(u8toBCD_s(stats.frames_received.GetLQ())); dbg.putc(',');
+                dbg.puts(u8toBCD_s(stats.valid_frames_received.GetLQ()));
+                dbg.puts("),");
+                dbg.puts(u8toBCD_s(stats.received_LQ_rc)); dbg.puts(", ");
 
+                dbg.puts(s8toBCD_s(stats.last_rssi1)); dbg.putc(',');
+                dbg.puts(s8toBCD_s(stats.received_rssi)); dbg.puts(", ");
+                dbg.puts(s8toBCD_s(stats.last_snr1)); dbg.puts("; ");
+
+                dbg.puts(u16toBCD_s(stats.bytes_transmitted.GetBytesPerSec())); dbg.puts(", ");
+                dbg.puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec())); dbg.puts("; "); */
+            }
         } // end of if (!doPreTransmit)
     }
 

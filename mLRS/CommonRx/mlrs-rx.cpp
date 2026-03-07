@@ -567,7 +567,25 @@ INITCONTROLLER_END
         fan.Tick_ms();
         dronecan.Tick_ms();
 
+        if (!tick_1hz) {
+            dbg.puts(".");
+/*            dbg.puts("\nRX: ");
+            dbg.puts(u8toBCD_s(stats.GetLQ_rc())); dbg.putc(',');
+            dbg.puts(u8toBCD_s(stats.GetLQ_serial()));
+            dbg.puts(" (");
+            dbg.puts(u8toBCD_s(stats.frames_received.GetLQ())); dbg.putc(',');
+            dbg.puts(u8toBCD_s(stats.valid_crc1_received.GetLQ())); dbg.putc(',');
+            dbg.puts(u8toBCD_s(stats.valid_frames_received.GetLQ()));
+            dbg.puts("),");
+            dbg.puts(u8toBCD_s(stats.received_LQ_serial)); dbg.puts(", ");
 
+            dbg.puts(s8toBCD_s(stats.last_rssi1)); dbg.putc(',');
+            dbg.puts(s8toBCD_s(stats.received_rssi)); dbg.puts(", ");
+            dbg.puts(s8toBCD_s(stats.last_snr1)); dbg.puts("; ");
+
+            dbg.puts(u16toBCD_s(stats.bytes_transmitted.GetBytesPerSec())); dbg.puts(", ");
+            dbg.puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec())); dbg.puts("; "); */
+        }
     }
 
     //-- SX handling
