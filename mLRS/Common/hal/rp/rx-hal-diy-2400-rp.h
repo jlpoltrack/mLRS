@@ -145,7 +145,7 @@ void out_set_inverted(void) { gpio_set_outover(UART_TX_PIN, GPIO_OVERRIDE_INVERT
 
 //-- Button
 
-#define BUTTON                    IO_P22
+#define BUTTON                    IO_P27
 
 void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
 bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
