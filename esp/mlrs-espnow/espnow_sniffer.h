@@ -6,7 +6,7 @@
 //*******************************************************
 // Sniffer Mode — promiscuous capture + MAC auto-detection
 //*******************************************************
-// 7. Mar. 2026
+// 12. Mar. 2026
 //*******************************************************
 #ifndef ESPNOW_SNIFFER_H
 #define ESPNOW_SNIFFER_H
@@ -47,7 +47,7 @@
 #define ESPNOW_TYPE_OFFSET         37
 #define ESPNOW_PAYLOAD_OFFSET      39
 
-const uint8_t IRAM_ATTR espressif_oui[3] = { 0x18, 0xFE, 0x34 };
+const uint8_t DRAM_ATTR espressif_oui[3] = { 0x18, 0xFE, 0x34 };
 
 
 //-------------------------------------------------------
@@ -90,6 +90,7 @@ volatile detect_phase_t detect_phase;
 uint8_t detected_macs[2][6];
 volatile uint32_t detected_counts[2];
 volatile int detected_count;
+volatile unsigned long detect_first_mac_ms;
 volatile unsigned long detect_second_mac_ms;
 
 uint8_t bridge_mac[6];
@@ -111,6 +112,7 @@ void detect_init(void)
     detected_count = 0;
     detected_counts[0] = 0;
     detected_counts[1] = 0;
+    detect_first_mac_ms = 0;
     detect_second_mac_ms = 0;
     bridge_mac_known = false;
 #endif
@@ -183,7 +185,9 @@ void IRAM_ATTR promisc_recv_cb(void* buf, wifi_promiscuous_pkt_type_t type)
             mac_copy(detected_macs[mac_idx], src_mac);
             detected_counts[mac_idx] = 0;
             detected_count++;
-            if (detected_count == 2) {
+            if (detected_count == 1) {
+                detect_first_mac_ms = millis();
+            } else if (detected_count == 2) {
                 detect_second_mac_ms = millis();
             }
         }
@@ -222,10 +226,15 @@ void detect_check(void)
     if (detected_count == 0) return;
 
     uint32_t total = detected_counts[0] + (detected_count > 1 ? detected_counts[1] : 0);
-    unsigned long elapsed = (detected_count > 1) ? (millis() - detect_second_mac_ms) : 0;
+    unsigned long elapsed_first = millis() - detect_first_mac_ms;
+    unsigned long elapsed_second = (detected_count > 1) ? (millis() - detect_second_mac_ms) : 0;
 
-    // decide once we have 50 total packets or 2 seconds since seeing second MAC
-    if (total >= 50 || elapsed >= 2000) {
+    // decide once we have 50 total packets, or 2s since seeing the first/second MAC
+    bool ready = (total >= 50);
+    if (!ready && detected_count == 1) ready = (elapsed_first >= 2000);
+    if (!ready && detected_count > 1) ready = (elapsed_second >= 2000);
+
+    if (ready) {
         // higher count = bridge (telemetry downlink is continuous)
         int bridge_idx = 0;
         if (detected_count > 1 && detected_counts[1] > detected_counts[0]) {

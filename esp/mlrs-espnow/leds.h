@@ -6,7 +6,7 @@
 //*******************************************************
 // LEDs
 //*******************************************************
-// 7. Mar. 2026
+// 12. Mar. 2026
 //*******************************************************
 #ifndef LEDS_H
 #define LEDS_H
@@ -94,7 +94,11 @@ void led_init(void)
 
 void led_on(void)
 {
+#ifdef ESPNOW_SNIFFER
+    _rgb_strip.setPixelColor(0, _rgb_strip.Color(128, 0, 255)); // purple
+#else
     _rgb_strip.setPixelColor(0, _rgb_strip.Color(0, 255, 0)); // green
+#endif
     _rgb_strip.show();
 }
 
@@ -116,8 +120,13 @@ void _led_rgb_blink(unsigned long interval_ms, uint8_t r, uint8_t g, uint8_t b)
     }
 }
 
+#ifdef ESPNOW_SNIFFER
+// connected: purple toggling at 500 ms
+void led_tick_connected(void) { _led_rgb_blink(500, 128, 0, 255); }
+#else
 // connected: green toggling at 500 ms
 void led_tick_connected(void) { _led_rgb_blink(500, 0, 255, 0); }
+#endif
 // disconnected: red toggling at 200 ms
 void led_tick_disconnected(void) { _led_rgb_blink(200, 255, 0, 0); }
 // scanning: red toggling at 100 ms

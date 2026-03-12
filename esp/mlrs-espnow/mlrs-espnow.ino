@@ -9,7 +9,7 @@
 // For use with ESP32, ESP32C3, and ESP32S3.
 // To use USB on ESP32C3 and ESP32S3, 'USB CDC On Boot' must be enabled in Tools.
 //********************************************************
-// 7. Mar. 2026
+// 12. Mar. 2026
 //********************************************************
 
 //-------------------------------------------------------
@@ -45,7 +45,7 @@
 
 //#define DEVICE_HAS_SINGLE_LED      // uncomment for single on/off LED
 //#define DEVICE_HAS_SINGLE_LED_RGB  // uncomment for single RGB (NeoPixel/WS2812) LED
-//#define LED_IO              8      // LED pin (comment out to disable)
+//#define LED_IO              48      // LED pin (comment out to disable)
 //#define LED_ACTIVE_LOW             // uncomment if LED is active low (on = LOW)
 //#define RGB_LED_COUNT       1      // number of RGB LEDs (default 1)
 
@@ -82,6 +82,9 @@
 
 #include "leds.h"
 #include "ring_buffer.h"
+
+// forward declaration — setup_wifi_mode() in the headers calls this
+void scan_for_traffic(void);
 
 #ifdef ESPNOW_SNIFFER
 #include "espnow_sniffer.h"
@@ -188,8 +191,8 @@ void loop()
     if (is_connected && (tnow_ms - is_connected_tlast_ms > 5000)) {
         is_connected = false;
         detect_init();
+        rxbuf_init(); // flush stale data so it doesn't falsely re-trigger connected
         scan_for_traffic();
-        // re-arm the timeout monitor immediately upon channel lock
         is_connected = true;
         is_connected_tlast_ms = millis();
     }
