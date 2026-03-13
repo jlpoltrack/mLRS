@@ -235,6 +235,7 @@ typedef enum {
     WIFI_CHANNEL_6,
     WIFI_CHANNEL_11,
     WIFI_CHANNEL_13,
+    WIFI_CHANNEL_36,  // 5 GHz
     WIFI_CHANNEL_NUM,
 } TX_WIFI_CHANNEL_ENUM;
 
@@ -459,6 +460,7 @@ typedef struct
     uint16_t Tx_SerialDestination_allowed_mask;
     uint16_t Tx_Buzzer_allowed_mask;
     uint16_t Tx_WiFiProt_allowed_mask;
+    uint16_t Tx_WiFiChannel_allowed_mask;
 
     char Rx_Power_optstr[67+1];
     uint16_t Rx_Diversity_allowed_mask;

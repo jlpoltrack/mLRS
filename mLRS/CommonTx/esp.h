@@ -623,6 +623,7 @@ uint8_t len;
         case WIFI_CHANNEL_6: strcat(cmd_str, "06"); break;
         case WIFI_CHANNEL_11: strcat(cmd_str, "11"); break;
         case WIFI_CHANNEL_13: strcat(cmd_str, "13"); break;
+        case WIFI_CHANNEL_36: strcat(cmd_str, "36"); break;  // 5 GHz
         default:
             strcat(cmd_str, "6"); // should not happen
     }

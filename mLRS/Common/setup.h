@@ -191,8 +191,17 @@ void setup_configure_metadata(void)
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b101011; // TCP, UDP, UDPSTA, ESPNOW (no BT, no BLE)
 #elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b111011; // all except BT (no classic BT on C3)
+#elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_BW16
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b011011; // TCP, UDP, UDPSTA, BLE (no BT, no ESPNOW)
 #else // ESP32
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b111111; // all protocols
+#endif
+
+    // Tx Bridge WiFi Channel : "1,6,11,13,36"
+#if defined DEVICE_HAS_ESP_WIFI_BRIDGE_BW16
+    SetupMetaData.Tx_WiFiChannel_allowed_mask = 0b11111; // all channels including 5 GHz
+#else
+    SetupMetaData.Tx_WiFiChannel_allowed_mask = 0b01111; // 2.4 GHz only (1,6,11,13)
 #endif
 
     //-- Rx:
@@ -450,6 +459,7 @@ void setup_sanitize_config(uint8_t config_id)
     SANITIZE(Tx[config_id].WifiProtocol, WIFI_PROTOCOL_NUM, WIFI_PROTOCOL_UDP, WIFI_PROTOCOL_UDP);
     TST_NOTALLOWED(Tx_WiFiProt_allowed_mask, Tx[config_id].WifiProtocol, WIFI_PROTOCOL_UDP);
     SANITIZE(Tx[config_id].WifiChannel, WIFI_CHANNEL_NUM, WIFI_CHANNEL_6, WIFI_CHANNEL_6);
+    TST_NOTALLOWED(Tx_WiFiChannel_allowed_mask, Tx[config_id].WifiChannel, WIFI_CHANNEL_6);
     SANITIZE(Tx[config_id].WifiPower, WIFI_POWER_NUM, WIFI_POWER_MED, WIFI_POWER_MED);
 #else
     Setup.Tx[config_id].WifiProtocol = WIFI_PROTOCOL_UDP; // force them to default
