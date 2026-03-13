@@ -175,7 +175,7 @@ extern bool is_connected;
 extern unsigned long is_connected_tlast_ms;
 
 // ring buffer for BLE receive callback
-#define BLE_RXBUF_SIZE  512
+#define BLE_RXBUF_SIZE  256
 uint8_t ble_rxbuf[BLE_RXBUF_SIZE];
 volatile uint16_t ble_rxbuf_head = 0;
 volatile uint16_t ble_rxbuf_tail = 0;
@@ -519,7 +519,7 @@ class tWifiHandler {
         if (avail <= 0) {
             serial_data_received_tfirst_ms = tnow_ms;
         } else
-        if ((tnow_ms - serial_data_received_tfirst_ms) > 10 || avail > 128) {
+        if ((tnow_ms - serial_data_received_tfirst_ms) > 10 || avail > 64) {
             serial_data_received_tfirst_ms = tnow_ms;
             int len = serial_read_bytes(buf, sizeofbuf);
             wifi_write(buf, len);
@@ -797,7 +797,7 @@ class tBLEHandler : public tWifiHandler {
             if (avail <= 0) {
                 serial_data_received_tfirst_ms = tnow_ms;
             } else
-            if ((tnow_ms - serial_data_received_tfirst_ms) > 10 || avail > 128) {
+            if ((tnow_ms - serial_data_received_tfirst_ms) > 10 || avail > 64) {
                 serial_data_received_tfirst_ms = tnow_ms;
                 int send_len = (sizeofbuf < 244) ? sizeofbuf : 244; // BLE MTU limit
                 int rlen = serial_read_bytes(buf, send_len);
@@ -941,5 +941,5 @@ void loop()
 
     wifi_handler->Loop(buf, sizeof(buf));
 
-    delay(2); // give it always a bit of time
+    delay(1); // give it always a bit of time
 }
