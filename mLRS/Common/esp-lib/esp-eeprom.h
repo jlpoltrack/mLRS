@@ -228,7 +228,7 @@ QUICK_EXIT:
 
 EE_STATUS_ENUM ee_init(void)
 {
-    EEPROM.begin(EE_PAGE_SIZE*2);
+    EEPROM.begin(EE_PAGE_SIZE*3); // 3 pages: 2 for setup, 1 for powerup counter
     EE_STATUS_ENUM status;
     uint32_t Page0Status, Page1Status;
 
