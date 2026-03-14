@@ -7,7 +7,7 @@
 // Basic but effective & reliable transparent WiFi or Bluetooth <-> serial bridge.
 // Minimizes wireless traffic while respecting latency by better packeting algorithm.
 //*******************************************************
-// 4. Mar. 2026
+// 14. Mar. 2026
 //*********************************************************/
 // inspired by examples from Arduino
 // NOTES:
@@ -231,7 +231,7 @@ String ble_device_name = ""; // name of your BLE device as it will be seen by yo
   #endif
 #endif // CONFIG_IDF_TARGET_ESP32C3
 
-#if defined USE_AT_MODE && (defined CONFIG_IDF_TARGET_ESP32 || defined CONFIG_IDF_TARGET_ESP32C3) && \
+#if defined USE_AT_MODE && defined CONFIG_IDF_TARGET_ESP32 && \
     !defined ARDUINO_PARTITION_no_ota
     #error Partition Scheme must be "No OTA (Large APP)", "No OTA (2MB APP/2MB SPIFFS)" or similar!
 #endif
@@ -251,10 +251,17 @@ String ble_device_name = ""; // name of your BLE device as it will be seen by yo
 #if defined USE_AT_MODE || (WIRELESS_PROTOCOL == 5)
   #if defined CONFIG_IDF_TARGET_ESP32 || defined CONFIG_IDF_TARGET_ESP32C3 // BLE available on ESP32 and ESP32C3
     #define USE_WIRELESS_PROTOCOL_BLE
-    #include <BLEDevice.h>
-    #include <BLEServer.h>
-    #include <BLEUtils.h>
-    #include <BLE2902.h>
+    #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+      #include <NimBLEDevice.h> // nimble for Core 2.x (ESP32-C3), requires NimBLE-Arduino 1.4.x
+      #ifndef CONFIG_BT_NIMBLE_ROLE_PERIPHERAL // nimble 2.x uses MYNEWT_VAL macros, not CONFIG_BT_NIMBLE
+        #error NimBLE-Arduino 2.x is not compatible with Core 2.x. Install NimBLE-Arduino 1.4.x via Library Manager.
+      #endif
+    #else
+      #include <BLEDevice.h> // bluedroid for Core 3.x (ESP32), needed for AT mode classic BT coexistence
+      #include <BLEServer.h>
+      #include <BLEUtils.h>
+      #include <BLE2902.h>
+    #endif
   #endif
 #endif
 #endif // #ifndef ESP8266
@@ -295,8 +302,13 @@ BluetoothSerial SerialBT;
 #define BLE_SERVICE_UUID            "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // Nordic UART service UUID
 #define BLE_CHARACTERISTIC_UUID_RX  "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define BLE_CHARACTERISTIC_UUID_TX  "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+NimBLEServer* ble_server = NULL;
+NimBLECharacteristic* ble_tx_characteristic;
+#else
 BLEServer* ble_server = NULL;
 BLECharacteristic* ble_tx_characteristic;
+#endif
 bool ble_device_connected;
 bool ble_serial_started;
 uint16_t ble_negotiated_mtu;
@@ -304,35 +316,38 @@ unsigned long ble_adv_tlast_ms;
 extern bool is_connected; // forward declarations, needed for BLE callbacks
 extern unsigned long is_connected_tlast_ms; // forward declarations, needed for BLE callbacks
 
-class BLEServerCallbacksHandler : public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) {
-        ble_device_connected = true;
-        ble_negotiated_mtu = pServer->getPeerMTU(pServer->getConnId());
-        DBG_PRINTLN("BLE connected");
+void ble_on_connect(uint16_t mtu) {
+    ble_device_connected = true;
+    ble_negotiated_mtu = mtu;
+    DBG_PRINTLN("BLE connected");
+}
+
+void ble_on_disconnect() {
+    ble_device_connected = false;
+    ble_serial_started = false;
+    DBG_PRINTLN("BLE disconnected");
+}
+
+void ble_on_write(const uint8_t* data, int len) {
+    if (!ble_serial_started) ble_serial_started = true;
+    if (len > 0) {
+        SERIAL.write(data, len);
+        is_connected = true;
+        is_connected_tlast_ms = millis();
     }
-    void onDisconnect(BLEServer* pServer) {
-        ble_device_connected = false;
-        ble_serial_started = false;
-        DBG_PRINTLN("BLE disconnected");
-    }
+}
+
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+// nimble callbacks (Core 2.x / ESP32-C3)
+class BLEServerCallbacksHandler : public NimBLEServerCallbacks {
+    void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) { ble_on_connect(pServer->getPeerMTU(desc->conn_handle)); }
+    void onDisconnect(NimBLEServer* pServer) { ble_on_disconnect(); }
 };
 
-class BLECharacteristicCallbacksHandler : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        if (!ble_serial_started) {
-            ble_serial_started = true;
-        }
-#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-        std::string rxValue = pCharacteristic->getValue(); // Core 2.x
-#else
-        String rxValue = pCharacteristic->getValue(); // Core 3.x
-#endif
-        int len = rxValue.length();
-        if (len > 0) {
-            SERIAL.write((uint8_t*)rxValue.c_str(), len);
-            is_connected = true;
-            is_connected_tlast_ms = millis();
-        }
+class BLECharacteristicCallbacksHandler : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic* pCharacteristic) {
+        std::string v = pCharacteristic->getValue();
+        ble_on_write((const uint8_t*)v.c_str(), v.length());
     }
 };
 
@@ -341,33 +356,74 @@ void ble_setup(String device_name) {
     ble_serial_started = false;
     ble_negotiated_mtu = 23;
     ble_adv_tlast_ms = 0;
-    // Create BLE Device, set MTU
+    // create BLE device, set MTU
+    NimBLEDevice::init(device_name.c_str());
+    NimBLEDevice::setMTU(256);
+    // note: setPower and advertising intervals omitted — buggy on C3 in nimble 1.x
+    // create BLE server, add callbacks
+    ble_server = NimBLEDevice::createServer();
+    ble_server->setCallbacks(new BLEServerCallbacksHandler());
+    // create BLE service
+    NimBLEService* ble_service = ble_server->createService(BLE_SERVICE_UUID);
+    // create BLE characteristics, add callback
+    // nimble auto-creates the CCCD (BLE2902) descriptor for notify characteristics
+    ble_tx_characteristic = ble_service->createCharacteristic(BLE_CHARACTERISTIC_UUID_TX, NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ);
+    NimBLECharacteristic* ble_rx_characteristic = ble_service->createCharacteristic(BLE_CHARACTERISTIC_UUID_RX, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    ble_rx_characteristic->setCallbacks(new BLECharacteristicCallbacksHandler());
+    // start service
+    ble_service->start();
+    // configure and start advertising
+    NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+    advertising->addServiceUUID(BLE_SERVICE_UUID);
+    advertising->start();
+    DBG_PRINTLN("BLE advertising started");
+}
+
+#else
+// bluedroid callbacks (Core 3.x / ESP32)
+class BLEServerCallbacksHandler : public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) { ble_on_connect(pServer->getPeerMTU(pServer->getConnId())); }
+    void onDisconnect(BLEServer* pServer) { ble_on_disconnect(); }
+};
+
+class BLECharacteristicCallbacksHandler : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        String v = pCharacteristic->getValue();
+        ble_on_write((const uint8_t*)v.c_str(), v.length());
+    }
+};
+
+void ble_setup(String device_name) {
+    ble_device_connected = false;
+    ble_serial_started = false;
+    ble_negotiated_mtu = 23;
+    ble_adv_tlast_ms = 0;
+    // create BLE device, set MTU
     BLEDevice::init(device_name.c_str());
-    BLEDevice::setMTU(512);
-    // Set BLE Power
+    BLEDevice::setMTU(256);
+    // set BLE power
     BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
-    // Create BLE server, add callbacks
+    // create BLE server, add callbacks
     ble_server = BLEDevice::createServer();
     ble_server->setCallbacks(new BLEServerCallbacksHandler());
-    // Create BLE service
+    // create BLE service
     BLEService* ble_service = ble_server->createService(BLE_SERVICE_UUID);
-    // Create BLE characteristics, add callback
+    // create BLE characteristics, add callback
     ble_tx_characteristic = ble_service->createCharacteristic(BLE_CHARACTERISTIC_UUID_TX, BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
     ble_tx_characteristic->addDescriptor(new BLE2902());
     BLECharacteristic* ble_rx_characteristic = ble_service->createCharacteristic(BLE_CHARACTERISTIC_UUID_RX, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
     ble_rx_characteristic->setCallbacks(new BLECharacteristicCallbacksHandler());
-    // Start service
+    // start service
     ble_service->start();
-    // Configure advertising
+    // configure and start advertising
     BLEAdvertising* advertising = BLEDevice::getAdvertising();
     advertising->addServiceUUID(BLE_SERVICE_UUID);
     advertising->setScanResponse(true);
-    advertising->setMinPreferred(0x06); // functions that help with iPhone connections issue
-    advertising->setMinPreferred(0x12);
-    // Start advertising
+    //advertising->setMinPreferred(0x06); // helps with iPhone connections
     advertising->start();
     DBG_PRINTLN("BLE advertising started");
 }
+#endif // ESP_ARDUINO_VERSION
 #endif // USE_WIRELESS_PROTOCOL_BLE
 // ESP-NOW
 #ifdef USE_WIRELESS_PROTOCOL_ESPNOW
@@ -1032,9 +1088,7 @@ class tBLEHandler : public tWifiHandler {
             } else
             if ((tnow_ms - serial_data_received_tfirst_ms) > 10 || avail > 128) {
                 serial_data_received_tfirst_ms = tnow_ms;
-                uint16_t bytesToRead = (ble_negotiated_mtu - 3);
-                if (bytesToRead < sizeofbuf) sizeofbuf = bytesToRead; // limit number of bytes to read to MTU - 3
-                int len = SERIAL.read(buf, sizeofbuf);
+                int len = SERIAL.read(buf, ble_negotiated_mtu - 3);
                 wifi_write(buf, len);
             }
         } else {
