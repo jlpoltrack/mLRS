@@ -71,6 +71,11 @@ void sx_dio_enable_exti_isr(void)
     attachInterrupt(SX_DIO1, SX_DIO_EXTI_IRQHandler, RISING);
 }
 
+IRAM_ATTR bool sx_dio_read(void)
+{
+    return gpio_read_activehigh(SX_DIO1);
+}
+
 IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
 
 
@@ -120,6 +125,11 @@ void sx2_dio_init_exti_isroff(void)
 void sx2_dio_enable_exti_isr(void)
 {
     attachInterrupt(SX2_DIO1, SX2_DIO_EXTI_IRQHandler, RISING);
+}
+
+IRAM_ATTR bool sx2_dio_read(void)
+{
+    return gpio_read_activehigh(SX2_DIO1);
 }
 
 void sx2_dio_exti_isr_clearflag(void) {}
