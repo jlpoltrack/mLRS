@@ -35,9 +35,9 @@
 
 #include "../Common/hal/hal.h"
 #if defined STM32G4 || defined STM32F1
-#include "../Common/thirdparty/stdstm32-can.h"
+#include "../modules/stm32-dronecan-lib/stdstm32-can.h"
 #elif defined ESP32
-#include "../Common/esp-lib/esp-can.h"
+#include "../modules/esp-lib/esp-can.h"
 #endif
 
 #if defined STM32G4 || defined STM32F1
@@ -143,10 +143,6 @@ bool dronecan_should_accept_transfer(
 
 // DroneCAN/Libcanard callback, forward declaration
 void dronecan_on_transfer_received(CanardInstance* const ins, CanardRxTransfer* const transfer);
-
-
-// CAN peripheral init, forward declaration
-void can_init(void);
 
 
 //-------------------------------------------------------
