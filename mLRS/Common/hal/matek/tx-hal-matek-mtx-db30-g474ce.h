@@ -25,13 +25,13 @@
 #define DEVICE_HAS_I2C_DISPLAY_ROT180
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
-#define DEVICE_HAS_COM_ON_USB
+#define DEVICE_HAS_SERIAL_OR_COM_ON_USB
 #define DEVICE_HAS_NO_DEBUG
 //#define DEVICE_HAS_NO_SERIAL
 
 //change these defaults
 #undef SETUP_TX_SERIAL_DESTINATION
-#define SETUP_TX_SERIAL_DESTINATION  1 // 0: serial port, 1: serial2 (BT/ESP) port, 2: mBridge
+#define SETUP_TX_SERIAL_DESTINATION  1 // 0: serial port, 1: serial2 (BT/ESP) port, 2: mBridge, 3: USB
 
 
 //-- Timers, Timing, EEPROM, and such stuff
