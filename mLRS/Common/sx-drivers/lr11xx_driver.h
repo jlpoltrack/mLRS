@@ -491,7 +491,6 @@ class Lr11xxDriver : public Lr11xxDriverCommon
 #endif
 
         Configure(global_config);
-        
         //sx_dio_enable_exti_isr();
     }
 
