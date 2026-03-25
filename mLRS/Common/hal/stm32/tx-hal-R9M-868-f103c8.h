@@ -34,6 +34,7 @@
 #define EE_START_PAGE             124 // 128 kB flash, 1 kB page
 
 #define MICROS_TIMx               TIM3
+#define MICROS_TIM_NAMEPREFIX     TIM3_
 
 
 //-- UARTS
@@ -282,7 +283,7 @@ void fan_set_power(int8_t power_dbm)
 #define I2C_CLOCKSPEED_400KHZ
 #define SX_PA_DAC_I2C_DEVICE_ADR  0x0C
 
-void rfpower_calc(int8_t power_dbm, uint8_t* sx_power, int8_t* actual_power_dbm, tI2cBase* dac)
+void rfpower_calc(int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, tI2cBase* dac)
 {
     // these are the values of ELRS
     // 10mW   10dbm   720

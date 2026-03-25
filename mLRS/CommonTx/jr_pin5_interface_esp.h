@@ -9,7 +9,7 @@
 #define JRPIN5_INTERFACE_ESP_H
 
 
-#include "../Common/esp-lib/esp-uart.h"
+#include "../modules/esp-lib/esp-uart.h"
 #include "../Common/protocols/crsf_protocol.h"
 #include <hal/uart_ll.h>
 
@@ -35,6 +35,18 @@ void CLOCK100US_IRQHandler(void)
         uart_ll_rxfifo_rst(UART_LL_GET_HW(1)); // discards ghost byte caused by switching
     }
 })
+
+
+//-------------------------------------------------------
+// Dummy tTxClock class
+
+class tTxClock
+{
+  public:
+    void SetCC1Callback(void (*callback)(void)) {};
+};
+
+tTxClock txclock;
 
 
 //-------------------------------------------------------
@@ -68,6 +80,7 @@ class tPin5BridgeBase
     // callback functions
     IRAM_ATTR void pin5_rx_callback(uint8_t c);
     void pin5_tc_callback(void) {} // is needed in derived classes
+    void pin5_cc1_callback(void) {} // is needed in derived classes
 
     // parser
     typedef enum {

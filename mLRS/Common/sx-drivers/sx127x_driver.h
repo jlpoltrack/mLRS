@@ -31,7 +31,7 @@ https://www.thethingsnetwork.org/forum/t/should-private-lorawan-networks-use-a-d
 //-------------------------------------------------------
 
 const tSxLoraConfiguration Sx127xLoraConfiguration[] = {
-    { .SpreadingFactor = SX1276_LORA_SF6,
+    { .SpreadingFactor = SX1276_LORA_SF6, // 900 MHz, 19 Hz 7x
       .Bandwidth = SX1276_LORA_BW_500,
       .CodingRate = SX1276_LORA_CR_4_5,
       .PreambleLength = 12,
@@ -46,26 +46,26 @@ const tSxLoraConfiguration Sx127xLoraConfiguration[] = {
 
 
 #ifdef POWER_USE_DEFAULT_RFPOWER_CALC
-void sx1276_rfpower_calc_default(const int8_t power_dbm, uint8_t* sx_power, int8_t* actual_power_dbm, const uint8_t GAIN_DBM, const uint8_t SX1276_MAX_DBM)
+void sx1276_rfpower_calc_default(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, const int8_t gain_dbm, const int8_t sx_power_max)
 {
 #ifdef SX_USE_RFO
     // Pout = OutputPower if PaSelect = 0 (RFO pin)
-    int16_t power_sx = (int16_t)power_dbm - GAIN_DBM + 3;
+    int16_t power_sx = (int16_t)power_dbm - gain_dbm + 3;
 #else
     // Pout = 17 - (15 - OutputPower) if PaSelect = 1 (PA_BOOST pin)
-    int16_t power_sx = (int16_t)power_dbm - GAIN_DBM - 2;
+    int16_t power_sx = (int16_t)power_dbm - gain_dbm - 2;
 #endif
 
     if (power_sx < SX1276_OUTPUT_POWER_MIN) power_sx = SX1276_OUTPUT_POWER_MIN;
     if (power_sx > SX1276_OUTPUT_POWER_MAX) power_sx = SX1276_OUTPUT_POWER_MAX;
-    if (power_sx > SX1276_MAX_DBM) power_sx = SX1276_MAX_DBM;
+    if (power_sx > sx_power_max) power_sx = sx_power_max;
 
     *sx_power = power_sx;
 
 #ifdef SX_USE_RFO
-    *actual_power_dbm = power_sx + GAIN_DBM - 3;
+    *actual_power_dbm = power_sx + gain_dbm - 3;
 #else
-    *actual_power_dbm = power_sx + GAIN_DBM + 2;
+    *actual_power_dbm = power_sx + gain_dbm + 2;
 #endif
 }
 #endif
@@ -112,9 +112,11 @@ class Sx127xDriverCommon : public Sx127xDriverBase
         SetLoraConfiguration(lora_configuration);
     }
 
-    void ResetToLoraConfiguration(void)
+    void ResetToLoraConfiguration(tSxGlobalConfig* const _gconfig)
     {
         if (!gconfig) while(1){} // must not happen
+
+        gconfig->LoraConfigIndex = _gconfig->LoraConfigIndex;
 
         SetLoraConfigurationByIndex(gconfig->LoraConfigIndex);
     }
@@ -149,8 +151,8 @@ class Sx127xDriverCommon : public Sx127xDriverBase
         gconfig = global_config;
 
         switch (gconfig->FrequencyBand) {
-            case SX_FHSS_CONFIG_FREQUENCY_BAND_433_MHZ:
-            case SX_FHSS_CONFIG_FREQUENCY_BAND_70_CM_HAM:
+            case SX_FHSS_FREQUENCY_BAND_433_MHZ:
+            case SX_FHSS_FREQUENCY_BAND_70_CM_HAM:
                 low_frequency_mode = SX1276_LOW_FREQUENCY_MODE_ON;
                 break;
             default:
@@ -194,11 +196,14 @@ class Sx127xDriverCommon : public Sx127xDriverBase
 
     void ReadFrame(uint8_t* const data, uint8_t len)
     {
-        uint8_t rxStartBufferPointer;
+/*        uint8_t rxStartBufferPointer;
         uint8_t rxPayloadLength;
 
         GetRxBufferStatus(&rxPayloadLength, &rxStartBufferPointer);
-        ReadBuffer(rxStartBufferPointer, data, len);
+        ReadBuffer(rxStartBufferPointer, data, len); */
+
+        // it seems that rxStartBufferPointer is always 0, so we assume that
+        ReadBuffer(0, data, len);
     }
 
     void SendFrame(uint8_t* const data, uint8_t len, uint16_t tmo_ms) // SX1276 doesn't have a Tx timeout
@@ -208,8 +213,9 @@ class Sx127xDriverCommon : public Sx127xDriverBase
         SetTx();
     }
 
-    void SetToRx(uint16_t tmo_ms)
+    void SetToRx(void)
     {
+        uint16_t tmo_ms = 0;
         WriteRegister(SX1276_REG_FifoAddrPtr, 0);
         ClearIrqStatus(SX1276_IRQ_ALL);
         if (tmo_ms == 0) { // 0 = no timeout
@@ -251,7 +257,7 @@ class Sx127xDriverCommon : public Sx127xDriverBase
 
     //-- RF power interface
 
-    virtual void _rfpower_calc(int8_t power_dbm, uint8_t* sx_power, int8_t* actual_power_dbm) = 0;
+    virtual void _rfpower_calc(int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm) = 0;
 
     //-- helper
 
@@ -295,11 +301,13 @@ class Sx127xDriverCommon : public Sx127xDriverBase
         return actual_power_dbm;
     }
 
-  private:
+  protected:
     tSxGlobalConfig* gconfig;
+
+  private:
     const tSxLoraConfiguration* lora_configuration;
     uint8_t low_frequency_mode;
-    uint8_t sx_power;
+    int8_t sx_power;
     int8_t actual_power_dbm;
     uint32_t symbol_time_us;
 
@@ -309,16 +317,16 @@ class Sx127xDriverCommon : public Sx127xDriverBase
 
         uint32_t bw = 7800;
         switch (Bandwidth) {
-          case SX1276_LORA_BW_7p8: bw = 7800; break;
-          case SX1276_LORA_BW_10p4: bw = 10400; break;
-          case SX1276_LORA_BW_15p6: bw = 15600; break;
-          case SX1276_LORA_BW_20p8: bw = 20800; break;
-          case SX1276_LORA_BW_31p25: bw = 31250; break;
-          case SX1276_LORA_BW_41p7: bw = 41700; break;
-          case SX1276_LORA_BW_62p5: bw = 62500; break;
-          case SX1276_LORA_BW_125: bw = 125000; break;
-          case SX1276_LORA_BW_250: bw = 250000; break;
-          case SX1276_LORA_BW_500: bw = 500000; break;
+            case SX1276_LORA_BW_7p8: bw = 7800; break;
+            case SX1276_LORA_BW_10p4: bw = 10400; break;
+            case SX1276_LORA_BW_15p6: bw = 15600; break;
+            case SX1276_LORA_BW_20p8: bw = 20800; break;
+            case SX1276_LORA_BW_31p25: bw = 31250; break;
+            case SX1276_LORA_BW_41p7: bw = 41700; break;
+            case SX1276_LORA_BW_62p5: bw = 62500; break;
+            case SX1276_LORA_BW_125: bw = 125000; break;
+            case SX1276_LORA_BW_250: bw = 250000; break;
+            case SX1276_LORA_BW_500: bw = 500000; break;
         };
 
         return ((1 << sf) * 1000000) / bw;
@@ -381,12 +389,12 @@ class Sx127xDriver : public Sx127xDriverCommon
 
     //-- RF power interface
 
-    void _rfpower_calc(int8_t power_dbm, uint8_t* sx_power, int8_t* actual_power_dbm) override
+    void _rfpower_calc(int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm) override
     {
 #if defined DEVICE_HAS_I2C_DAC || defined DEVICE_HAS_INTERNAL_DAC_TWOCHANNELS
         rfpower_calc(power_dbm, sx_power, actual_power_dbm, &dac);
 #elif defined POWER_USE_DEFAULT_RFPOWER_CALC
-        sx1276_rfpower_calc_default(power_dbm, sx_power, actual_power_dbm, POWER_GAIN_DBM, POWER_SX1276_MAX_DBM);
+        sx1276_rfpower_calc_default(power_dbm, sx_power, actual_power_dbm, POWER_GAIN_DBM, POWER_SX1276_MAX);
 #else
         sx1276_rfpower_calc(power_dbm, sx_power, actual_power_dbm);
 #endif
@@ -429,6 +437,8 @@ class Sx127xDriver : public Sx127xDriverCommon
 
     void StartUp(tSxGlobalConfig* const global_config)
     {
+        if (gconfig) return; // has been started up already
+
 //XX        // this is not nice, figure out where to place
 //XX#ifdef DEVICE_HAS_I2C_DAC
 //XX        dac.Init();
@@ -439,7 +449,6 @@ class Sx127xDriver : public Sx127xDriverCommon
 
         Configure(global_config);
         delay_us(125); // may not be needed
-
         sx_dio_enable_exti_isr();
     }
 
@@ -452,10 +461,10 @@ class Sx127xDriver : public Sx127xDriverCommon
         delay_us(125); // may not be needed if busy available
     }
 
-    void SetToRx(uint16_t tmo_ms)
+    void SetToRx(void)
     {
         sx_amp_receive();
-        Sx127xDriverCommon::SetToRx(tmo_ms);
+        Sx127xDriverCommon::SetToRx();
         delay_us(125); // may not be needed if busy available
     }
 };
@@ -529,12 +538,12 @@ class Sx127xDriver2 : public Sx127xDriverCommon
 
  //-- RF power interface
 
-    void _rfpower_calc(int8_t power_dbm, uint8_t* sx_power, int8_t* actual_power_dbm) override
+    void _rfpower_calc(int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm) override
     {
 #if defined DEVICE_HAS_I2C_DAC || defined DEVICE_HAS_INTERNAL_DAC_TWOCHANNELS
         rfpower_calc(power_dbm, sx_power, actual_power_dbm, &dac);
 #elif defined POWER_USE_DEFAULT_RFPOWER_CALC
-        sx1276_rfpower_calc_default(power_dbm, sx_power, actual_power_dbm, POWER_GAIN_DBM, POWER_SX1276_MAX_DBM);
+        sx1276_rfpower_calc_default(power_dbm, sx_power, actual_power_dbm, POWER_GAIN_DBM, POWER_SX1276_MAX);
 #else
         sx1276_rfpower_calc(power_dbm, sx_power, actual_power_dbm);
 #endif
@@ -581,6 +590,8 @@ class Sx127xDriver2 : public Sx127xDriverCommon
 
     void StartUp(tSxGlobalConfig* const global_config)
     {
+        if (gconfig) return; // has been started up already
+
         Configure(global_config);
         delay_us(125); // may not be needed
         sx2_dio_enable_exti_isr();
@@ -595,10 +606,10 @@ class Sx127xDriver2 : public Sx127xDriverCommon
         delay_us(125); // may not be needed if busy available
     }
 
-    void SetToRx(uint16_t tmo_ms)
+    void SetToRx(void)
     {
         sx2_amp_receive();
-        Sx127xDriverCommon::SetToRx(tmo_ms);
+        Sx127xDriverCommon::SetToRx();
         delay_us(125); // may not be needed if busy available
     }
 };

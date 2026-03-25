@@ -389,6 +389,8 @@ void frequency_band_str_to_strbuf(char* const s, uint8_t frequency_band, uint8_t
         case SETUP_FREQUENCY_BAND_433_MHZ: strbufstrcpy(s, "433M", len); break;
         case SETUP_FREQUENCY_BAND_70_CM_HAM: strbufstrcpy(s, "70cm", len); break;
         case SETUP_FREQUENCY_BAND_866_MHZ_IN: strbufstrcpy(s, "866M", len); break;
+        case SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ: strbufstrcpy(s, "DUAL", len); break;
+        case SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ: strbufstrcpy(s, "DUAL", len); break;
         default: strbufstrcpy(s, "?", len);
     }
 }
@@ -486,7 +488,7 @@ void bindphrase_from_u32(char* const bindphrase, uint32_t bindphrase_u32)
 
 void remove_leading_zeros(char* const s)
 {
-uint16_t i, len;
+int16_t i, len; // int16 to avoid underflow in len -1
 
     len = strlen(s);
     for (i = 0; i < len - 1; i++) {
@@ -498,6 +500,8 @@ uint16_t i, len;
 
 void power_optstr_from_power_list(char* const Power_optstr, int16_t* const power_list, uint8_t num, uint8_t slen)
 {
+    if (slen > 67) slen = 67; // should not happen, but play it safe
+
     memset(Power_optstr, 0, slen);
 
     char optstr[67+2] = {};

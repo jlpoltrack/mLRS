@@ -13,14 +13,12 @@
 
 #include "../Common/mavlink/fmav_extension.h"
 #include "../Common/protocols/ardupilot_protocol.h"
-#ifdef USE_FEATURE_MAVLINKX
 #include "../Common/thirdparty/mavlinkx.h"
 #include "../Common/libs/fifo.h"
 #define FASTMAVLINK_ROUTER_LINKS_MAX  4
 #define FASTMAVLINK_ROUTER_COMPONENTS_MAX  12
 #define FASTMAVLINK_ROUTER_LINK_PROPERTY_DEFAULT  FASTMAVLINK_ROUTER_LINK_PROPERTY_FLAG_ALWAYS_SEND_HEARTBEAT
 #include "../Common/mavlink/out/lib/fastmavlink_router.h"
-#endif
 
 
 extern bool link_task_free(void);
@@ -105,13 +103,11 @@ class tTxMavlink
     void parse_link_in_serial_out(void);
 
     // fields for ser/ser2 in -> parser -> link out
-#ifdef USE_FEATURE_MAVLINKX
     fmav_status_t status_ser_in; // status for ser in parser
     uint8_t buf_ser_in[MAVLINK_BUF_SIZE]; // buffer for ser in parser
     fmav_status_t status_ser2_in;
     uint8_t buf_ser2_in[MAVLINK_BUF_SIZE];
     tFifo<char,512> fifo_link_out; // needs to be at least 82 + 280
-#endif
     void parse_serial_in_link_out(void);
 
     fmav_message_t msg_buf; // temporary working buffer, to not burden stack
@@ -152,7 +148,7 @@ void tTxMavlink::Init(tSerialBase* const _serialport, tSerialBase* const _mbridg
 {
     // if ChannelsSource = MBRIDGE:
     //   SerialDestination = SERIAL or SERIAL2 => router with ser = mbridge & ser2 = serial/serial2
-    //   SerialDestination = MBRDIGE           => no router, only ser = mbridge (ser2 = null)
+    //   SerialDestination = MBRIDGE           => no router, only ser = mbridge (ser2 = null)
     // => ser2 != nullptr indicates that router is to be used
     switch (Setup.Tx[Config.ConfigId].SerialDestination) {
     case SERIAL_DESTINATION_SERIAL:
@@ -163,7 +159,7 @@ void tTxMavlink::Init(tSerialBase* const _serialport, tSerialBase* const _mbridg
         ser = _serial2port;
         ser2 = (Setup.Tx[Config.ConfigId].ChannelsSource == CHANNEL_SOURCE_MBRIDGE) ? _mbridge : nullptr;
         break;
-    case SERIAL_DESTINATION_MBRDIGE:
+    case SERIAL_DESTINATION_MBRIDGE:
         ser = _mbridge;
         ser2 = nullptr;
         break;
@@ -178,7 +174,6 @@ void tTxMavlink::Init(tSerialBase* const _serialport, tSerialBase* const _mbridg
     status_serial_out = {};
     fifo_link_in.Init();
 
-#ifdef USE_FEATURE_MAVLINKX
     fmavX_init();
     fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X) ? 1 : 0); // use compression only in 19 Hz mode
 
@@ -187,7 +182,6 @@ void tTxMavlink::Init(tSerialBase* const _serialport, tSerialBase* const _mbridg
     fifo_link_out.Init();
 
     fmav_router_init();
-#endif
 
     radio_status_tlast_ms = millis32() + 1000;
 
@@ -213,10 +207,8 @@ uint8_t tTxMavlink::VehicleState(void)
 
 void tTxMavlink::FrameLost(void)
 {
-#ifdef USE_FEATURE_MAVLINKX
     // reset parser link in -> serial out
     fmav_parse_reset(&status_link_in);
-#endif
 }
 
 
@@ -229,9 +221,7 @@ void tTxMavlink::Do(void)
         //Init();
         radio_status_tlast_ms = tnow_ms;
         fifo_link_in.Flush();
-#ifdef USE_FEATURE_MAVLINKX
         fifo_link_out.Flush();
-#endif
         msg_seq_initialized = false;
     }
 
@@ -287,7 +277,6 @@ uint8_t tTxMavlink::Task(void)
 void tTxMavlink::parse_serial_in_link_out(void)
 {
     // parse ser in -> link out
-#ifdef USE_FEATURE_MAVLINKX
     fmav_result_t result;
 
 if (!do_router()) {
@@ -363,7 +352,6 @@ if (!do_router()) {
 
     }
 } // end if(do_router())
-#endif // USE_FEATURE_MAVLINKX
 }
 
 
@@ -375,7 +363,6 @@ fmav_result_t result;
         char c = fifo_link_in.Get();
 
         // parse link in -> serial out
-#ifdef USE_FEATURE_MAVLINKX
         if (Setup.Rx.SerialLinkMode == SERIAL_LINK_MODE_MAVLINK_X) {
             fmavX_parse_and_checkX_to_frame_buf(&result, buf_link_in, &status_link_in, c);
         } else {
@@ -397,12 +384,6 @@ if (!do_router()) {
             }
             if (fmav_router_send_to_link(0)) {} // WE DO NOT REFLECT, SO THIS MUST NEVER HAPPEN !!
 } // end if(do_router())
-
-#else
-        fmav_parse_and_check_to_frame_buf(&result, buf_link_in, &status_link_in, c);
-        if (result.res == FASTMAVLINK_PARSE_RESULT_OK) {
-            ser->putbuf(buf_link_in, result.frame_len);
-#endif
 
             fmav_frame_buf_to_msg(&msg_buf, &result, buf_link_in); // requires RESULT_OK
 
@@ -432,7 +413,6 @@ for (uint16_t i = 0; i < len; i++) if (_buf[i] != buf_link_in[i]) while(1){}
 
 void tTxMavlink::send_msg_fifo_link_out(fmav_message_t* const msg)
 {
-#ifdef USE_FEATURE_MAVLINKX
     uint16_t len;
     if (Setup.Rx.SerialLinkMode == SERIAL_LINK_MODE_MAVLINK_X) {
         len = fmavX_msg_to_frame_bufX(_buf, msg);
@@ -441,7 +421,6 @@ void tTxMavlink::send_msg_fifo_link_out(fmav_message_t* const msg)
     }
 
     fifo_link_out.PutBuf(_buf, len);
-#endif
 }
 
 
@@ -454,9 +433,7 @@ void tTxMavlink::send_msg_serial_out(void)
 
     ser->putbuf(_buf, len);
 
-#ifdef USE_FEATURE_MAVLINKX
     if (ser2) ser2->putbuf(_buf, len);
-#endif
 }
 
 
@@ -470,11 +447,7 @@ bool tTxMavlink::available(void)
 {
     if (!ser) return false; // should not happen
 
-#ifdef USE_FEATURE_MAVLINKX
     return fifo_link_out.Available();
-#else
-    return ser->available();
-#endif
 }
 
 
@@ -482,11 +455,7 @@ uint8_t tTxMavlink::getc(void)
 {
     if (!ser) return 0; // should not happen
 
-#ifdef USE_FEATURE_MAVLINKX
     return fifo_link_out.Get();
-#else
-    return ser->getc();
-#endif
 }
 
 
@@ -494,10 +463,8 @@ void tTxMavlink::flush(void)
 {
     if (!ser) return; // should not happen
 
-#ifdef USE_FEATURE_MAVLINKX
     fifo_link_out.Flush();
     if (ser2) ser2->flush();
-#endif
     ser->flush();
 }
 
@@ -575,7 +542,6 @@ uint8_t rssi, remrssi, txbuf, noise;
 
 void tTxMavlink::send_param_request_read(const char* const requested_param_id)
 {
-#ifdef USE_FEATURE_MAVLINKX
     char param_id[16+1];
     strbufstrcpy(param_id, requested_param_id, 16);
 
@@ -592,7 +558,6 @@ void tTxMavlink::send_param_request_read(const char* const requested_param_id)
         &status_serial_out);
 
     send_msg_fifo_link_out(&msg_buf); // goes to link out
-#endif
 }
 
 
@@ -676,10 +641,10 @@ uint8_t dummy[18+2] = {};
     fmav_msg_autopilot_version_pack(
         &msg_buf,
         RADIO_LINK_SYSTEM_ID, MAV_COMP_ID_TELEMETRY_RADIO, // sysid, compid, SiK uses 51, 68
-        MAV_PROTOCOL_CAPABILITY_MAVLINK2 | MAV_PROTOCOL_CAPABILITY_PARAM_ENCODE_BYTEWISE,
+        MAV_PROTOCOL_CAPABILITY_MAVLINK2 | MAV_PROTOCOL_CAPABILITY_PARAM_ENCODE_BYTEWISE | MAV_PROTOCOL_CAPABILITY_COMMAND_INT,
         VERSION, 0, 0, 0,
         dummy, dummy, dummy,
-        MAVLINK_VID, MAVLINK_PID, 0, dummy,
+        MAVLINK_VID, MAVLINK_PID, 0, dummy, // TODO: set a uid
         //uint64_t capabilities,
         //uint32_t flight_sw_version, uint32_t middleware_sw_version, uint32_t os_sw_version, uint32_t board_version,
         //const uint8_t* flight_custom_version, const uint8_t* middleware_custom_version, const uint8_t* os_custom_version,
@@ -801,7 +766,7 @@ void tTxMavlink::component_handle_msg(fmav_message_t* const msg)
 
             switch (command) {
                 case MAV_CMD_REQUEST_MESSAGE: // #512
-                    switch (param1) {
+                    switch (param1) { // param1: MAVLink message id of requested message
                         case FASTMAVLINK_MSG_ID_AUTOPILOT_VERSION: // #148
                             inject_task |= INJECT_TASK_AUTOPILOT_VERSION;
                             res = MAV_RESULT_ACCEPTED;
@@ -811,12 +776,15 @@ void tTxMavlink::component_handle_msg(fmav_message_t* const msg)
                             res = MAV_RESULT_ACCEPTED;
                             break;
                     }
+                    // we ignore param7 (target address for requested message, if message has target address fields, 0,1,2)
                     break;
                 case MAV_CMD_REQUEST_PROTOCOL_VERSION: // #519, replaced by MAV_CMD_REQUEST_MESSAGE
+                    // we ignore param1 (should test for 0,1, and ignore else)
                     inject_task |= INJECT_TASK_PROTOCOL_VERSION;
                     res = MAV_RESULT_ACCEPTED;
                     break;
                 case MAV_CMD_REQUEST_AUTOPILOT_CAPABILITIES: // #520, replaced by MAV_CMD_REQUEST_MESSAGE
+                    // we ignore param1 (should test for 0,1, and ignore else)
                     inject_task |= INJECT_TASK_AUTOPILOT_VERSION;
                     res = MAV_RESULT_ACCEPTED;
                     break;
@@ -870,6 +838,7 @@ void tTxMavlink::component_do(void)
 
     if (inject_task & INJECT_TASK_PROTOCOL_VERSION) {
         inject_task &=~ INJECT_TASK_PROTOCOL_VERSION;
+        // note: message PROTOCOL_VERSION (#300) is deprecated and replaced by nothing
         send_autopilot_version();
         return; // only one per loop
     }
@@ -971,7 +940,6 @@ uint8_t tTxVehicle::State(void)
 
 void tTxVehicle::Do(void)
 {
-#ifdef USE_FEATURE_MAVLINKX
     uint32_t tnow_ms = millis32(); // we need to get fresh time, since a HEARTBEAT might be received in the main Do loop
 
     // we want to start requests only on first connection
@@ -996,26 +964,22 @@ void tTxVehicle::Do(void)
             trigger_param_request = true;
         }
     }
-#endif
 }
 
 
 bool tTxVehicle::RequestParamBattCapacity(void)
 {
-#ifdef USE_FEATURE_MAVLINKX
     if (trigger_param_request) {
         trigger_param_request = false;
 //dbg.puts("\nsend param request");
         return true;
     }
-#endif
     return false;
 }
 
 
 void tTxVehicle::handle_param_value(fmav_message_t* const msg)
 {
-#ifdef USE_FEATURE_MAVLINKX
     // we have checked already that msg comes from our autopilot
     if (param_request_cnt < 0) return; // we do have it already, so let's save time and not process again
 
@@ -1039,7 +1003,6 @@ void tTxVehicle::handle_param_value(fmav_message_t* const msg)
         param_request_cnt = -1; // <= 0 means off
 //dbg.puts("\nparam batt cap received");
     }
-#endif
 }
 
 

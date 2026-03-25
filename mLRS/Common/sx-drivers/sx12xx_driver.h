@@ -91,7 +91,6 @@ typedef struct
     uint8_t PacketType;
     uint8_t PayloadLength;
     uint8_t CrcLength;
-    uint16_t CrcSeed;
     uint32_t TimeOverAir; // in us
     int16_t ReceiverSensitivity;
 } tSxFlrcConfiguration;
@@ -99,7 +98,7 @@ typedef struct
 
 typedef struct
 {
-    uint32_t br_bps;
+    uint32_t BitRate_bps;
     uint8_t PulseShape;
     uint8_t Bandwidth;
     uint32_t Fdev_hz;
@@ -127,13 +126,13 @@ class SxDriverDummy
     void GetPacketStatus(int8_t* const RssiSync, int8_t* const Snr) {}
     void SendFrame(uint8_t* const data, uint8_t len, uint16_t tmo_ms) {}
     void ReadFrame(uint8_t* const data, uint8_t len) {}
-    void SetToRx(uint16_t tmo_ms) {}
+    void SetToRx(void) {}
     void SetToIdle(void) {}
 
-    void ResetToLoraConfiguration() {}
+    void ResetToLoraConfiguration(tSxGlobalConfig* const _gconfig) {}
     void SetRfPower_dbm(int8_t power_dbm) {}
     void UpdateRfPower(tSxGlobalConfig* const global_config) {}
-    void ClearIrqStatus(uint16_t IrqMask) {}
+    void ClearIrqStatus(uint32_t IrqMask) {}
 
     int16_t ReceiverSensitivity_dbm(void) { return 0; }
     int8_t RfPower_dbm(void) { return INT8_MIN; }
@@ -151,6 +150,8 @@ class SxDriverDummy
   #include "sx128x_driver.h"
 #elif defined DEVICE_HAS_LR11xx
   #include "lr11xx_driver.h"
+#elif defined DEVICE_HAS_LR20xx
+  #include "lr20xx_driver.h"
 #else
   #include "sx128x_driver.h"
 #endif

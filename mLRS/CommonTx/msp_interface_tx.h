@@ -14,7 +14,6 @@
 // TODO: share fixed buffers with mavlink interface
 
 
-#ifdef USE_FEATURE_MAVLINKX
 #include "../Common/protocols/msp_protocol.h"
 #include "../Common/thirdparty/mspx.h"
 
@@ -66,7 +65,7 @@ void tTxMsp::Init(tSerialBase* const _serialport, tSerialBase* const _serial2por
     case SERIAL_DESTINATION_SERIAL2:
         ser = _serial2port;
         break;
-    case SERIAL_DESTINATION_MBRDIGE:
+    case SERIAL_DESTINATION_MBRIDGE:
         ser = nullptr;
         break;
     default:
@@ -206,24 +205,6 @@ void tTxMsp::flush(void)
     fifo_link_out.Flush();
     ser->flush();
 }
-
-
-#else // !USE_FEATURE_MAVLINKX
-
-class tTxMsp
-{
-  public:
-    void Init(tSerialBase* const _serialport, tSerialBase* const _serial2port) {}
-    void Do(void) {}
-    void FrameLost(void) {}
-
-    void putc(char c) {}
-    bool available(void) { return false; }
-    uint8_t getc(void) { return 0; }
-    void flush(void) {}
-};
-
-#endif // USE_FEATURE_MAVLINKX
 
 
 #endif // MSP_INTERFACE_TX_H

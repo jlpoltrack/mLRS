@@ -14,7 +14,6 @@
 // TODO: share fixed buffers with mavlink interface
 
 
-#ifdef USE_FEATURE_MAVLINKX
 #include "../Common/libs/fifo.h"
 #include "../Common/protocols/msp_protocol.h"
 #include "../Common/thirdparty/mspx.h"
@@ -297,6 +296,13 @@ void tRxMsp::parse_serial_in_link_out(void)
 
                         send = false; // mark as handled
                     }
+                    if (msp_msg_ser_in.function == MSP2_RX_BIND && msp_msg_ser_in.magic2 == MSP_MAGIC_2_V2) {
+                        // handle MSP2_RX_BIND, only if MSP V2
+                        // this is a really a request from the FC but sent as a response
+                        // payload is ignored
+                        bind.StartBind();
+                        send = false; // don't forward to ground
+                    }
                 }
 
                 if (msp_msg_ser_in.type == MSP_TYPE_ERROR) { // this is an error response from the FC
@@ -313,8 +319,8 @@ void tRxMsp::parse_serial_in_link_out(void)
                 }
 
                 if (msp_msg_ser_in.type == MSP_TYPE_REQUEST) { // this is a request from the FC
-                    // handle MSP_REBOOT, only if MSP V2
                     if (msp_msg_ser_in.function == MSP_REBOOT && msp_msg_ser_in.magic2 == MSP_MAGIC_2_V2) {
+                        // handle MSP_REBOOT, only if MSP V2
                         uint32_t magic = ((tMspReboot*)msp_msg_ser_in.payload)->magic;
                         if (serial.has_systemboot() && magic == MSP_REBOOT_MAGIC) {
                             reboot_activate_ms = millis32(); // set to non zero to enter system bootloader
@@ -329,7 +335,6 @@ void tRxMsp::parse_serial_in_link_out(void)
                             serial.putbuf(_buf, len);
                         }
                         send = false; // don't forward to ground
-                        break;
                     }
                 }
 
@@ -500,25 +505,6 @@ tMspCommonSetMspRcInfo payload;
 
     serial.putbuf(_buf, len);
 }
-
-
-#else //!USE_FEATURE_MAVLINKX
-
-class tRxMsp
-{
-  public:
-    void Init(void) {}
-    void Do(void) {}
-    void SendRcData(tRcData* const rc_out, bool frame_missed, bool failsafe) {}
-    void FrameLost(void) {}
-
-    void putc(char c) {}
-    bool available(void) { return false; }
-    uint8_t getc(void) { return 0; }
-    void flush(void) {}
-};
-
-#endif //USE_FEATURE_MAVLINKX
 
 
 #endif // MSP_INTERFACE_RX_H

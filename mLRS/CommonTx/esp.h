@@ -14,7 +14,11 @@
 //   is defined when RESET & GPIO0 pin handling is available (ESP_RESET & ESP_GPIO0 defined)
 //   this allows:
 //   - flashing via passthrough, flash mode invoked by "FLASH ESP" command
-//   - ESP TX parameters, esp configuration
+//
+// USE_ESP_WIFI_BRIDGE_CONFIGURE
+//   is defined when USE_ESP_WIFI_BRIDGE_RST_GPIO0 && DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
+//   this allows:
+//   - ESP TX parameters, ESP configuration at startup
 //
 // USE_ESP_WIFI_BRIDGE_DTR_RTS
 //   is defined when DTR & RTS pin handling is available (ESP_DTR & ESP_RTS defined)
@@ -66,12 +70,6 @@ void esp_enable(uint8_t serial_destination)
 // ESP WifiBridge class
 //-------------------------------------------------------
 
-#if defined USE_ESP_WIFI_BRIDGE_RST_GPIO0 && defined DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
-  // we currently require RST, GPIO0 for ESP configuration option
-  #define ESP_STARTUP_CONFIGURE
-#endif
-
-
 #define ESP_PASSTHROUGH_TMO_MS  4000 // esptool uses 3 secs, so be a bit more generous
 #define ESP_BUTTON_DEBOUNCE_MS  50
 #define ESP_BUTTON_TMO_MS       4000
@@ -85,9 +83,12 @@ class tTxEspWifiBridge
     void Init(tSerialBase* const _comport, tSerialBase* const _serialport, tSerialBase* const _serial2port, uint32_t _serial_baudrate, tTxSetup* const _tx_setup, tCommonSetup* const _common_setup) {}
     void Tick_ms(void) {}
     void Do(void) {}
-
     void EnterFlash(void) {}
     void EnterPassthrough(void) {}
+    void GetPassword(void) {}
+    void SetPassword(char* str) {}
+    void GetNetSsid(void) {}
+    void SetNetSsid(char* str) {}
 };
 
 #else
@@ -123,10 +124,25 @@ class tTxEspWifiBridge
     void EnterFlash(void);
     void EnterPassthrough(void);
 
+#ifdef USE_ESP_WIFI_BRIDGE_CONFIGURE
+    void GetPassword(void);
+    void SetPassword(char* str);
+    void GetNetSsid(void);
+    void SetNetSsid(char* str);
+#else
+    void GetPassword(void) {}
+    void SetPassword(char* str) {}
+    void GetNetSsid(void) {}
+    void SetNetSsid(char* str) {}
+#endif
+
   private:
-#ifdef ESP_STARTUP_CONFIGURE
+#ifdef USE_ESP_WIFI_BRIDGE_CONFIGURE
     bool esp_read(const char* const cmd, char* const res, uint8_t* const len);
     void esp_wait_after_read(const char* const res);
+    void esp_get_info(void);
+    void esp_get_ssidpswd(const char* const net_cmd);
+    void esp_set_ssidpswd(const char* const net_cmd, char* const str);
     void esp_configure_baudrate(void);
     void esp_configure_wifiprotocol(void);
     void esp_configure_wifichannel(void);
@@ -190,7 +206,7 @@ void tTxEspWifiBridge::Init(
 
     version = 0; // unknown
 
-#ifdef ESP_STARTUP_CONFIGURE
+#ifdef USE_ESP_WIFI_BRIDGE_CONFIGURE
     run_configure();
 #endif
 }
@@ -410,11 +426,11 @@ void tTxEspWifiBridge::passthrough_do(void)
 }
 
 
-#ifdef ESP_STARTUP_CONFIGURE
+#ifdef USE_ESP_WIFI_BRIDGE_CONFIGURE
 
 #define ESP_DBG(x)
 
-#define ESP_CMDRES_LEN      46
+#define ESP_CMDRES_LEN      64
 #define ESP_CMDRES_TMO_MS   70 // 50 was not enough at 9600 baud.  60 worked.
 
 
@@ -433,6 +449,7 @@ ESP_DBG(dbg.puts("\r\n");dbg.puts(cmd);dbg.puts(" -> ");)
 ESP_DBG(dbg.putc(c);)
             res[(*len)++] = c;
             if (c == '\n') { // 0x0A
+                res[*len] = '\0'; // terminate it properly
 ESP_DBG(dbg.puts("!ENDE!");)
                 return (*len > 3 && res[0] == 'O' && res[1] == 'K' && res[*len - 2] == '\r'); // 0x0D
             }
@@ -457,11 +474,102 @@ void tTxEspWifiBridge::esp_wait_after_read(const char* const res)
 }
 
 
-void tTxEspWifiBridge::esp_configure_baudrate(void)
+void tTxEspWifiBridge::esp_get_info(void)
 {
 char s[ESP_CMDRES_LEN+2];
 uint8_t len;
+
+    info.wireless.device_name[0] = '\0';
+    info.wireless.device_id = 0;
+    if (version >= 10307) { // not available before v1.3.07
+        esp_read("AT+WIFIDEVICENAME=?", s, &len);
+        s[len-2] = '\0';
+        if (len > 22) {
+            strncpy(info.wireless.device_name, s + 18, sizeof(info.wireless.device_name)-1);
+        }
+        if (strlen(info.wireless.device_name) > 9 && !strncmp(info.wireless.device_name, "mLRS-", 5)) {
+            info.wireless.device_id = atoi(info.wireless.device_name + 5);
+        }
+    }
+}
+
+
+void tTxEspWifiBridge::esp_get_ssidpswd(const char* const net_cmd)
+{
+char cmd_str[64];
+char s[ESP_CMDRES_LEN+2];
+uint8_t len;
+
+    if (version < 10309) { // not available before v1.3.09
+        com->puts("  not supported by this wireless bridge version");
+        return;
+    }
+
+    esp_gpio0_low(); // force AT mode
+    delay_ms(50); // give it some time // 10 ms was too short
+
+    strcpy(cmd_str, "AT+"); strcat(cmd_str, net_cmd); strcat(cmd_str, "=?");
+    com->puts("  ");com->puts(cmd_str);com->puts("->");
+    if (!esp_read(cmd_str, s, &len)) { // AT+NETSSID sends response with 24 chars max
+        com->puts("get ");com->puts(net_cmd);com->puts(" failed");com->puts(CLI_LINEND);
+        return;
+    }
+    esp_wait_after_read(s);
+    s[len-2] = '\0'; com->puts((char*)s); com->puts(CLI_LINEND); // esp_read() returns len>3 if true, so no danger with len-2
+
+    esp_gpio0_high(); // leave forced AT mode
+}
+
+
+void tTxEspWifiBridge::esp_set_ssidpswd(const char* const net_cmd, char* const str)
+{
+char cmd_str[64];
+char s[ESP_CMDRES_LEN+2];
+uint8_t len;
+
+    if (version < 10309) { // not available before v1.3.09
+        com->puts("  not supported by this wireless bridge version");
+        return;
+    }
+
+    esp_gpio0_low(); // force AT mode
+    delay_ms(50); // give it some time
+
+    // AT+NETSSID=xxxxxxxxxxxxxxxxxxxxxxxx
+    strcpy(cmd_str, "AT+"); strcat(cmd_str, net_cmd); strcat(cmd_str, "="); strncat(cmd_str, str, 62);
+    len = 3 + strlen(net_cmd) + 1 + 24;
+    for (uint8_t i = strlen(cmd_str); i < len; i++) cmd_str[i] = 255; // AT+NETSSID= must be followed by 24 chars!
+    cmd_str[len] = '\0';
+    com->puts("  ");com->puts(cmd_str);com->puts("->");
+    if (!esp_read(cmd_str, s, &len)) {
+        com->puts("set ");com->puts(net_cmd);com->puts(" failed");com->puts(CLI_LINEND);
+        return;
+    }
+    esp_wait_after_read(s);
+    s[len-2] = '\0'; com->puts((char*)s); com->puts(CLI_LINEND); // esp_read() returns len>3 if true, so no danger with len-2
+
+    if (esp_read("AT+RESTART", s, &len)) {
+        delay_ms(1500);
+    }
+    ser->flush();
+
+    esp_get_info();
+
+    esp_gpio0_high(); // leave forced AT mode
+}
+
+
+void tTxEspWifiBridge::GetPassword(void) { esp_get_ssidpswd("PSWD"); }
+void tTxEspWifiBridge::SetPassword(char* str) { esp_set_ssidpswd("PSWD", str); }
+void tTxEspWifiBridge::GetNetSsid(void) { esp_get_ssidpswd("NETSSID"); }
+void tTxEspWifiBridge::SetNetSsid(char* str) { esp_set_ssidpswd("NETSSID", str); }
+
+
+void tTxEspWifiBridge::esp_configure_baudrate(void)
+{
 char cmd_str[32];
+char s[ESP_CMDRES_LEN+2];
+uint8_t len;
 
     char baud_str[32];
     u32toBCDstr(ser_baud, baud_str);
@@ -479,9 +587,9 @@ char cmd_str[32];
 
 void tTxEspWifiBridge::esp_configure_wifiprotocol(void)
 {
+char cmd_str[32];
 char s[ESP_CMDRES_LEN+2];
 uint8_t len;
-char cmd_str[32];
 
     strcpy(cmd_str, "AT+PROTOCOL=");
     switch (tx_setup->WifiProtocol) {
@@ -490,6 +598,7 @@ char cmd_str[32];
         case WIFI_PROTOCOL_BT: strcat(cmd_str, "3"); break;
         case WIFI_PROTOCOL_UDPSTA: strcat(cmd_str, "2"); break;
         case WIFI_PROTOCOL_BLE: strcat(cmd_str, "5"); break;
+        case WIFI_PROTOCOL_ESPNOW: strcat(cmd_str, "6"); break;
         default:
             strcat(cmd_str, "1"); // should not happen
     }
@@ -504,9 +613,9 @@ char cmd_str[32];
 
 void tTxEspWifiBridge::esp_configure_wifichannel(void)
 {
+char cmd_str[32];
 char s[ESP_CMDRES_LEN+2];
 uint8_t len;
-char cmd_str[32];
 
     strcpy(cmd_str, "AT+WIFICHANNEL=");
     switch (tx_setup->WifiChannel) {
@@ -528,9 +637,9 @@ char cmd_str[32];
 
 void tTxEspWifiBridge::esp_configure_wifipower(void)
 {
+char cmd_str[32];
 char s[ESP_CMDRES_LEN+2];
 uint8_t len;
-char cmd_str[32];
 
     strcpy(cmd_str, "AT+WIFIPOWER=");
     switch (tx_setup->WifiPower) {
@@ -551,9 +660,9 @@ char cmd_str[32];
 
 void tTxEspWifiBridge::esp_configure_bindphrase(void)
 {
+char cmd_str[32];
 char s[ESP_CMDRES_LEN+2];
 uint8_t len;
-char cmd_str[32];
 
     strcpy(cmd_str, "AT+BINDPHRASE=");
     strcat(cmd_str, common_setup->BindPhrase);
@@ -582,7 +691,7 @@ uint8_t len;
     uint32_t bauds[7] = { ser_baud, 9600, 19200, 38400, 57600, 115200, 230400 };
     uint8_t baud_idx = 0;
     for (uint8_t cc = 0; cc < 3; cc++) { // when in BT it seems to need f-ing long to start up
-        for (baud_idx = 0; baud_idx < sizeof(bauds)/4; baud_idx++) {
+        for (baud_idx = 0; baud_idx < sizeof(bauds)/sizeof(bauds[0]); baud_idx++) {
             ser->SetBaudRate(bauds[baud_idx]);
             delay_ms(5); // allow a few character times to settle
             ser->flush();
@@ -619,19 +728,6 @@ esp_read("dAT+BINDPHRASE=?", s, &len);)
         } else {
             // Houston, we have a problem. UDPCl is not available but we allow the user to select
         }
-        if (version >= 10307) { // not available before v1.3.07
-//            esp_read("AT+WIFIDEVICEID=?", s, &len);
-//            if (len > 18) device_id = atoi(s + 16);
-            esp_read("AT+WIFIDEVICENAME=?", s, &len);
-            if (len > 22) {
-                strcpy(info.wireless.device_name, s + 18);
-                info.wireless.device_name[strlen(info.wireless.device_name)-1] = '\0'; // strip off '\n'
-                info.wireless.device_name[strlen(info.wireless.device_name)-1] = '\0'; // strip off '\r'
-            }
-            if (strlen(info.wireless.device_name) > 9 && !strncmp(info.wireless.device_name, "mLRS-", 5)) {
-                info.wireless.device_id = atoi(info.wireless.device_name + 5);
-            }
-        }
 
         if (esp_read("AT+RESTART", s, &len)) { // will respond with 'KO' if a restart isn't needed
             delay_ms(1500); // 500 ms is too short, 1000 ms is sometimes too short, 1200 ms works fine, play it safe
@@ -644,6 +740,10 @@ esp_read("dAT+BINDPHRASE=?", s, &len);)
     }
     ser->flush();
 
+    if (found) { // not available before v1.3.07 // needs to come after restart to get current name
+        esp_get_info();
+    }
+
 //ESP_DBG(if (esp_read("AT+NAME=?", s, &len)) { dbg.puts("!ALL GOOD!\r\n"); } else { dbg.puts("!F IT!\r\n"); })
 if (esp_read("AT+NAME=?", s, &len)) { dbg.puts("!ALL GOOD!\r\n"); } else { dbg.puts("!F IT!\r\n"); }
 
@@ -651,7 +751,7 @@ if (esp_read("AT+NAME=?", s, &len)) { dbg.puts("!ALL GOOD!\r\n"); } else { dbg.p
 }
 
 
-#endif // ESP_AUTOCONFIGURE
+#endif // USE_ESP_WIFI_BRIDGE_CONFIGURE
 
 #endif // USE_ESP_WIFI_BRIDGE
 
