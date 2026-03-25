@@ -7,14 +7,13 @@
 // Basic but effective & reliable transparent WiFi or Bluetooth <-> serial bridge.
 // Minimizes wireless traffic while respecting latency by better packeting algorithm.
 //*******************************************************
-// 19. Mar. 2026
+// 21. Mar. 2026
 //*********************************************************/
 // inspired by examples from Arduino
 // NOTES:
 // - For ESP32 and ESP32C3: Partition Scheme needs to be changed to "No OTA (Large APP)" or "No OTA (2MB APP/2MB SPIFFS)" or similar!!
 // - Use upload speed 115200 if serial passthrough shall be used for flashing (else 921600 is fine)
 // - ArduinoIDE 2.3.2, esp32 by Espressif Systems 3.0.4
-// - For ESP32C3: ESP32 arduino core must be 2.0.17 !!
 // This can be useful: https://github.com/espressif/arduino-esp32/blob/master/libraries
 // Dependencies:
 // You need to have in File->Preferences->Additional Board managers URLs
@@ -215,11 +214,13 @@ String ble_device_name = ""; // name of your BLE device as it will be seen by yo
   #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
     #error Version of your ESP Arduino Core below 3.0.0 !
   #elif ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 3, 7) // 19.Mar.2026
-    #pragma message "Warning: Consider upgrading your ESP Arduino Core !"
+    #pragma message "Warning: Consider upgrading your ESP Arduino Core !" // #warning doesn't show if not verbose, hence #pgrama message
   #endif
 #elif defined CONFIG_IDF_TARGET_ESP32C3
-  #if ESP_ARDUINO_VERSION != ESP_ARDUINO_VERSION_VAL(2, 0, 17)
-    #error For ESP32-C3, you must use ESP Arduino Core 2.0.17. Version can be selected via the Arduino IDE Boards Manager.
+  #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+    #error Version of your ESP Arduino Core below 3.0.0 !
+  #elif ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 3, 7) // 21.Mar.2026
+    #pragma message "Warning: Consider upgrading your ESP Arduino Core !" // #warning doesn't show if not verbose, hence #pragma message
   #endif
 #elif defined ESP8266
 #else
@@ -317,11 +318,7 @@ class BLECharacteristicCallbacksHandler : public BLECharacteristicCallbacks {
         if (!ble_serial_started) {
             ble_serial_started = true;
         }
-#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-        std::string rxValue = pCharacteristic->getValue(); // Core 2.x
-#else
-        String rxValue = pCharacteristic->getValue(); // Core 3.x
-#endif
+        String rxValue = pCharacteristic->getValue();
         int len = rxValue.length();
         if (len > 0) {
             SERIAL.write((uint8_t*)rxValue.c_str(), len);
@@ -406,8 +403,6 @@ void espnow_recv_callback(const uint8_t* sender_mac, const uint8_t* data, int le
 
 #ifdef ESP8266
 void espnow_recv_cb(uint8_t* mac, uint8_t* data, uint8_t len) { espnow_recv_callback(mac, data, len); }
-#elif ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-void espnow_recv_cb(const uint8_t* mac, const uint8_t* data, int len) { espnow_recv_callback(mac, data, len); }
 #else
 void espnow_recv_cb(const esp_now_recv_info_t* info, const uint8_t* data, int len) { espnow_recv_callback(info->src_addr, data, len); }
 #endif
@@ -608,6 +603,11 @@ void setup_wifipower()
 void setup_ap_mode(IPAddress __ip)
 {
     WiFi.mode(WIFI_AP); // seems not to be needed, done by WiFi.softAP()?
+#ifndef ESP8266
+    // set country to EU to enable channels 1-13 (default may restrict to 1-11)
+    wifi_country_t country = { .cc = "EU", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_MANUAL };
+    esp_wifi_set_country(&country);
+#endif
     WiFi.softAPConfig(__ip, ip_gateway, netmask);
     WiFi.softAP(device_name.c_str(), (device_password.length()) ? device_password.c_str() : NULL, g_wifichannel); // channel = 1 is default
     DBG_PRINT("ap ip address: ");
@@ -667,10 +667,10 @@ class tWifiHandler {
         uint8_t MAC_buf[6+2];
         // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/misc_system_api.html#mac-address
         // MACs are different for STA and AP, BT
-#ifndef ESP8266
-        esp_base_mac_addr_get(MAC_buf);
+#ifdef ESP8266
+       wifi_get_macaddr(STATION_IF, MAC_buf);
 #else
-        wifi_get_macaddr(STATION_IF, MAC_buf);
+        esp_efuse_mac_get_default(MAC_buf);
 #endif
         for (uint8_t i = 0; i < 5; i++) device_id += MAC_buf[i] + ((uint16_t)MAC_buf[i + 1] << 8) / 39;
         device_id += MAC_buf[5];

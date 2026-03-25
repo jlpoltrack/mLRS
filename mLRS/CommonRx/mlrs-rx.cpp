@@ -31,21 +31,21 @@
 
 #include "../Common/hal/esp-glue.h"
 #include "../modules/stm32ll-lib/src/stdstm32.h"
-#include "../Common/esp-lib/esp-peripherals.h"
-#include "../Common/esp-lib/esp-mcu.h"
-#include "../Common/esp-lib/esp-stack.h"
+#include "../modules/esp-lib/esp-peripherals.h"
+#include "../modules/esp-lib/esp-mcu.h"
+#include "../modules/esp-lib/esp-stack.h"
 #include "../Common/hal/hal.h"
-#include "../Common/esp-lib/esp-delay.h" // these are dependent on hal
-#include "../Common/esp-lib/esp-eeprom.h"
-#include "../Common/esp-lib/esp-spi.h"
+#include "../modules/esp-lib/esp-delay.h" // these are dependent on hal
+#include "../modules/esp-lib/esp-eeprom.h"
+#include "../modules/esp-lib/esp-spi.h"
 #ifdef USE_SERIAL
-#include "../Common/esp-lib/esp-uartb.h"
+#include "../modules/esp-lib/esp-uartb.h"
 #endif
 #ifdef USE_DEBUG
 #ifdef DEVICE_HAS_DEBUG_SWUART
-#include "../Common/esp-lib/esp-uart-sw.h"
+#include "../modules/esp-lib/esp-uart-sw.h"
 #else
-#include "../Common/esp-lib/esp-uartf.h"
+#include "../modules/esp-lib/esp-uartf.h"
 #endif
 #endif
 #include "../Common/hal/esp-timer.h"
@@ -168,8 +168,6 @@ void init_hw(void)
 //-------------------------------------------------------
 // SX12xx
 //-------------------------------------------------------
-
-
 
 uint8_t link_rx1_status;
 uint8_t link_rx2_status;
@@ -541,7 +539,7 @@ RESTARTCONTROLLER
     mavlink.Init();
     msp.Init();
     sx_serial.Init();
-    fan.SetPower(sx.RfPower_dbm());
+    fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
     dronecan.Start();
 
     tick_1hz = 0;
@@ -563,7 +561,7 @@ INITCONTROLLER_END
 
         if (!connect_occured_once) bind.AutoBind();
         bind.Tick_ms();
-        fan.SetPower(sx.RfPower_dbm());
+        fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
         fan.Tick_ms();
         dronecan.Tick_ms();
 
