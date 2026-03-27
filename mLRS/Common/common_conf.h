@@ -36,7 +36,7 @@
 // user can modify them to their liking
 
 // un-comment to force setup to the below defines, else setup is taken from EEPROM
-//#define SETUP_FORCE_COMMON_CONF
+#define SETUP_FORCE_COMMON_CONF
 
 
 #define CPOWER                          RFPOWER_DEFAULT
@@ -89,16 +89,16 @@
 #define SETUP_RX_OUT_LQ_CHANNEL         0 // 0: off, 5: CH5, 16: CH16
 
 
-#define BIND_PHRASE                     "mlrs.0" // string of 6 characters, allowed are 'a'-'z','0'-'9','_','-','#','.'
+#define BIND_PHRASE                     "mlrs.4" // string of 6 characters, allowed are 'a'-'z','0'-'9','_','-','#','.'
 
 
-#define SETUP_MODE                      MODE_50HZ
-//#define SETUP_MODE                      MODE_31HZ
+//#define SETUP_MODE                      MODE_50HZ
+#define SETUP_MODE                      MODE_31HZ
 //#define SETUP_MODE                      MODE_19HZ
 
 
 //#define SETUP_RF_BAND                   SETUP_FREQUENCY_BAND_915_MHZ_FCC
-#define SETUP_RF_BAND                   SETUP_FREQUENCY_BAND_868_MHZ // that's my privilege :)
+#define SETUP_RF_BAND                   SETUP_FREQUENCY_BAND_2P4_GHZ // that's my privilege :)
 
 
 #define SETUP_RF_ORTHO                  0 // 0: off, 1: 1/3, 2: 2/3, 3: 3/3

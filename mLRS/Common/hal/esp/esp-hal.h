@@ -155,3 +155,7 @@
 #include "tx-hal-flysky-int-pa01-2400-esp32s3.h"
 #endif
 
+#ifdef TX_ELRS_RADIOMASTER_XR1_ESP32C3
+#include "tx-hal-radiomaster-xr1-esp32c3.h"
+#endif
+
