@@ -90,6 +90,7 @@ IRAM_ATTR bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true 
 
 //-- POWER
 
+#define SX_USE_RFSW_CTRL {15, 0, 12, 8, 8, 6, 0, 5}
 #include "../../setup_types.h" // needed for frequency band condition in rfpower calc
 
 void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, const uint8_t frequency_band)
