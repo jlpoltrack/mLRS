@@ -473,6 +473,13 @@ uint8_t tRxDroneCan::getc(void)
 }
 
 
+void tRxDroneCan::getbuf(uint8_t* const buf, uint16_t len)
+{
+    tunnel_targetted_stats.fc_to_ser_rate += len;
+    for (uint16_t i = 0; i < len; i++) buf[i] = fifo_fc_to_ser.Get();
+}
+
+
 void tRxDroneCan::flush(void)
 {
     fifo_fc_to_ser.Flush();

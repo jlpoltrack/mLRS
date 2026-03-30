@@ -49,6 +49,7 @@ class tRxDroneCan
     void putbuf(uint8_t* const buf, uint16_t len);
     bool available(void);
     uint8_t getc(void);
+    void getbuf(uint8_t* const buf, uint16_t len);
     void flush(void);
     uint16_t bytes_available(void);
 
