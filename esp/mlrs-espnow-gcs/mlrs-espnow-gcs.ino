@@ -31,6 +31,12 @@
 //#define TX_PIN              43     // Serial1 TX pin
 //#define RX_PIN              44     // Serial1 RX pin
 
+// WiFi transmit power
+// Uncomment one of the three power levels:
+//#define WIFI_POWER_LOW                 // lowest power: -1 dBm (ESP32) / 0 dBm (ESP8266)
+#define WIFI_POWER_MED                   // medium power: 5 dBm
+//#define WIFI_POWER_MAX                 // maximum power: 19.5 dBm (ESP32) / 20.5 dBm (ESP8266)
+
 //#define DEVICE_HAS_SINGLE_LED      // uncomment for single on/off LED
 //#define DEVICE_HAS_SINGLE_LED_RGB  // uncomment for single RGB (NeoPixel/WS2812) LED
 //#define LED_IO              8      // LED pin (comment out to disable)
@@ -173,12 +179,28 @@ void setup_wifi(void)
 #ifdef ESP8266
     // force 11b only for best reliability
     wifi_set_phy_mode(PHY_MODE_11B);
+    // set transmit power
+  #if defined(WIFI_POWER_MAX)
+    WiFi.setOutputPower(20.5);
+  #elif defined(WIFI_POWER_MED)
+    WiFi.setOutputPower(5);
+  #else
+    WiFi.setOutputPower(0);
+  #endif
 #else
     // set country to EU to enable channels 1-13 (default may restrict to 1-11)
     wifi_country_t country = { .cc = "EU", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_MANUAL };
     esp_wifi_set_country(&country);
     // force 11b only for best reliability
     esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B);
+    // set transmit power
+  #if defined(WIFI_POWER_MAX)
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);
+  #elif defined(WIFI_POWER_MED)
+    WiFi.setTxPower(WIFI_POWER_5dBm);
+  #else
+    WiFi.setTxPower(WIFI_POWER_MINUS_1dBm);
+  #endif
 #endif
 
     esp_now_init();
