@@ -30,9 +30,9 @@ typedef enum {
     EE_STATUS_OK
 } EE_STATUS_ENUM;
 
-// ESP8266 has 4kb available for EEPROM. We need 3 pages, 2 for setup and
-// 1 for the powerup counter. So best to keep page size to 3kb to let it
-// fit in.
+// ESP8266 only has 4kb available for EEPROM, so we use 2 pages of 1kb each.
+// Powerup counter is only implemented on ESP32 as EEPROM is NVS-backed with
+// wear leveling, whereas on ESP8266, each commit erases a raw flash sector.
 #define EE_START_PAGE 0
 #define EE_PAGE_SIZE  0x0400 // Page size = 1 KByte
 
@@ -48,6 +48,8 @@ typedef enum {
 
 #define EE_START_PAGE0            ((uint32_t)(EE_START_PAGE))
 #define EE_START_PAGE1            ((uint32_t)(EE_START_PAGE + 1))
+
+#define POWERUPCNT_EE_ADDRESS     (EE_PAGE_SIZE * 2) // = 0x0800
 
 // Page status definitions stored in EEPROM
 #define EE_ERASE                  ((uint32_t)0xFFFFFFFF)     // PAGE is erased, may not be completely erased in case of an error
@@ -228,7 +230,11 @@ QUICK_EXIT:
 
 EE_STATUS_ENUM ee_init(void)
 {
+#ifdef ESP32
+    EEPROM.begin(EE_PAGE_SIZE*2 + 4); // +4 for powerup counter byte
+#else
     EEPROM.begin(EE_PAGE_SIZE*2);
+#endif
     EE_STATUS_ENUM status;
     uint32_t Page0Status, Page1Status;
 
