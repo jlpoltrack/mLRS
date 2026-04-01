@@ -19,8 +19,9 @@
 
 
 // FLASH_SECTOR_SIZE = 4096, FLASH_PAGE_SIZE = 256 (from pico sdk)
-// firmware area is 2044 KB (2MB flash minus 4KB EEPROM at end)
-#define RP_OTA_MAX_SIZE           (2044 * 1024)
+// firmware area is flash minus 20KB reserved at end:
+// 4 x 4KB EEPROM wear-leveled sectors + 1 x 4KB powerup counter
+#define RP_OTA_MAX_SIZE           (PICO_FLASH_SIZE_BYTES - 5 * FLASH_SECTOR_SIZE)
 
 
 typedef enum {
@@ -135,7 +136,7 @@ class tRpOta
     bool _erase_and_program_sector(void)
     {
         if (_write_offset + FLASH_SECTOR_SIZE > RP_OTA_MAX_SIZE) {
-            return false; // would overwrite EEPROM area
+            return false; // would overwrite powerup counter or EEPROM area
         }
 
         rp2040.idleOtherCore();

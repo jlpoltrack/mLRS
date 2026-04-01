@@ -7,17 +7,17 @@
 
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 2044k
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 2028k
     PSRAM(rwx) : ORIGIN = 0x11000000, LENGTH = 0
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 512k
     SCRATCH_X(rwx) : ORIGIN = 0x20080000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20081000, LENGTH = 4k
 }
 
-/* eeprom at last 4k of 2mb flash (rp2354 variants), no filesystem */
-PROVIDE ( _EEPROM_start = 0x101FF000 );
-PROVIDE ( _FS_start     = 0x101FF000 );
-PROVIDE ( _FS_end       = 0x101FF000 );
+/* reserved area at end of 2mb flash (4x4KB EEPROM + 4KB powerup counter = 20KB), no filesystem */
+PROVIDE ( _EEPROM_start = 0x101FB000 );
+PROVIDE ( _FS_start     = 0x101FB000 );
+PROVIDE ( _FS_end       = 0x101FB000 );
 
 ENTRY(_entry_point)
 
@@ -34,10 +34,10 @@ SECTIONS
 
     .partition : {
         . = __flash_binary_start + 0x2ff0;
-        LONG(0x101FF000)
-        LONG(0x101FF000)
-        LONG(0x101FF000)
-        LONG(2093056)
+        LONG(0x101FB000)
+        LONG(0x101FB000)
+        LONG(0x101FB000)
+        LONG(2076672)
     } > FLASH
 
     /* only vectors, binary_info, and reset handler stay in flash */

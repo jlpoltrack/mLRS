@@ -5,15 +5,46 @@
 //*******************************************************
 // RP EEPROM emulation
 //*******************************************************
+// Wear-leveled settings storage using raw flash.
+// 4 sectors rotated round-robin. Each write uses the next sector.
+// One sector erase per write; wear spread 4x across sectors.
+// At 100K erases per sector x 4 sectors = 400K total writes.
+//
+// Crash-safe: new sector is fully written before becoming active
+// (highest sequence number wins). If power is lost mid-write,
+// the previous sector remains valid.
+//
+// Flash layout (end of flash, 5 sectors = 20KB):
+//   PICO_FLASH_SIZE - 20KB : EEPROM sector 0
+//   ...
+//   PICO_FLASH_SIZE -  8KB : EEPROM sector 3
+//   PICO_FLASH_SIZE -  4KB : powerup counter
+//*******************************************************
 #ifndef RP_EEPROM_H
 #define RP_EEPROM_H
+#pragma once
 
-#include <EEPROM.h>
+#include <string.h>
+#include <hardware/flash.h>
 
-typedef enum {
-    EE_PAGE0 = 0,
-    EE_PAGE1,
-} EE_PAGE_ENUM;
+
+//-------------------------------------------------------
+// Configuration
+//-------------------------------------------------------
+
+#define EE_NUM_SECTORS            4
+#define EE_BASE_OFFSET            (PICO_FLASH_SIZE_BYTES - (EE_NUM_SECTORS + 1) * FLASH_SECTOR_SIZE)
+
+#define EE_HEADER_SIZE            16
+#define EE_HEADER_MAGIC           ((uint32_t)0x4D4C5253)
+
+// keep for compilation guards in other headers
+#define EE_USE_WORD
+
+
+//-------------------------------------------------------
+// Types
+//-------------------------------------------------------
 
 typedef enum {
     EE_STATUS_FLASH_FAIL = 0,
@@ -23,108 +54,70 @@ typedef enum {
     EE_STATUS_OK
 } EE_STATUS_ENUM;
 
-// redundant pages for robustness, matching esp-eeprom.h logic
-#ifndef EE_PAGE_SIZE
-#define EE_PAGE_SIZE              0x0400 
-#endif
-
-#define EE_HEADER_SIZE            16
-
-// EEPROM start address
-#define EE_START_ADDRESS          ((uint32_t)(0x0000))
-
-// pages 0 and 1 base addresses
-#define EE_PAGE0_BASE_ADDRESS     ((uint32_t)(EE_START_ADDRESS + 0x0000))
-#define EE_PAGE1_BASE_ADDRESS     ((uint32_t)(EE_START_ADDRESS + EE_PAGE_SIZE))
-
-// page status definitions
-#define EE_ERASE                  ((uint32_t)0xFFFFFFFF)
-#define EE_VALID_PAGE             ((uint32_t)0x11111111)
-
-#define EE_USE_WORD
+typedef struct {
+    uint32_t magic;      // EE_HEADER_MAGIC when valid
+    uint32_t sequence;   // incrementing, highest = active sector
+    uint32_t datalen;    // bytes of settings data
+    uint32_t checksum;   // sum of data bytes
+} ee_header_t;
 
 
 //-------------------------------------------------------
-// HAL functions for compatibility with powerup.h
+// Internal state
 //-------------------------------------------------------
 
-inline void ee_hal_unlock(void) {}
-inline void ee_hal_lock(void) {}
+static uint8_t ee_active_sector;
+static uint32_t ee_active_sequence;
+static uint8_t ee_sector_buf[FLASH_SECTOR_SIZE]; // write buffer, avoids 4KB on stack
 
-inline bool ee_hal_programword(uint32_t Address, uint32_t Data) {
-    EEPROM.put(Address, Data);
-    return true;
+
+//-------------------------------------------------------
+// Helpers
+//-------------------------------------------------------
+
+static inline uint32_t ee_sector_flash_offset(uint8_t sector)
+{
+    return EE_BASE_OFFSET + sector * FLASH_SECTOR_SIZE;
 }
 
-inline bool ee_hal_erasepage(uint32_t Page_Address, uint32_t Page_No) {
-    (void)Page_No;
-    for (uint32_t i = 0; i < EE_PAGE_SIZE; i++) {
-        EEPROM.write(Page_Address + i, 0xFF);
-    }
-    return true;
+
+static inline const uint8_t* ee_sector_xip_ptr(uint8_t sector)
+{
+    return (const uint8_t*)(XIP_BASE + ee_sector_flash_offset(sector));
 }
 
-// stubs for halfword and doubleword for compilation compatibility
-inline bool ee_hal_programhalfword(uint32_t address, uint16_t data) { (void)address; (void)data; return true; }
-inline bool ee_hal_programdoubleword(uint32_t address, uint64_t data) { (void)address; (void)data; return true; }
+
+static uint32_t ee_checksum(const void* data, uint16_t len)
+{
+    const uint8_t* p = (const uint8_t*)data;
+    uint32_t csum = 0;
+    for (uint16_t i = 0; i < len; i++) csum += p[i];
+    return csum;
+}
 
 
-//-------------------------------------------------------
-// Helper
-//-------------------------------------------------------
+static void ee_flash_erase_and_program(uint8_t sector)
+{
+    uint32_t offset = ee_sector_flash_offset(sector);
 
-// this function is only for internal use
-// if data != NULL: write data to specified page
-// if data == NULL: copy data from other page to specified page
-inline EE_STATUS_ENUM _ee_write_to(uint16_t ToPage, void* data, uint16_t datalen) {
-    EE_STATUS_ENUM status = EE_STATUS_OK;
-    uint32_t ToPageBaseAddress, ToPageEndAddress, FromPageBaseAddress, adr;
-    uint32_t PageNo;
-    uint32_t val;
-    uint16_t word_datalen;
+    rp2040.idleOtherCore();
+    noInterrupts();
+    flash_range_erase(offset, FLASH_SECTOR_SIZE);
+    flash_range_program(offset, ee_sector_buf, FLASH_SECTOR_SIZE);
+    interrupts();
+    rp2040.resumeOtherCore();
+}
 
-    if (ToPage == EE_PAGE1) {
-        PageNo = 1;
-        ToPageBaseAddress = EE_PAGE1_BASE_ADDRESS;
-        FromPageBaseAddress = EE_PAGE0_BASE_ADDRESS;
-    } else {
-        PageNo = 0;
-        ToPageBaseAddress = EE_PAGE0_BASE_ADDRESS;
-        FromPageBaseAddress = EE_PAGE1_BASE_ADDRESS;
-    }
-    ToPageEndAddress = ToPageBaseAddress + EE_PAGE_SIZE - 1;
 
-    // erase ToPage
-    if (!ee_hal_erasepage(ToPageBaseAddress, PageNo)) { status = EE_STATUS_FLASH_FAIL; goto QUICK_EXIT; }
+static void ee_flash_erase(uint8_t sector)
+{
+    uint32_t offset = ee_sector_flash_offset(sector);
 
-    // write data to ToPage
-    if (data == NULL) datalen = EE_PAGE_SIZE - EE_HEADER_SIZE; 
-
-    word_datalen = (datalen + 3) / 4; 
-
-    for (uint16_t n = 0; n < word_datalen; n++) {
-        if (data == NULL) {
-            adr = FromPageBaseAddress + EE_HEADER_SIZE + 4 * n;
-            EEPROM.get(adr, val);
-        } else {
-            val = ((uint32_t*)data)[n];
-        }
-        if (val != (uint32_t)0xFFFFFFFF) {
-            adr = ToPageBaseAddress + EE_HEADER_SIZE + 4 * n;
-            if (adr >= ToPageEndAddress) { status = EE_STATUS_PAGE_FULL; goto QUICK_EXIT; }
-            ee_hal_programword(adr, val);
-        }
-    }
-    
-    // set ToPage status to EE_VALID_PAGE
-    ee_hal_programword(ToPageBaseAddress, EE_VALID_PAGE);
-    
-    // commit to flash
-    EEPROM.commit();
-    
-    status = EE_STATUS_OK;
-QUICK_EXIT:
-    return status;
+    rp2040.idleOtherCore();
+    noInterrupts();
+    flash_range_erase(offset, FLASH_SECTOR_SIZE);
+    interrupts();
+    rp2040.resumeOtherCore();
 }
 
 
@@ -132,50 +125,84 @@ QUICK_EXIT:
 // API
 //-------------------------------------------------------
 
-inline EE_STATUS_ENUM ee_readdata(void* data, uint16_t datalen) {
-    uint32_t adr;
-    for (uint16_t n = 0; n < datalen; n++) {
-        adr = EE_PAGE0_BASE_ADDRESS + EE_HEADER_SIZE + n;
-        if (adr >= EE_PAGE0_BASE_ADDRESS + EE_PAGE_SIZE) return EE_STATUS_PAGE_FULL;
-        ((uint8_t*)data)[n] = EEPROM.read(adr);
+inline EE_STATUS_ENUM ee_init(void)
+{
+    ee_active_sector = 0;
+    ee_active_sequence = 0;
+    bool found = false;
+
+    // scan all sectors, find the one with valid header and highest sequence
+    for (uint8_t i = 0; i < EE_NUM_SECTORS; i++) {
+        const ee_header_t* hdr = (const ee_header_t*)ee_sector_xip_ptr(i);
+        if (hdr->magic != EE_HEADER_MAGIC) continue;
+        if (hdr->datalen > FLASH_SECTOR_SIZE - EE_HEADER_SIZE) continue;
+
+        const uint8_t* data = ee_sector_xip_ptr(i) + EE_HEADER_SIZE;
+        if (ee_checksum(data, hdr->datalen) != hdr->checksum) continue;
+
+        if (!found || hdr->sequence > ee_active_sequence) {
+            ee_active_sector = i;
+            ee_active_sequence = hdr->sequence;
+            found = true;
+        }
     }
+
+    if (found) return EE_STATUS_OK;
+
+    // no valid sector found, check if flash is erased or corrupt
+    const uint32_t* p = (const uint32_t*)ee_sector_xip_ptr(0);
+    return (p[0] == 0xFFFFFFFF) ? EE_STATUS_PAGE_EMPTY : EE_STATUS_PAGE_UNDEF;
+}
+
+
+inline EE_STATUS_ENUM ee_readdata(void* data, uint16_t datalen)
+{
+    const ee_header_t* hdr = (const ee_header_t*)ee_sector_xip_ptr(ee_active_sector);
+    if (hdr->magic != EE_HEADER_MAGIC) return EE_STATUS_PAGE_EMPTY;
+
+    const uint8_t* src = ee_sector_xip_ptr(ee_active_sector) + EE_HEADER_SIZE;
+    uint16_t copylen = (datalen < hdr->datalen) ? datalen : hdr->datalen;
+    memcpy(data, src, copylen);
+
     return EE_STATUS_OK;
 }
 
-inline EE_STATUS_ENUM ee_writedata(void* data, uint16_t datalen) {
-    EE_STATUS_ENUM status;
-    status = _ee_write_to(EE_PAGE0, data, datalen);
-    if (status != EE_STATUS_OK) return status;
-    status = _ee_write_to(EE_PAGE1, data, datalen);
-    return status;
-}
 
-inline EE_STATUS_ENUM ee_format(void) {
-    if (!ee_hal_erasepage(EE_PAGE0_BASE_ADDRESS, 0)) return EE_STATUS_FLASH_FAIL;
-    if (!ee_hal_erasepage(EE_PAGE1_BASE_ADDRESS, 1)) return EE_STATUS_FLASH_FAIL;
+inline EE_STATUS_ENUM ee_writedata(void* data, uint16_t datalen)
+{
+    if (datalen > FLASH_SECTOR_SIZE - EE_HEADER_SIZE) return EE_STATUS_PAGE_FULL;
+
+    uint8_t next = (ee_active_sector + 1) % EE_NUM_SECTORS;
+    uint32_t next_seq = ee_active_sequence + 1;
+
+    // build sector image: header + data + 0xFF padding
+    memset(ee_sector_buf, 0xFF, FLASH_SECTOR_SIZE);
+
+    ee_header_t hdr;
+    hdr.magic = EE_HEADER_MAGIC;
+    hdr.sequence = next_seq;
+    hdr.datalen = datalen;
+    hdr.checksum = ee_checksum(data, datalen);
+    memcpy(ee_sector_buf, &hdr, sizeof(hdr));
+    memcpy(&ee_sector_buf[EE_HEADER_SIZE], data, datalen);
+
+    ee_flash_erase_and_program(next);
+
+    ee_active_sector = next;
+    ee_active_sequence = next_seq;
+
     return EE_STATUS_OK;
 }
 
-inline EE_STATUS_ENUM ee_init(void) {
-    EEPROM.begin(EE_PAGE_SIZE * 2);
-    EE_STATUS_ENUM status;
-    uint32_t Page0Status, Page1Status;
 
-    EEPROM.get(EE_PAGE0_BASE_ADDRESS, Page0Status);
-    EEPROM.get(EE_PAGE1_BASE_ADDRESS, Page1Status);
-
-    if ((Page0Status == EE_VALID_PAGE) && (Page1Status == EE_VALID_PAGE)) {
-        status = EE_STATUS_OK;
-    } else if ((Page0Status == EE_VALID_PAGE) && (Page1Status != EE_VALID_PAGE)) {
-        status = _ee_write_to(EE_PAGE1, NULL, 0);
-    } else if ((Page0Status != EE_VALID_PAGE) && (Page1Status == EE_VALID_PAGE)) {
-        status = _ee_write_to(EE_PAGE0, NULL, 0);
-    } else {
-        status = ee_format();
-        if (status != EE_STATUS_OK) return status;
-        status = (Page0Status == EE_ERASE && Page1Status == EE_ERASE) ? EE_STATUS_PAGE_EMPTY : EE_STATUS_PAGE_UNDEF;
+inline EE_STATUS_ENUM ee_format(void)
+{
+    for (uint8_t i = 0; i < EE_NUM_SECTORS; i++) {
+        ee_flash_erase(i);
     }
-    return status;
+    ee_active_sector = 0;
+    ee_active_sequence = 0;
+    return EE_STATUS_OK;
 }
 
 
