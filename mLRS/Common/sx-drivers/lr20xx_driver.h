@@ -331,7 +331,9 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
         ClearIrq(LR20XX_IRQ_ALL);
 
 #ifdef LR_DIO_RFSW
-        for (uint8_t i = 0; i < LR_DIO_RFSW_NUM; i++) {
+        static_assert(sizeof(lr_dio_rfsw) == sizeof(lr_dio_rfsw_config), "lr_dio_rfsw and lr_dio_rfsw_config must have same length");
+        const uint8_t lr_dio_rfsw_num = sizeof(lr_dio_rfsw);
+        for (uint8_t i = 0; i < lr_dio_rfsw_num; i++) {
             SetDioFunction(lr_dio_rfsw[i], LR20XX_DIO_FUNCTION_RF_SWITCH, LR20XX_DIO_SLEEP_PULL_DOWN);
             SetDioRfSwitchConfig(lr_dio_rfsw[i], lr_dio_rfsw_config[i]);
         }
