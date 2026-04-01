@@ -326,8 +326,14 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
 
         SetRfPower_dbm(gconfig->Power_dbm);
 
-        SetDioFunction(LR20XX_DIO_7, LR20XX_DIO_FUNCTION_IRQ, LR20XX_DIO_SLEEP_PULL_DOWN);
-        SetDioIrqConfig(LR20XX_DIO_7, LR20XX_IRQ_TX_DONE | LR20XX_IRQ_RX_DONE | LR20XX_IRQ_TIMEOUT);
+        SetDioFunction(LR_DIO_IRQ_NO, LR20XX_DIO_FUNCTION_IRQ, LR20XX_DIO_SLEEP_PULL_DOWN);
+        SetDioIrqConfig(LR_DIO_IRQ_NO, LR20XX_IRQ_TX_DONE | LR20XX_IRQ_RX_DONE | LR20XX_IRQ_TIMEOUT);
+#ifdef LR_DIO_RFSW
+        for (uint8_t i = 0; i < LR_DIO_RFSW_NUM; i++) {
+            SetDioFunction(lr_dio_rfsw[i], LR20XX_DIO_FUNCTION_RF_SWITCH, LR20XX_DIO_SLEEP_PULL_DOWN);
+            SetDioRfSwitchConfig(lr_dio_rfsw[i], lr_dio_rfsw_config[i]);
+        }
+#endif
         ClearIrq(LR20XX_IRQ_ALL);
 
         SetFs();
