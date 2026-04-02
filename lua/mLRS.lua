@@ -29,6 +29,7 @@ local paramLoadDeadTime_10ms = 300 -- 150 was a bit too short, also 200 was too 
 -- TX16, T16, etc.:    480 x 272
 -- T15, TX15:          480 x 320
 -- PA01:               320 x 240
+-- TX16S MK3:          800 x 480
 
 local THEME = {
     screenSize = nil,
@@ -62,6 +63,8 @@ local LAYOUT = {
     RELOAD_X = 10 + 225,
     BIND_X = 10 + 305,
     TOOLS_X = 10 + 365,
+    -- edit page, second column offset
+    COL2_OFS = 230,
     -- info section, location of info section on main page
     INFO_Y = 210,
     INFO_DY = 20,
@@ -96,6 +99,29 @@ local function setupScreen()
     elseif THEME.screenSize == 480320 then -- 480x320, T15
         LAYOUT.page_N1 = 11
         LAYOUT.page_N = 2 * LAYOUT.page_N1
+    elseif THEME.screenSize == 800480 then -- 800x480, TX16S MK3
+        LAYOUT.DY = 29
+        LAYOUT.page_N1 = 13
+        LAYOUT.page_N = 2 * LAYOUT.page_N1
+        LAYOUT.COL2_OFS = 390
+        LAYOUT.POPUP_X = 160
+        LAYOUT.POPUP_W = 480
+        LAYOUT.POPUP_Y = 130
+        LAYOUT.WARN_X = 100
+        LAYOUT.WARN_W = 600
+        LAYOUT.BUTTONS_Y = 310
+        LAYOUT.EDIT_TX_X = 20
+        LAYOUT.EDIT_RX_X = 150
+        LAYOUT.SAVE_X = 285
+        LAYOUT.RELOAD_X = 390
+        LAYOUT.BIND_X = 525
+        LAYOUT.TOOLS_X = 625
+        LAYOUT.INFO_Y = 370
+        LAYOUT.INFO_DY = 28
+        LAYOUT.INFO_LEFT_X = 10
+        LAYOUT.INFO_LEFT_VAL_X = 200
+        LAYOUT.INFO_RIGHT_X = 410
+        LAYOUT.INFO_RIGHT_VALUE_X = 600
     else
         LAYOUT.page_N1 = 9
         LAYOUT.page_N = 2 * LAYOUT.page_N1
@@ -332,12 +358,12 @@ local function drawPopup()
     local i = string.find(POPUP.text, "\n")
     local attr = THEME.menuTitleColor + MIDSIZE + CENTER
     if i == nil then
-        lcd.drawText(LAYOUT.W_HALF, 99, POPUP.text, attr)
+        lcd.drawText(LAYOUT.W_HALF, LAYOUT.POPUP_Y + 23, POPUP.text, attr)
     else
         local t1 = string.sub(POPUP.text, 1,i-1)
         local t2 = string.sub(POPUP.text, i+1)
-        lcd.drawText(LAYOUT.W_HALF, 85, t1, attr)
-        lcd.drawText(LAYOUT.W_HALF, 85+30, t2, attr)
+        lcd.drawText(LAYOUT.W_HALF, LAYOUT.POPUP_Y + 9, t1, attr)
+        lcd.drawText(LAYOUT.W_HALF, LAYOUT.POPUP_Y + 9 + 30, t2, attr)
     end
 end
 
@@ -1015,7 +1041,7 @@ local function drawPageEdit(page_str)
             y = y0 + shifted_idx * LAYOUT.DY
 
             local xofs = 0
-            if shifted_idx >= LAYOUT.page_N1 then y = y - LAYOUT.page_N1 * LAYOUT.DY; xofs = 230 end
+            if shifted_idx >= LAYOUT.page_N1 then y = y - LAYOUT.page_N1 * LAYOUT.DY; xofs = LAYOUT.COL2_OFS end
 
             lcd.drawText(10+xofs, y, name, THEME.textColor)
             if p.typ < MBRIDGE_PARAM_TYPE.LIST then
