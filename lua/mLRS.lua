@@ -46,6 +46,7 @@ local LAYOUT = {
     W = LCD_W,
     W_HALF = LCD_W / 2,
     DY = 21, -- default line distance
+    CHAR_SCALE = 1, -- character width scale factor
     -- popup box, location of popup box 
     POPUP_X = 80, -- LCD_W/2-160
     POPUP_Y = 76,
@@ -101,6 +102,7 @@ local function setupScreen()
         LAYOUT.page_N = 2 * LAYOUT.page_N1
     elseif THEME.screenSize == 800480 then -- 800x480, TX16S MK3
         LAYOUT.DY = 29
+        LAYOUT.CHAR_SCALE = 1.5
         LAYOUT.page_N1 = 13
         LAYOUT.page_N = 2 * LAYOUT.page_N1
         LAYOUT.COL2_OFS = 390
@@ -203,8 +205,8 @@ local charSize = {
 }
 
 local function getCharWidth(c)
-    if charSize[c] == nil then return 10 end
-    return charSize[c]
+    local w = charSize[c] or 10
+    return math.floor(w * LAYOUT.CHAR_SCALE + 0.5)
 end
 
 
