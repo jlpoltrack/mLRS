@@ -10,8 +10,8 @@
 
 #define DEVICE_HAS_SINGLE_LED
 //#define DEVICE_HAS_SINGLE_LED_RGB
-#define DEVICE_HAS_OUT
-//#define DEVICE_HAS_DIVERSITY
+//#define DEVICE_HAS_OUT
+//#define DEVICE_HAS_DRONECAN
 
 
 //-- UARTS
@@ -106,7 +106,7 @@ bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
 //-- LEDs
 #ifdef DEVICE_HAS_SINGLE_LED
 
-#define LED_RED                   IO_P20
+#define LED_RED                   IO_P25
 
 void leds_init(void) { gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW); }
 void led_red_off(void) { gpio_low(LED_RED); }
