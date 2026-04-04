@@ -36,7 +36,7 @@ class tRxClock
 };
 
 
-int64_t __not_in_flash_func(tRxClock::alarm_callback)(alarm_id_t id, void* user_data)
+int64_t tRxClock::alarm_callback(alarm_id_t id, void* user_data)
 {
     tRxClock* clock = static_cast<tRxClock*>(user_data);
     doPostReceive = true;
@@ -64,7 +64,7 @@ void tRxClock::SetPeriod(uint16_t period_ms)
 }
 
 
-void __not_in_flash_func(tRxClock::Reset)(void)
+void tRxClock::Reset(void)
 {
     if (alarm_id >= 0) { cancel_alarm(alarm_id); } // cancel existing alarm before scheduling new one
 

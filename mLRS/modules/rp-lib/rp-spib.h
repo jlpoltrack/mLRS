@@ -20,12 +20,12 @@
 
 //-- select functions
 
-void __not_in_flash_func(spib_select)(void)
+void spib_select(void)
 {
     gpio_low(SPIB_CS_IO);
 }
 
-void __not_in_flash_func(spib_deselect)(void)
+void spib_deselect(void)
 {
     gpio_high(SPIB_CS_IO);
 }
@@ -33,19 +33,19 @@ void __not_in_flash_func(spib_deselect)(void)
 
 //-- transmit, transfer, read, write functions
 
-void __not_in_flash_func(spib_transfer)(const uint8_t* dataout, uint8_t* datain, const uint8_t len)
+void spib_transfer(const uint8_t* dataout, uint8_t* datain, const uint8_t len)
 {
     SPIB_BUS.transfer(dataout, datain, len);
 }
 
 
-void __not_in_flash_func(spib_read)(uint8_t* datain, const uint8_t len)
+void spib_read(uint8_t* datain, const uint8_t len)
 {
     SPIB_BUS.transfer(nullptr, datain, len);
 }
 
 
-void __not_in_flash_func(spib_write)(const uint8_t* dataout, uint8_t len)
+void spib_write(const uint8_t* dataout, uint8_t len)
 {
     SPIB_BUS.transfer(dataout, nullptr, len);
 }

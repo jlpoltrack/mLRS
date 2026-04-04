@@ -20,12 +20,12 @@
 
 //-- select functions
 
-void __not_in_flash_func(spi$_select)(void)
+void spi$_select(void)
 {
     gpio_low(SPI$_CS_IO);
 }
 
-void __not_in_flash_func(spi$_deselect)(void)
+void spi$_deselect(void)
 {
     gpio_high(SPI$_CS_IO);
 }
@@ -33,19 +33,19 @@ void __not_in_flash_func(spi$_deselect)(void)
 
 //-- transmit, transfer, read, write functions
 
-void __not_in_flash_func(spi$_transfer)(const uint8_t* dataout, uint8_t* datain, const uint8_t len)
+void spi$_transfer(const uint8_t* dataout, uint8_t* datain, const uint8_t len)
 {
     SPI$_BUS.transfer(dataout, datain, len);
 }
 
 
-void __not_in_flash_func(spi$_read)(uint8_t* datain, const uint8_t len)
+void spi$_read(uint8_t* datain, const uint8_t len)
 {
     SPI$_BUS.transfer(nullptr, datain, len);
 }
 
 
-void __not_in_flash_func(spi$_write)(const uint8_t* dataout, uint8_t len)
+void spi$_write(const uint8_t* dataout, uint8_t len)
 {
     SPI$_BUS.transfer(dataout, nullptr, len);
 }

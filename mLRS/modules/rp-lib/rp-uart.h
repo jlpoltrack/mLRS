@@ -105,7 +105,7 @@ static volatile uint16_t uart_rxreadpos;
 
 #ifdef UART_IS_HW_SERIAL
 
-void __not_in_flash_func(uart_irq_handler)(void)
+void uart_irq_handler(void)
 {
     uart_hw_t* hw = uart_get_hw(UART_UART_INST);
 

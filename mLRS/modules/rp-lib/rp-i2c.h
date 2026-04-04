@@ -57,7 +57,7 @@ static i2c_dma_state_t i2c_dma;
 // I2C IRQ handler (STOP_DET and TX_ABRT)
 //-------------------------------------------------------
 
-void __not_in_flash_func(i2c_dma_irq_handler)(void)
+void i2c_dma_irq_handler(void)
 {
     i2c_hw_t* hw = i2c_get_hw(I2C_INST);
     uint32_t status = hw->intr_stat;

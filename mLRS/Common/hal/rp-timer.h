@@ -50,7 +50,7 @@ uint64_t micros64(void) { return to_us_since_boot(get_absolute_time()); }
 
 static struct repeating_timer rp_systick_timer;
 
-bool __not_in_flash_func(rp_systick_callback)(struct repeating_timer *t)
+bool rp_systick_callback(struct repeating_timer *t)
 {
     HAL_IncTick();
     return true;
@@ -121,7 +121,7 @@ void tTxClock::StartCC1Delay(uint16_t delay_us)
 }
 
 
-int64_t __not_in_flash_func(tTxClock::alarm_callback)(alarm_id_t id, void* user_data)
+int64_t tTxClock::alarm_callback(alarm_id_t id, void* user_data)
 {
     tTxClock* clock = static_cast<tTxClock*>(user_data);
     clock->alarm_id = -1;

@@ -72,7 +72,7 @@ static volatile bool dc_hal_flush_requested = false;
 //-------------------------------------------------------
 // called in irq context on every received/transmitted frame
 
-static void __not_in_flash_func(dc_hal_can2040_cb)(struct can2040* cd, uint32_t notify, struct can2040_msg* msg)
+static void dc_hal_can2040_cb(struct can2040* cd, uint32_t notify, struct can2040_msg* msg)
 {
     (void)cd;
 
@@ -113,7 +113,7 @@ static void __not_in_flash_func(dc_hal_can2040_cb)(struct can2040* cd, uint32_t 
 // PIO1 IRQ handler
 //-------------------------------------------------------
 
-static void __not_in_flash_func(dc_hal_pio1_irq_handler)(void)
+static void dc_hal_pio1_irq_handler(void)
 {
     can2040_pio_irq_handler(&dc_hal_cbus);
 }

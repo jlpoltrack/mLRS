@@ -79,7 +79,7 @@ with right shift) — extract with `(raw >> 24) & 0xFF`.
 
 #### IRQ Handler
 
-Single shared handler per PIO instance, placed in RAM via `__not_in_flash_func`.
+Single shared handler per PIO instance.
 Handles both RX and TX in one ISR:
 
 1. **RX**: drain PIO RX FIFO → software ring buffer. Extract byte from upper 8 bits

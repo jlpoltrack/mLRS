@@ -131,7 +131,7 @@ class tPin5BridgeBase
 // tx complete delay callback - called after last byte fully transmitted
 // 2 byte times after PIO signals last byte pulled ensures stop bit is complete
 //-------------------------------------------------------
-static int64_t __not_in_flash_func(tx_complete_alarm_callback)(alarm_id_t id, void* user_data) {
+static int64_t tx_complete_alarm_callback(alarm_id_t id, void* user_data) {
     (void)id;
     (void)user_data;
     if (g_pin5_bridge && tx_in_progress) {
@@ -147,7 +147,7 @@ static int64_t __not_in_flash_func(tx_complete_alarm_callback)(alarm_id_t id, vo
 //-------------------------------------------------------
 // tx turnaround delay callback - starts tx after delay
 //-------------------------------------------------------
-static int64_t __not_in_flash_func(tx_turnaround_alarm_callback)(alarm_id_t id, void* user_data) {
+static int64_t tx_turnaround_alarm_callback(alarm_id_t id, void* user_data) {
     (void)id;
     (void)user_data;
     if (g_pin5_bridge && g_pin5_bridge->state == tPin5BridgeBase::STATE_TRANSMIT_PENDING) {
@@ -164,7 +164,7 @@ static int64_t __not_in_flash_func(tx_turnaround_alarm_callback)(alarm_id_t id, 
 // RX: drains PIO to ring buffer, then parses
 // TX: feeds bytes from tx_buf as FIFO drains
 //-------------------------------------------------------
-void __not_in_flash_func(pio_uart_irq_handler)(void) {
+void pio_uart_irq_handler(void) {
     // handle TX complete: PIO fires irq 0 after each byte
     if (pio_interrupt_get(pio_uart, 0)) {
         pio_interrupt_clear(pio_uart, 0);
