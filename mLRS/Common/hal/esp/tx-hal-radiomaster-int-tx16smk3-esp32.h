@@ -200,7 +200,7 @@ IRAM_ATTR void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 
 void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, const uint8_t frequency_band)
 {
-    if (frequency_band == SX_FHSS_CONFIG_FREQUENCY_BAND_2P4_GHZ) {  
+    if (frequency_band == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {
         if (power_dbm >= POWER_30_DBM) {
             *sx_power = 8;
             *actual_power_dbm = 30;
@@ -258,7 +258,7 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actua
 const rfpower_t rfpower_list[] = {
     { .dbm = POWER_10_DBM, .mW = 10 },
     { .dbm = POWER_14_DBM, .mW = 25 },
-    { .dbm = POWER_17_DBM, .mW = 50 }, 
+    { .dbm = POWER_17_DBM, .mW = 50 },
     { .dbm = POWER_20_DBM, .mW = 100 },
     { .dbm = POWER_24_DBM, .mW = 250 },
     { .dbm = POWER_27_DBM, .mW = 500 },
