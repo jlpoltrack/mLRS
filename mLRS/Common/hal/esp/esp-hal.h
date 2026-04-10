@@ -95,8 +95,16 @@
 #include "rx-hal-radiomaster-xr4-esp32.h"
 #endif
 
+#ifdef RX_ELRS_RADIOMASTER_XR4_CAN_ESP32
+#include "rx-hal-radiomaster-xr4-can-esp32.h"
+#endif
+
 #ifdef RX_ELRS_RADIOMASTER_XR1_ESP32C3
 #include "rx-hal-radiomaster-xr1-esp32c3.h"
+#endif
+
+#ifdef RX_ELRS_RADIOMASTER_XR1_CAN_ESP32C3
+#include "rx-hal-radiomaster-xr1-can-esp32c3.h"
 #endif
 
 #ifdef RX_FLYSKY_PR02_2400_TD_ESP32S3
@@ -157,5 +165,9 @@
 
 #ifdef TX_ELRS_FLYSKY_INTERNAL_PA01_2400_ESP32S3
 #include "tx-hal-flysky-int-pa01-2400-esp32s3.h"
+#endif
+
+#ifdef TX_ELRS_RADIOMASTER_XR1_ESP32C3
+#include "tx-hal-radiomaster-xr1-esp32c3.h"
 #endif
 
