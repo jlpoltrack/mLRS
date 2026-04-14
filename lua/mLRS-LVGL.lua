@@ -3,17 +3,16 @@
 -- Copyright (c) MLRS project
 -- GPL3
 -- https://www.gnu.org/licenses/gpl-3.0.de.html
--- OlliW @ www.olliw.eu
 ----------------------------------------------------------------------
--- Lua TOOLS script, LVGL version for EdgeTX 2.11.5+
+-- Lua TOOLS script, LVGL version for EdgeTX 2.12.X+
 ----------------------------------------------------------------------
 -- copy script to SCRIPTS\TOOLS folder on EdgeTx SD card
--- works with mLRS v1.3.03 and later
+-- works with mLRS v1.4.00 and later
 
 local VERSION = {
-    script = '2026-04-13 LVGL',
-    required_tx_version_int = 10303,  -- 'v1.3.03'
-    required_rx_version_int = 10303,  -- 'v1.3.03'
+    script = '2026-04-14 LVGL',
+    required_tx_version_int = 10400,  -- 'v1.4.00'
+    required_rx_version_int = 10400,  -- 'v1.4.00'
 }
 
 
@@ -70,6 +69,9 @@ local Protocol = {
     DEVICE_PARAM_LIST_complete = false,
     DEVICE_DOWNLOAD_is_running = true,
     DEVICE_SAVE_t_last = 0,
+    DEVICE_SAVE_reload_pending = false,
+    DEVICE_BINDING = false,
+    DEVICE_BIND_t_start = 0,
 }
 
 local MBRIDGE_COMMANDPACKET_STX  = 0xA0
@@ -452,7 +454,7 @@ function Protocol.doParamLoop()
                     Protocol.DEVICE_PARAM_LIST_complete = true
                 else
                     Protocol.DEVICE_PARAM_LIST_complete = false
-                    Dialogs.showPopup("Param Upload Errors ("..tostring(Protocol.DEVICE_PARAM_LIST_errors)..")!\nTry Reload", 200)
+                    UI.setSubtitleMsg("Param errors ("..tostring(Protocol.DEVICE_PARAM_LIST_errors)..")! Try Reload", 200)
                 end
                 Protocol.DEVICE_DOWNLOAD_is_running = false
             else
@@ -555,13 +557,14 @@ function Protocol.sendParamStore()
     if not Protocol.DEVICE_PARAM_LIST_complete then return end
     Protocol.cmdPush(MBRIDGE_CMD.PARAM_STORE, {})
     Protocol.DEVICE_SAVE_t_last = getTime()
-    Dialogs.showPopup("Save Parameters", 250)
+    Protocol.DEVICE_SAVE_reload_pending = true
 end
 
 function Protocol.sendBind()
     if Protocol.DEVICE_DOWNLOAD_is_running then return end
     Protocol.cmdPush(MBRIDGE_CMD.BIND_START, {})
-    Dialogs.showBlocked("Binding")
+    Protocol.DEVICE_BINDING = true
+    Protocol.DEVICE_BIND_t_start = getTime()
 end
 
 function Protocol.sendBoot()
@@ -579,7 +582,7 @@ end
 function Protocol.checkBind()
     if Protocol.DEVICE_DOWNLOAD_is_running then return end
     if Protocol.DEVICE_INFO ~= nil and Protocol.DEVICE_INFO.has_status == 1 and Protocol.DEVICE_INFO.binding == 1 then
-        Dialogs.showBlocked("Binding")
+        Protocol.DEVICE_BINDING = true
     end
 end
 
@@ -635,37 +638,7 @@ end
 -- Dialogs Module
 -- ============================================================================
 
-Dialogs.popup = nil       -- {dialog, tend_10ms}
-
-function Dialogs.showPopup(text, tmo_10ms)
-    if Dialogs.popup and Dialogs.popup.tend_10ms and Dialogs.popup.tend_10ms < 0 then
-        return -- blocked popup on display, don't override
-    end
-    -- Close existing popup if any
-    if Dialogs.popup and Dialogs.popup.dialog then
-        Dialogs.popup.dialog:close()
-    end
-    local dg = lvgl.dialog({
-        title = "mLRS",
-        flexFlow = lvgl.FLOW_COLUMN,
-        flexPad = lvgl.PAD_SMALL,
-    })
-    -- Handle multi-line text
-    local i = string.find(text, "\n")
-    if i == nil then
-        dg:build({
-            {type="label", text=text, align=CENTER, font=MIDSIZE},
-        })
-    else
-        local t1 = string.sub(text, 1, i-1)
-        local t2 = string.sub(text, i+1)
-        dg:build({
-            {type="label", text=t1, align=CENTER, font=MIDSIZE},
-            {type="label", text=t2, align=CENTER, font=MIDSIZE},
-        })
-    end
-    Dialogs.popup = {dialog = dg, tend_10ms = getTime() + tmo_10ms}
-end
+Dialogs.popup = nil       -- {dialog}
 
 function Dialogs.showBlocked(text)
     -- Close existing popup if any
@@ -675,35 +648,19 @@ function Dialogs.showBlocked(text)
     local dg = lvgl.dialog({
         title = "mLRS",
         flexFlow = lvgl.FLOW_COLUMN,
-        flexPad = lvgl.PAD_SMALL,
+        flexPad = lvgl.PAD_TINY,
     })
     dg:build({
         {type="label", text=text, align=CENTER, font=MIDSIZE},
     })
-    Dialogs.popup = {dialog = dg, tend_10ms = -1}
+    Dialogs.popup = {dialog = dg}
 end
 
-function Dialogs.clearPopup()
+function Dialogs.clearBlocked()
     if Dialogs.popup and Dialogs.popup.dialog then
         Dialogs.popup.dialog:close()
     end
     Dialogs.popup = nil
-end
-
-function Dialogs.clearIfBlocked()
-    if Dialogs.popup and Dialogs.popup.tend_10ms and Dialogs.popup.tend_10ms < 0 then
-        Dialogs.clearPopup()
-    end
-end
-
-function Dialogs.update()
-    if Dialogs.popup == nil then return end
-    if Dialogs.popup.tend_10ms > 0 then
-        local t_10ms = getTime()
-        if t_10ms > Dialogs.popup.tend_10ms then
-            Dialogs.clearPopup()
-        end
-    end
 end
 
 function Dialogs.showVersionWarning(text)
@@ -722,10 +679,17 @@ local UI = {
     currentPage = nil,
     uiBuilt = false,
     paramsWereComplete = false,
+    subtitle_msg = nil,
+    subtitle_msg_tend = 0,
 }
 
 function UI.invalidate()
     UI.uiBuilt = false
+end
+
+function UI.setSubtitleMsg(msg, tmo_10ms)
+    UI.subtitle_msg = msg
+    UI.subtitle_msg_tend = getTime() + tmo_10ms
 end
 
 
@@ -747,6 +711,12 @@ function UI.getSubtitle()
 end
 
 function UI.getMainSubtitle()
+    if Protocol.DEVICE_BINDING then return "Binding..." end
+    if Protocol.DEVICE_SAVE_reload_pending then return "Saving..." end
+    if UI.subtitle_msg then
+        if getTime() < UI.subtitle_msg_tend then return UI.subtitle_msg end
+        UI.subtitle_msg = nil
+    end
     local s = UI.getSubtitle()
     if s ~= "" then return s end
     return VERSION.script
@@ -964,7 +934,6 @@ function UI.mainRow1(pg, label, valueFn)
         w = lvgl.PERCENT_SIZE + 100, thickness = 0,
         flexFlow = lvgl.FLOW_ROW, flexPad = 0,
     })
-    -- Left half
     row:rectangle({
         w = lvgl.PERCENT_SIZE + ML, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
         children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=label, font=BOLD, color=BLACK}},
@@ -973,6 +942,26 @@ function UI.mainRow1(pg, label, valueFn)
         w = lvgl.PERCENT_SIZE + (100 - ML), h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
         children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=valueFn}},
     })
+end
+
+-- One label:control pair (full width)
+function UI.mainControlRow1(pg, label, ctrlFn)
+    local row = pg:rectangle({
+        w = lvgl.PERCENT_SIZE + 100, thickness = 0,
+        flexFlow = lvgl.FLOW_ROW, flexPad = 0,
+    })
+    row:rectangle({
+        w = lvgl.PERCENT_SIZE + ML, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
+        children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=label, font=BOLD, color=BLACK}},
+    })
+    local ctrl = row:rectangle({
+        w = lvgl.PERCENT_SIZE + (100 - ML), thickness = 0,
+        flexFlow = lvgl.FLOW_ROW, flexPad = 0,
+        align = LEFT,
+    })
+    ctrlFn(ctrl)
+    -- Invisible placeholder keeps height consistent when no control is added
+    ctrl:rectangle({w = 1, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0})
 end
 
 -- Two label:value pairs side by side (each gets 50%)
@@ -1059,7 +1048,7 @@ function UI.buildMainPage()
     local pg = UI.currentPage:box({
         w = lvgl.PERCENT_SIZE + 100,
         flexFlow = lvgl.FLOW_COLUMN,
-        flexPad = lvgl.PAD_SMALL,
+        flexPad = lvgl.PAD_TINY,
     })
 
     -- Version check
@@ -1070,122 +1059,7 @@ function UI.buildMainPage()
         Dialogs.showVersionWarning("Rx version not supported by this Lua script!")
     end
 
-    -- Line 1: Tx info
-    UI.mainRow1(pg, "Tx:", function()
-        if Protocol.DEVICE_ITEM_TX == nil then return "---" end
-        local s = Protocol.DEVICE_ITEM_TX.name .. "  " .. Protocol.DEVICE_ITEM_TX.version_str
-        if Protocol.DEVICE_INFO ~= nil then
-            s = s .. "  ConfigId " .. tostring(Protocol.DEVICE_INFO.tx_config_id)
-        end
-        return s
-    end)
-
-    -- Line 2: Tx Power + Tx Diversity
-    UI.mainRow2(pg,
-        "Tx Power:", function()
-            if Protocol.DEVICE_INFO == nil then return "---" end
-            return tostring(Protocol.DEVICE_INFO.tx_power_dbm) .. " dBm"
-        end,
-        "Tx Diversity:", function()
-            if Protocol.DEVICE_INFO == nil then return "---" end
-            return diversity_list[Protocol.DEVICE_INFO.tx_diversity] or "?"
-        end)
-
-    -- Line 3: Rx info
-    UI.mainRow1(pg, "Rx:", function()
-        if not Protocol.connected then return "not connected" end
-        if Protocol.DEVICE_ITEM_RX == nil then return "---" end
-        return Protocol.DEVICE_ITEM_RX.name .. "  " .. Protocol.DEVICE_ITEM_RX.version_str
-    end)
-
-    -- Line 4: Rx Power + Rx Diversity
-    UI.mainRow2(pg,
-        "Rx Power:", function()
-            if Protocol.DEVICE_INFO == nil or not Protocol.connected then return "---" end
-            return tostring(Protocol.DEVICE_INFO.rx_power_dbm) .. " dBm"
-        end,
-        "Rx Diversity:", function()
-            if Protocol.DEVICE_INFO == nil or not Protocol.connected then return "---" end
-            return diversity_list[Protocol.DEVICE_INFO.rx_diversity] or "?"
-        end)
-
-    -- Line 5: Sensitivity
-    UI.mainRow1(pg, "Sensitivity:", function()
-        if Protocol.DEVICE_INFO == nil then return "---" end
-        return tostring(Protocol.DEVICE_INFO.receiver_sensitivity) .. " dBm"
-    end)
-
-    -- Line 6: Bind Phrase + Mode
-    if Protocol.DEVICE_PARAM_LIST_complete then
-        local bpParam = Protocol.DEVICE_PARAM_LIST[0]
-        local modeParam = Protocol.DEVICE_PARAM_LIST[1]
-
-        UI.mainControlRow2(pg,
-            "Bind Phrase:",
-            function(parent)
-                if bpParam then
-                    parent:textEdit({
-                        value = bpParam.value or "",
-                        length = 6,
-                        w = lvgl.PERCENT_SIZE + 90,
-                        set = function(newVal)
-                            local s = ""
-                            for i = 1, math.min(6, #newVal) do
-                                local c = string.sub(newVal, i, i)
-                                if string.find(bindphrase_chars, c, 1, true) then s = s .. c end
-                            end
-                            while #s < 6 do s = s .. "a" end
-                            bpParam.value = s
-                            Protocol.sendParamSet(0)
-                        end,
-                    })
-                end
-            end,
-            "Mode:",
-            function(parent)
-                if Protocol.paramFocusable(1) then
-                    local mfv, mo2f, mf2o = UI.buildFilteredValues(modeParam)
-                    parent:choice({
-                        values = mfv,
-                        get = function() return mo2f[modeParam.value] or 1 end,
-                        set = function(val) modeParam.value = mf2o[val] or 0; Protocol.sendParamSet(1) end,
-                        active = function() return modeParam.editable end,
-                    })
-                end
-            end)
-
-        -- Line 7: RF Band + Ortho
-        local rfParam = Protocol.DEVICE_PARAM_LIST[2]
-        local orthoParam = Protocol.DEVICE_PARAM_LIST[3]
-
-        UI.mainControlRow2(pg,
-            "RF Band:",
-            function(parent)
-                if Protocol.paramFocusable(2) then
-                    local rfv, ro2f, rf2o = UI.buildFilteredValues(rfParam, freq_band_list)
-                    parent:choice({
-                        values = rfv,
-                        get = function() return ro2f[rfParam.value] or 1 end,
-                        set = function(val) rfParam.value = rf2o[val] or 0; Protocol.sendParamSet(2) end,
-                        active = function() return rfParam.editable end,
-                    })
-                end
-            end,
-            "Ortho:",
-            function(parent)
-                if orthoParam and orthoParam.allowed_mask > 0 and Protocol.paramFocusable(3) then
-                    local ofv, oo2f, of2o = UI.buildFilteredValues(orthoParam)
-                    parent:choice({
-                        values = ofv,
-                        get = function() return oo2f[orthoParam.value] or 1 end,
-                        set = function(val) orthoParam.value = of2o[val] or 0; Protocol.sendParamSet(3) end,
-                        active = function() return orthoParam.editable end,
-                    })
-                end
-            end)
-    end
-
-    -- Line 8: All 6 action buttons
+    -- Action buttons
     local btnRow = pg:box({
         w = lvgl.PERCENT_SIZE + 100, flexFlow = lvgl.FLOW_ROW,
         flexPad = lvgl.PAD_TINY,
@@ -1197,7 +1071,7 @@ function UI.buildMainPage()
         if Protocol.DEVICE_PARAM_LIST_complete and Protocol.connected then App.switchPage("edit_rx") end
     end, active = function() return Protocol.connected and Protocol.DEVICE_PARAM_LIST_complete end })
     btnRow:button({ text = "Save", w = lvgl.PERCENT_SIZE + 16, press = function()
-        if Protocol.DEVICE_PARAM_LIST_complete then Protocol.sendParamStore(); Protocol.clearParams() end
+        if Protocol.DEVICE_PARAM_LIST_complete then Protocol.sendParamStore() end
     end })
     btnRow:button({ text = "Reload", w = lvgl.PERCENT_SIZE + 16, press = function()
         Protocol.clearParams(); UI.invalidate()
@@ -1209,6 +1083,85 @@ function UI.buildMainPage()
         if Protocol.DEVICE_PARAM_LIST_complete then App.switchPage("tools") end
     end })
 
+    -- Tx, Rx, Bind Phrase, Mode, RF Band, Ortho (consistent spacing)
+    local ctrlBox = pg:box({
+        w = lvgl.PERCENT_SIZE + 100, flexFlow = lvgl.FLOW_COLUMN, flexPad = 5,
+    })
+    UI.mainRow1(ctrlBox, "Tx:", function()
+        if Protocol.DEVICE_ITEM_TX == nil then return "---" end
+        local s = Protocol.DEVICE_ITEM_TX.name .. " | " .. Protocol.DEVICE_ITEM_TX.version_str
+        if Protocol.DEVICE_INFO ~= nil then
+            s = s .. " | ConfigId " .. tostring(Protocol.DEVICE_INFO.tx_config_id)
+        end
+        return s
+    end)
+    UI.mainRow1(ctrlBox, "Rx:", function()
+        if not Protocol.connected then return "not connected" end
+        if Protocol.DEVICE_ITEM_RX == nil then return "---" end
+        return Protocol.DEVICE_ITEM_RX.name .. " | " .. Protocol.DEVICE_ITEM_RX.version_str
+    end)
+    local bpParam = Protocol.DEVICE_PARAM_LIST_complete and Protocol.DEVICE_PARAM_LIST[0] or nil
+    local modeParam = Protocol.DEVICE_PARAM_LIST_complete and Protocol.DEVICE_PARAM_LIST[1] or nil
+    local rfParam = Protocol.DEVICE_PARAM_LIST_complete and Protocol.DEVICE_PARAM_LIST[2] or nil
+    local orthoParam = Protocol.DEVICE_PARAM_LIST_complete and Protocol.DEVICE_PARAM_LIST[3] or nil
+
+    UI.mainControlRow1(ctrlBox, "Bind Phrase:", function(parent)
+        if bpParam then
+            parent:textEdit({
+                value = bpParam.value or "",
+                length = 6,
+                w = 80,
+                set = function(newVal)
+                    local s = ""
+                    for i = 1, math.min(6, #newVal) do
+                        local c = string.sub(newVal, i, i)
+                        if string.find(bindphrase_chars, c, 1, true) then s = s .. c end
+                    end
+                    while #s < 6 do s = s .. "a" end
+                    bpParam.value = s
+                    Protocol.sendParamSet(0)
+                end,
+            })
+        end
+    end)
+
+    UI.mainControlRow1(ctrlBox, "Mode:", function(parent)
+        if modeParam and Protocol.paramFocusable(1) then
+            local mfv, mo2f, mf2o = UI.buildFilteredValues(modeParam)
+            parent:choice({
+                values = mfv,
+                get = function() return mo2f[modeParam.value] or 1 end,
+                set = function(val) modeParam.value = mf2o[val] or 0; Protocol.sendParamSet(1) end,
+                active = function() return modeParam.editable end,
+            })
+        end
+    end)
+
+    UI.mainControlRow1(ctrlBox, "RF Band:", function(parent)
+        if rfParam and Protocol.paramFocusable(2) then
+            local rfv, ro2f, rf2o = UI.buildFilteredValues(rfParam, freq_band_list)
+            parent:choice({
+                values = rfv,
+                get = function() return ro2f[rfParam.value] or 1 end,
+                set = function(val) rfParam.value = rf2o[val] or 0; Protocol.sendParamSet(2) end,
+                active = function() return rfParam.editable end,
+            })
+        end
+    end)
+
+    -- Ortho row only shown when available
+    if orthoParam and orthoParam.allowed_mask > 0 and Protocol.paramFocusable(3) then
+        UI.mainControlRow1(ctrlBox, "Ortho:", function(parent)
+            local ofv, oo2f, of2o = UI.buildFilteredValues(orthoParam)
+            parent:choice({
+                values = ofv,
+                get = function() return oo2f[orthoParam.value] or 1 end,
+                set = function(val) orthoParam.value = of2o[val] or 0; Protocol.sendParamSet(3) end,
+                active = function() return orthoParam.editable end,
+            })
+        end)
+    end
+
     -- Setup layout warning
     if Protocol.DEVICE_ITEM_TX ~= nil and Protocol.DEVICE_ITEM_RX ~= nil and Protocol.connected and Protocol.DEVICE_PARAM_LIST_complete and
            (Protocol.DEVICE_ITEM_TX.setuplayout_int > 515 or Protocol.DEVICE_ITEM_RX.setuplayout_int > 515) then
@@ -1218,8 +1171,6 @@ function UI.buildMainPage()
             pg:build({{type="label", text="Rx param version < Tx. Update Rx firmware!", color=COLOR_THEME_PRIMARY1}})
         end
     end
-
-    pg:rectangle({w = lvgl.PERCENT_SIZE + 100, h = lvgl.PAD_SMALL, thickness = 0})
 end
 
 
@@ -1320,10 +1271,7 @@ end
 function UI.build()
     -- Close any open dialog before clearing - dialogs may be on a separate
     -- LVGL layer that lvgl.clear() does not destroy
-    if Dialogs.popup and Dialogs.popup.dialog then
-        Dialogs.popup.dialog:close()
-        Dialogs.popup = nil
-    end
+    Dialogs.clearBlocked()
     lvgl.clear()
 
     if App.page == "main" then
@@ -1441,11 +1389,11 @@ local function run(event, touchState)
     -- Connection state transitions
     if Protocol.has_connected then
         Protocol.clearParams()
-        if Dialogs.popup == nil then Dialogs.showPopup("Receiver connected!", 100) end
-        Dialogs.clearIfBlocked()
+        Protocol.DEVICE_BINDING = false
+        UI.setSubtitleMsg("Receiver connected!", 100)
     end
     if Protocol.has_disconnected then
-        if Dialogs.popup == nil then Dialogs.showPopup("Receiver\nhas disconnected!", 100) end
+        UI.setSubtitleMsg("Receiver disconnected!", 100)
     end
     if not Protocol.connected and App.page == "edit_rx" then
         App.switchPage("main")
@@ -1453,14 +1401,20 @@ local function run(event, touchState)
 
     Protocol.doParamLoop()
     Protocol.checkBind()
-    Dialogs.update()
+
+    -- Auto-reload params after save dead time expires
+    if Protocol.DEVICE_SAVE_reload_pending and getTime() > Protocol.DEVICE_SAVE_t_last + paramLoadDeadTime_10ms then
+        Protocol.DEVICE_SAVE_reload_pending = false
+        Protocol.clearParams()
+        UI.invalidate()
+    end
 
     -- CRSF baudrate warning on first param download
     if App.isFirstParamDownload and Protocol.DEVICE_DOWNLOAD_is_running then
         if App.firstParamDownloadTmo_10ms > 0 and getTime() > App.firstParamDownloadTmo_10ms then
             if not App.baudRateWarningShown then
                 App.baudRateWarningShown = true
-                Dialogs.showPopup("Please check if CRSF\nbaudrate is 400k!", 300)
+                UI.setSubtitleMsg("Check CRSF baudrate is 400k!", 300)
             end
             App.firstParamDownloadTmo_10ms = 0
         end
@@ -1477,7 +1431,7 @@ local function run(event, touchState)
     end
     UI.paramsWereComplete = paramsNowComplete
 
-    -- Build/rebuild UI when needed (skip while popup is showing)
+    -- Build/rebuild UI when needed (skip while blocked dialog is showing)
     if not UI.uiBuilt and Dialogs.popup == nil then
         UI.build()
     end
