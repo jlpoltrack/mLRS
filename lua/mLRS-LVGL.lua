@@ -925,8 +925,12 @@ end
 -- UI: Main page helpers (grid-aligned label:value pairs)
 ----------------------------------------------------------------------
 
-local ML = 40  -- label width % within a 50% half
-local MV = 60  -- value width % within a 50% half
+local ML = 25  -- label width % for full-width rows
+local MV = 75  -- value width % for full-width rows
+local ML2 = 40 -- left label width % within a 50% half (two-column rows)
+local MV2 = 60 -- left value width % within a 50% half (two-column rows)
+local ML2R = 22 -- right label width % within a 50% half
+local MV2R = 78 -- right value width % within a 50% half
 
 -- One label:value pair in the left half, right half empty
 function UI.mainRow1(pg, label, valueFn)
@@ -976,11 +980,11 @@ function UI.mainRow2(pg, label1, val1, label2, val2)
         flexFlow = lvgl.FLOW_ROW, flexPad = 0,
     })
     left:rectangle({
-        w = lvgl.PERCENT_SIZE + ML, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
+        w = lvgl.PERCENT_SIZE + ML2, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
         children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=label1, font=BOLD, color=BLACK}},
     })
     left:rectangle({
-        w = lvgl.PERCENT_SIZE + MV, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
+        w = lvgl.PERCENT_SIZE + MV2, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
         children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=val1}},
     })
     -- Right half
@@ -989,11 +993,11 @@ function UI.mainRow2(pg, label1, val1, label2, val2)
         flexFlow = lvgl.FLOW_ROW, flexPad = 0,
     })
     right:rectangle({
-        w = lvgl.PERCENT_SIZE + ML, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
+        w = lvgl.PERCENT_SIZE + ML2R, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
         children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=label2, font=BOLD, color=BLACK}},
     })
     right:rectangle({
-        w = lvgl.PERCENT_SIZE + MV, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
+        w = lvgl.PERCENT_SIZE + MV2R, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
         children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=val2}},
     })
 end
@@ -1010,11 +1014,11 @@ function UI.mainControlRow2(pg, label1, ctrl1Fn, label2, ctrl2Fn)
         flexFlow = lvgl.FLOW_ROW, flexPad = 0,
     })
     left:rectangle({
-        w = lvgl.PERCENT_SIZE + ML, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
+        w = lvgl.PERCENT_SIZE + ML2, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
         children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=label1, font=BOLD, color=BLACK}},
     })
     local leftCtrl = left:rectangle({
-        w = lvgl.PERCENT_SIZE + MV, thickness = 0,
+        w = lvgl.PERCENT_SIZE + MV2, thickness = 0,
         flexFlow = lvgl.FLOW_ROW, flexPad = 0,
     })
     ctrl1Fn(leftCtrl)
@@ -1024,11 +1028,11 @@ function UI.mainControlRow2(pg, label1, ctrl1Fn, label2, ctrl2Fn)
         flexFlow = lvgl.FLOW_ROW, flexPad = 0,
     })
     right:rectangle({
-        w = lvgl.PERCENT_SIZE + ML, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
+        w = lvgl.PERCENT_SIZE + ML2R, h = lvgl.UI_ELEMENT_HEIGHT, thickness = 0,
         children = {{type=lvgl.LABEL, y=lvgl.PAD_SMALL, text=label2, font=BOLD, color=BLACK}},
     })
     local rightCtrl = right:rectangle({
-        w = lvgl.PERCENT_SIZE + MV, thickness = 0,
+        w = lvgl.PERCENT_SIZE + MV2R, thickness = 0,
         flexFlow = lvgl.FLOW_ROW, flexPad = 0,
     })
     ctrl2Fn(rightCtrl)
@@ -1059,30 +1063,6 @@ function UI.buildMainPage()
         Dialogs.showVersionWarning("Rx version not supported by this Lua script!")
     end
 
-    -- Action buttons
-    local btnRow = pg:box({
-        w = lvgl.PERCENT_SIZE + 100, flexFlow = lvgl.FLOW_ROW,
-        flexPad = lvgl.PAD_TINY,
-    })
-    btnRow:button({ text = "Edit Tx", w = lvgl.PERCENT_SIZE + 16, press = function()
-        if Protocol.DEVICE_PARAM_LIST_complete then App.switchPage("edit_tx") end
-    end })
-    btnRow:button({ text = "Edit Rx", w = lvgl.PERCENT_SIZE + 16, press = function()
-        if Protocol.DEVICE_PARAM_LIST_complete and Protocol.connected then App.switchPage("edit_rx") end
-    end, active = function() return Protocol.connected and Protocol.DEVICE_PARAM_LIST_complete end })
-    btnRow:button({ text = "Save", w = lvgl.PERCENT_SIZE + 16, press = function()
-        if Protocol.DEVICE_PARAM_LIST_complete then Protocol.sendParamStore() end
-    end })
-    btnRow:button({ text = "Reload", w = lvgl.PERCENT_SIZE + 16, press = function()
-        Protocol.clearParams(); UI.invalidate()
-    end })
-    btnRow:button({ text = "Bind", w = lvgl.PERCENT_SIZE + 16, press = function()
-        Protocol.sendBind()
-    end })
-    btnRow:button({ text = "Tools", w = lvgl.PERCENT_SIZE + 16, press = function()
-        if Protocol.DEVICE_PARAM_LIST_complete then App.switchPage("tools") end
-    end })
-
     -- Tx, Rx, Bind Phrase, Mode, RF Band, Ortho (consistent spacing)
     local ctrlBox = pg:box({
         w = lvgl.PERCENT_SIZE + 100, flexFlow = lvgl.FLOW_COLUMN, flexPad = 5,
@@ -1105,7 +1085,7 @@ function UI.buildMainPage()
     local rfParam = Protocol.DEVICE_PARAM_LIST_complete and Protocol.DEVICE_PARAM_LIST[2] or nil
     local orthoParam = Protocol.DEVICE_PARAM_LIST_complete and Protocol.DEVICE_PARAM_LIST[3] or nil
 
-    UI.mainControlRow1(ctrlBox, "Bind Phrase:", function(parent)
+    UI.mainControlRow2(ctrlBox, "Bind Phrase:", function(parent)
         if bpParam then
             parent:textEdit({
                 value = bpParam.value or "",
@@ -1123,9 +1103,7 @@ function UI.buildMainPage()
                 end,
             })
         end
-    end)
-
-    UI.mainControlRow1(ctrlBox, "Mode:", function(parent)
+    end, "Mode:", function(parent)
         if modeParam and Protocol.paramFocusable(1) then
             local mfv, mo2f, mf2o = UI.buildFilteredValues(modeParam)
             parent:choice({
@@ -1137,7 +1115,7 @@ function UI.buildMainPage()
         end
     end)
 
-    UI.mainControlRow1(ctrlBox, "RF Band:", function(parent)
+    UI.mainControlRow2(ctrlBox, "RF Band:", function(parent)
         if rfParam and Protocol.paramFocusable(2) then
             local rfv, ro2f, rf2o = UI.buildFilteredValues(rfParam, freq_band_list)
             parent:choice({
@@ -1147,11 +1125,8 @@ function UI.buildMainPage()
                 active = function() return rfParam.editable end,
             })
         end
-    end)
-
-    -- Ortho row only shown when available
-    if orthoParam and orthoParam.allowed_mask > 0 and Protocol.paramFocusable(3) then
-        UI.mainControlRow1(ctrlBox, "Ortho:", function(parent)
+    end, "Ortho:", function(parent)
+        if orthoParam and orthoParam.allowed_mask > 0 and Protocol.paramFocusable(3) then
             local ofv, oo2f, of2o = UI.buildFilteredValues(orthoParam)
             parent:choice({
                 values = ofv,
@@ -1159,8 +1134,8 @@ function UI.buildMainPage()
                 set = function(val) orthoParam.value = of2o[val] or 0; Protocol.sendParamSet(3) end,
                 active = function() return orthoParam.editable end,
             })
-        end)
-    end
+        end
+    end)
 
     -- Setup layout warning
     if Protocol.DEVICE_ITEM_TX ~= nil and Protocol.DEVICE_ITEM_RX ~= nil and Protocol.connected and Protocol.DEVICE_PARAM_LIST_complete and
@@ -1171,6 +1146,30 @@ function UI.buildMainPage()
             pg:build({{type="label", text="Rx param version < Tx. Update Rx firmware!", color=COLOR_THEME_PRIMARY1}})
         end
     end
+
+    -- Action buttons (at bottom)
+    local btnRow = pg:box({
+        w = lvgl.PERCENT_SIZE + 100, flexFlow = lvgl.FLOW_ROW,
+        flexPad = lvgl.PAD_TINY,
+    })
+    btnRow:button({ text = "Edit Tx", w = lvgl.PERCENT_SIZE + 16, press = function()
+        if Protocol.DEVICE_PARAM_LIST_complete then App.switchPage("edit_tx") end
+    end })
+    btnRow:button({ text = "Edit Rx", w = lvgl.PERCENT_SIZE + 16, press = function()
+        if Protocol.DEVICE_PARAM_LIST_complete and Protocol.connected then App.switchPage("edit_rx") end
+    end, active = function() return Protocol.connected and Protocol.DEVICE_PARAM_LIST_complete end })
+    btnRow:button({ text = "Save", w = lvgl.PERCENT_SIZE + 16, press = function()
+        if Protocol.DEVICE_PARAM_LIST_complete then Protocol.sendParamStore() end
+    end })
+    btnRow:button({ text = "Reload", w = lvgl.PERCENT_SIZE + 16, press = function()
+        Protocol.clearParams(); UI.invalidate()
+    end })
+    btnRow:button({ text = "Bind", w = lvgl.PERCENT_SIZE + 16, press = function()
+        Protocol.sendBind()
+    end })
+    btnRow:button({ text = "Tools", w = lvgl.PERCENT_SIZE + 16, press = function()
+        if Protocol.DEVICE_PARAM_LIST_complete then App.switchPage("tools") end
+    end })
 end
 
 
@@ -1299,6 +1298,217 @@ end
 
 
 -- ============================================================================
+-- Mock data for EdgeTX Companion simulator
+-- ============================================================================
+
+local function setMock()
+    local _, rv = getVersion()
+    if string.sub(rv, -5) ~= "-simu" then return end
+
+    -- Parameter set based on mLRS PARAMETERS.md documentation
+    local mockParams = {
+        -- Common parameters (shown on main page)
+        [0]  = {typ=5, name="Bind Phrase",      value="mlrs.1"},
+        [1]  = {typ=4, name="Mode",             value=0, options="50 Hz,31 Hz,19 Hz",  mask=7},
+        [2]  = {typ=4, name="RF Band",          value=0, options="2.4 GHz,915 MHz FCC", mask=3},
+        [3]  = {typ=4, name="Ortho",            value=0, options="off,1/3,2/3,3/3",     mask=15},
+        -- Tx parameters
+        [4]  = {typ=4, name="Tx Power",         value=2, options="10 mW,50 mW,100 mW",  mask=7},
+        [5]  = {typ=4, name="Tx Diversity",     value=0, options="enabled,antenna1,antenna2,r:en. t:ant1,r:en. t:ant2", mask=31},
+        [6]  = {typ=4, name="Tx Ch Source",     value=1, options="none,crsf,in,mbridge", mask=15},
+        [7]  = {typ=4, name="Tx Ch Order",      value=0, options="AETR,TAER,ETAR",      mask=7},
+        [8]  = {typ=4, name="Tx In Mode",       value=0, options="sbus,sbus inv",        mask=3},
+        [9]  = {typ=4, name="Tx Ser Dest",      value=0, options="serial,serial2,mbridge", mask=7},
+        [10] = {typ=4, name="Tx Ser Baudrate",  value=4, options="9600,19200,38400,57600,115200,230400", mask=63},
+        [11] = {typ=4, name="Tx Snd RadioStat", value=0, options="off,1 Hz",            mask=3},
+        [12] = {typ=4, name="Tx Buzzer",        value=0, options="off,LP,rxLQ",          mask=7},
+        -- Rx parameters
+        [13] = {typ=4, name="Rx Power",         value=2, options="10 mW,50 mW,100 mW",  mask=7},
+        [14] = {typ=4, name="Rx Diversity",     value=0, options="enabled,antenna1,antenna2,r:en. t:ant1,r:en. t:ant2", mask=31},
+        [15] = {typ=4, name="Rx Ch Order",      value=0, options="AETR,TAER,ETAR",      mask=7},
+        [16] = {typ=4, name="Rx Out Mode",      value=0, options="sbus,crsf,sbus inv",  mask=7},
+        [17] = {typ=4, name="Rx FailSafe Mode", value=0, options="no sig,low thr,by cnf,low thr cnt,ch1ch4 cnt", mask=31},
+        [18] = {typ=4, name="Rx Ser Baudrate",  value=3, options="9600,19200,38400,57600,115200,230400", mask=63},
+        [19] = {typ=4, name="Rx Ser Link Mode", value=0, options="transp.,mavlink,mavlinkX,mspX", mask=15},
+        [20] = {typ=4, name="Rx Out Rssi Ch",   value=0, options="off,5,6,7,8,9,10,11,12,13,14,15,16", mask=8191},
+        [21] = {typ=4, name="Rx Out LQ Ch",     value=0, options="off,5,6,7,8,9,10,11,12,13,14,15,16", mask=8191},
+        [22] = {typ=4, name="Rx Buzzer",        value=0, options="off,LP",               mask=3},
+    }
+    local MOCK_PARAM_COUNT = 23
+
+    -- Version v1.4.01: (1<<12)|(4<<6)|1
+    local VER_U16 = 4353
+    -- Setup layout v0.5.15: (0<<12)|(5<<6)|15  ->  setuplayout_int = 515
+    local LAYOUT_U16 = 335
+
+    local responseQueue = {}
+
+    local function enqueue(cmd, payload)
+        responseQueue[#responseQueue + 1] = {
+            cmd = cmd,
+            len = MBRIDGE_CMD_LEN[cmd] or 24,
+            payload = payload,
+        }
+    end
+
+    local function encStr(p, pos, str, maxLen)
+        for i = 0, maxLen - 1 do
+            if i < #str then
+                p[pos + i] = string.byte(str, i + 1)
+            else
+                p[pos + i] = 0
+            end
+        end
+    end
+
+    local function encU16(p, pos, val)
+        p[pos]     = bit32.band(val, 0xFF)
+        p[pos + 1] = bit32.rshift(val, 8)
+    end
+
+    local function buildDeviceItem(name)
+        local p = {}
+        encU16(p, 0, VER_U16)
+        encU16(p, 2, LAYOUT_U16)
+        encStr(p, 4, name, 20)
+        return p
+    end
+
+    local function buildInfo()
+        local p = {}
+        encU16(p, 0, 65424)     -- receiver_sensitivity = -112 dBm (as u16)
+        p[2] = 1                -- has_status=1, binding=0
+        p[3] = 20               -- tx_power_dbm
+        p[4] = 14               -- rx_power_dbm
+        p[5] = 1                -- rx_available
+        p[6] = 42               -- tx_config_id
+        p[7] = 0                -- diversity flags
+        p[8] = MOCK_PARAM_COUNT
+        for i = 9, 23 do p[i] = 0 end
+        return p
+    end
+
+    local function buildParamItem(idx)
+        local mp = mockParams[idx]
+        if not mp then return nil end
+        local p = {}
+        p[0] = idx
+        p[1] = mp.typ
+        encStr(p, 2, mp.name, 16)
+        if mp.typ == MBRIDGE_PARAM_TYPE.STR6 then
+            encStr(p, 18, mp.value, 6)
+        else
+            p[18] = (type(mp.value) == "number") and mp.value or 0
+            for i = 19, 23 do p[i] = 0 end
+        end
+        return p
+    end
+
+    local function buildParamItem2(idx)
+        local mp = mockParams[idx]
+        if not mp then return nil end
+        local p = {}
+        p[0] = idx
+        if mp.typ == MBRIDGE_PARAM_TYPE.LIST then
+            encU16(p, 1, mp.mask)
+            encStr(p, 3, mp.options, 21)
+        elseif mp.typ < MBRIDGE_PARAM_TYPE.LIST then
+            p[1] = mp.min or 0; p[2] = 0
+            p[3] = mp.max or 0; p[4] = 0
+            p[5] = 0; p[6] = 0
+            encStr(p, 7, mp.unit or "", 6)
+            for i = 13, 23 do p[i] = 0 end
+        else -- STR6
+            for i = 1, 23 do p[i] = 0 end
+        end
+        return p
+    end
+
+    -- ITEM3: continuation bytes for LIST options > 20 chars
+    local function buildItem3(idx, opts)
+        local p = {}
+        p[0] = idx
+        for i = 0, 22 do
+            local si = 21 + i
+            if si < #opts then
+                p[1 + i] = string.byte(opts, si + 1)
+            else
+                p[1 + i] = 0
+            end
+        end
+        return p
+    end
+
+    -- ITEM4: continuation bytes for LIST options > 43 chars
+    local function buildItem4(idx, opts)
+        local p = {}
+        p[0] = idx + 128
+        for i = 0, 22 do
+            local si = 44 + i
+            if si < #opts then
+                p[1 + i] = string.byte(opts, si + 1)
+            else
+                p[1 + i] = 0
+            end
+        end
+        return p
+    end
+
+    Protocol.isConnected = function() return true end
+
+    Protocol.cmdPush = function(cmd, payload)
+        if cmd == MBRIDGE_CMD.REQUEST_INFO then
+            enqueue(MBRIDGE_CMD.DEVICE_ITEM_TX, buildDeviceItem("Mock Tx Module"))
+            enqueue(MBRIDGE_CMD.DEVICE_ITEM_RX, buildDeviceItem("Mock Rx Module"))
+            enqueue(MBRIDGE_CMD.INFO, buildInfo())
+        elseif cmd == MBRIDGE_CMD.REQUEST_CMD then
+            local paramIdx = payload[2]
+            if mockParams[paramIdx] then
+                enqueue(MBRIDGE_CMD.PARAM_ITEM, buildParamItem(paramIdx))
+                enqueue(MBRIDGE_CMD.PARAM_ITEM2, buildParamItem2(paramIdx))
+                -- Queue ITEM3/ITEM4 for LIST options that overflow ITEM2's 21 bytes
+                local mp = mockParams[paramIdx]
+                if mp.typ == MBRIDGE_PARAM_TYPE.LIST and mp.options and #mp.options >= 21 then
+                    enqueue(MBRIDGE_CMD.PARAM_ITEM3_4, buildItem3(paramIdx, mp.options))
+                    if #mp.options >= 44 then
+                        enqueue(MBRIDGE_CMD.PARAM_ITEM3_4, buildItem4(paramIdx, mp.options))
+                    end
+                end
+            else
+                -- End-of-list marker
+                local eol = {}; eol[0] = 255
+                for i = 1, 23 do eol[i] = 0 end
+                enqueue(MBRIDGE_CMD.PARAM_ITEM, eol)
+            end
+        elseif cmd == MBRIDGE_CMD.PARAM_SET then
+            local idx = payload[1]
+            if mockParams[idx] then
+                if mockParams[idx].typ == MBRIDGE_PARAM_TYPE.STR6 then
+                    local s = ""
+                    for i = 2, 7 do
+                        if payload[i] and payload[i] > 0 then
+                            s = s .. string.char(payload[i])
+                        end
+                    end
+                    mockParams[idx].value = s
+                else
+                    mockParams[idx].value = payload[2] or 0
+                end
+            end
+        end
+        -- PARAM_STORE, BIND_START, etc: silently accepted
+    end
+
+    Protocol.cmdPop = function()
+        if #responseQueue > 0 then
+            return table.remove(responseQueue, 1)
+        end
+        return nil
+    end
+end
+
+
+-- ============================================================================
 -- LVGL support check fallback
 -- ============================================================================
 
@@ -1320,6 +1530,7 @@ local function init()
     end
 
     Protocol.setupBridge()
+    setMock()
 
     local tnow_10ms = getTime()
 
