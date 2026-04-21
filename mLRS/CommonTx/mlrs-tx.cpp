@@ -26,7 +26,8 @@
 #define BUZZER_TIM_IRQ_PRIORITY     14
 
 #include "../Common/common_conf.h"
-#include "../Common/common_types.h"
+#include "../Common/common_types.h" // includes setup_types.h
+#include "../Common/sx-drivers/sx12xx.h"
 
 #if defined ESP8266 || defined ESP32
 
@@ -106,7 +107,6 @@
 
 #endif //#if defined ESP8266 || defined ESP32
 
-#include "../Common/sx-drivers/sx12xx.h"
 #include "../Common/mavlink/fmav.h"
 #include "../Common/setup.h"
 #include "../Common/common.h"

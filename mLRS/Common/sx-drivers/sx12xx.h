@@ -26,8 +26,7 @@
 #elif defined DEVICE_HAS_LR11xx
   #include "../../modules/sx12xx-lib/src/lr11xx.h"
 #elif defined DEVICE_HAS_LR20xx
-//XX  #include "../../modules/sx12xx-lib/src/lr20xx.h"
-  #include "lr20xx.h"
+  #include "../../modules/sx12xx-lib/src/lr20xx.h"
 #else
   #include "../../modules/sx12xx-lib/src/sx128x.h"
 #endif

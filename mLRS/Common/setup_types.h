@@ -12,8 +12,6 @@
 
 
 #include <stdint.h>
-#include "common_conf.h"
-#include "hal/device_conf.h"
 
 
 //-------------------------------------------------------
