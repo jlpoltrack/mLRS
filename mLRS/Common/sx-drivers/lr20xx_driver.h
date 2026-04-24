@@ -294,9 +294,9 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
         SetDefaultRxTxTimeout(0, 0);
 
         if (gconfig->FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {
-            SetRxPath(LR20XX_RX_PATH_HF, LR20XX_RX_BOOST_4_HF);
+            SetRxPath(LR20XX_RX_PATH_HF, LR20XX_RX_BOOST_7);
         } else {
-            SetRxPath(LR20XX_RX_PATH_LF, LR20XX_RX_BOOST_0_LF); // hm, table 3-17 says rx_boost = 7
+            SetRxPath(LR20XX_RX_PATH_LF, LR20XX_RX_BOOST_7); // hm, table 3-17 says rx_boost = 7
         }
 
         // calibrations
