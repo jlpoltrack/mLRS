@@ -204,7 +204,7 @@ void pio_uart_irq_handler(void) {
                 g_pin5_bridge->state = tPin5BridgeBase::STATE_IDLE;
             } else if (g_pin5_bridge->transmit_start()) {
                 g_pin5_bridge->state = tPin5BridgeBase::STATE_TRANSMIT_PENDING;
-                add_alarm_in_us(100, tx_turnaround_alarm_callback, NULL, true);
+                add_alarm_in_us(250, tx_turnaround_alarm_callback, NULL, true);
             } else {
                 g_pin5_bridge->state = tPin5BridgeBase::STATE_IDLE;
             }
