@@ -36,6 +36,7 @@ typedef enum {
     TXCRSF_SEND_LINK_STATISTICS = 0,
     TXCRSF_SEND_LINK_STATISTICS_TX,
     TXCRSF_SEND_LINK_STATISTICS_RX,
+    TXCRSF_SEND_LINK_STATISTICS_ALL,
     TXCRSF_SEND_TELEMETRY_FRAME, // native or passthrough telemetry frame
     TXCRSF_SEND_DEVICE_INFO,
 } TXCRSF_SEND_ENUM;
@@ -69,6 +70,7 @@ class tTxCrsf : public tPin5BridgeBase
     void SendLinkStatisticsTx(void);
     void SendLinkStatisticsRx(void);
     void SendDeviceInfo(void);
+    void SendLinkStatisticsAll(void);
 
     void SendMBridgeFrame(void* const payload, uint8_t payload_len);
 
@@ -398,9 +400,8 @@ bool tTxCrsf::TelemetryUpdate(uint8_t* const task, uint16_t frame_rate_ms)
         // slow it down if frame time is too short
         if (frame_rate_ms <= 19) {
             static uint8_t cnt = 0;
+            DECc(cnt, 2);
             if (!cnt) telemetry_state = 0;
-            cnt++;
-            if (cnt > 2) cnt = 0;
         } else {
             telemetry_state = 0;
         }
@@ -412,15 +413,21 @@ bool tTxCrsf::TelemetryUpdate(uint8_t* const task, uint16_t frame_rate_ms)
 
     // now determine what to transmit
     // frame rate is
-    //   20 ms -> ca 5  = 3  + 2
-    //   32 ms -> ca 8  = 3 + 5
-    //   53 ms -> ca 13 = 3 + 10
-    //   7 ms  -> 3x = 21 ms -> ca 5 = 3 + 2
+    //   50 Hz:  20 ms -> ca 5  = 3 + 2
+    //   31 Hz:  32 ms -> ca 8  = 3 + 5
+    //   19 Hz:  53 ms -> ca 13 = 3 + 10
+    //   111 Hz:  9 ms -> 3x = 27 ms -> ca 6 = 3 + 3
 
+    /* this is what it was before, keep it for now just in case 
     switch (curr_telemetry_state) {
         case 0: *task = TXCRSF_SEND_LINK_STATISTICS; return true;
         case 1: *task = TXCRSF_SEND_LINK_STATISTICS_TX; return true;
         case 2: *task = TXCRSF_SEND_LINK_STATISTICS_RX; return true;
+    } */
+
+    if (curr_telemetry_state == 0) {
+        *task = TXCRSF_SEND_LINK_STATISTICS_ALL;
+        return true;
     }
 
     // if we got a PING_DEVICE, send a DEVICE_INFO instead of a telemetry frame
@@ -1059,6 +1066,28 @@ char buf[64]; // DEVICE_NAME is limited to 20 chars max, so this is plenty of sp
     dvif_ptr->parameter_version_number = 0;
 
     send_frame(CRSF_FRAME_ID_DEVICE_INFO, buf, len + CRSF_DEVICE_INFO_FRAGMENT_LEN);
+}
+
+
+void tTxCrsf::SendLinkStatisticsAll(void)
+{
+    uint8_t tx_frame_all[64];
+    uint8_t tx_available_all;
+
+    SendLinkStatistics();
+    memcpy(tx_frame_all, tx_frame, tx_available);
+    tx_available_all = tx_available;
+
+    SendLinkStatisticsTx();
+    memcpy(tx_frame_all + tx_available_all, tx_frame, tx_available);
+    tx_available_all += tx_available;
+
+    SendLinkStatisticsRx();
+    memcpy(tx_frame_all + tx_available_all, tx_frame, tx_available);
+    tx_available_all += tx_available;
+
+    memcpy(tx_frame, tx_frame_all, tx_available_all);
+    tx_available = tx_available_all;
 }
 
 
