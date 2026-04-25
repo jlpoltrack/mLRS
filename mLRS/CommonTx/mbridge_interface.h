@@ -20,6 +20,7 @@
 
 
 extern uint16_t micros16(void);
+extern volatile uint32_t millis32(void);
 extern bool connected(void);
 extern uint8_t mavlink_vehicle_state(void);
 extern tStats stats;
@@ -96,6 +97,7 @@ class tMBridge : public tPin5BridgeBase, public tSerialBase
     // for communication
     tFifo<uint8_t,128> cmd_fifo; // TODO: how large does it really need to be?
     uint8_t cmd_in_process;
+    uint32_t cmd_processed_tlast_ms;
     uint8_t ack_cmd;
     bool ack_ok;
 
@@ -339,6 +341,7 @@ void tMBridge::Init(bool enable_flag, bool crsf_emulation_flag)
 
     cmd_fifo.Init();
     cmd_in_process = 0;
+    cmd_processed_tlast_ms = 0;
 
     if (!crsf_emulation) {
         uart_rx_callback_ptr = &mbridge_pin5_rx_callback;
@@ -454,6 +457,14 @@ bool tMBridge::CommandInFifo(uint8_t* const cmd)
     if (cmd_in_process) return false;
 
     if (!cmd_fifo.Available()) return false;
+
+    // before this was attempted by do_cnt in the main loop
+    // cleaner and more precise so now
+    // on F4 radios seems not to be needed anymore since lua was changed to request-response
+    // on H7 EdgeTx radios, without lua has startup problems (errors out with CRSF not 400k)
+    uint32_t tnow_ms = millis32();
+    if (crsf_emulation && (cmd_processed_tlast_ms - tnow_ms < 10)) return false; // don't do too fast
+    cmd_processed_tlast_ms = tnow_ms;
 
     cmd_in_process = 0;
 
