@@ -32,6 +32,8 @@ extern tStats stats;
 //-------------------------------------------------------
 // Interface Implementation
 
+#define CRSF_BUF_SIZE  (CRSF_FRAME_LEN_MAX + 16)
+
 typedef enum {
     TXCRSF_SEND_LINK_STATISTICS = 0,
     TXCRSF_SEND_LINK_STATISTICS_TX,
@@ -88,7 +90,7 @@ class tTxCrsf : public tPin5BridgeBase
 
     bool enabled;
 
-    uint8_t frame[CRSF_FRAME_LEN_MAX + 16];
+    uint8_t frame[CRSF_BUF_SIZE];
     volatile bool channels_received;
     volatile bool cmd_received;
     volatile bool ping_device_received;
@@ -230,7 +232,7 @@ void tTxCrsf::parse_nextchar(uint8_t c)
         break;
 
     case STATE_RECEIVE_CRSF_LEN:
-        if (c >= (CRSF_FRAME_LEN_MAX-2)) { state = STATE_IDLE; break; }
+        if (c >= (CRSF_FRAME_LEN_MAX - 2)) { state = STATE_IDLE; break; } // cannot be a valid CRSF frame
         frame[cnt++] = c;
         len = c;
         state = STATE_RECEIVE_CRSF_PAYLOAD;
@@ -1050,7 +1052,7 @@ uint32_t version_to_u32(uint32_t version)
 
 void tTxCrsf::SendDeviceInfo(void)
 {
-char buf[64]; // DEVICE_NAME is limited to 20 chars max, so this is plenty of space
+char buf[CRSF_BUF_SIZE]; // DEVICE_NAME is limited to 20 chars max, so this is plenty of space
 
     // extended frame, so need to send destination and origin addresses
     buf[0] = CRSF_ADDRESS_RADIO; // destination address, ignored by EdgeTx (ELRS uses BROADCAST)
@@ -1072,8 +1074,8 @@ char buf[64]; // DEVICE_NAME is limited to 20 chars max, so this is plenty of sp
 
 void tTxCrsf::SendLinkStatisticsAll(void)
 {
-    uint8_t tx_frame_all[64];
-    uint8_t tx_available_all;
+uint8_t tx_frame_all[CRSF_BUF_SIZE];
+uint8_t tx_available_all;
 
     SendLinkStatistics();
     memcpy(tx_frame_all, tx_frame, tx_available);
