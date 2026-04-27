@@ -230,6 +230,7 @@ void tTxCrsf::parse_nextchar(uint8_t c)
         break;
 
     case STATE_RECEIVE_CRSF_LEN:
+        if (c >= (CRSF_FRAME_LEN_MAX-2)) { state = STATE_IDLE; break; }
         frame[cnt++] = c;
         len = c;
         state = STATE_RECEIVE_CRSF_PAYLOAD;
@@ -418,8 +419,8 @@ bool tTxCrsf::TelemetryUpdate(uint8_t* const task, uint16_t frame_rate_ms)
     //   19 Hz:  53 ms -> ca 13 = 3 + 10
     //   111 Hz:  9 ms -> 3x = 27 ms -> ca 6 = 3 + 3
 
-    /* this is what it was before, keep it for now just in case 
-    switch (curr_telemetry_state) {
+    // this is what it was before, keep it for now just in case
+/*    switch (curr_telemetry_state) {
         case 0: *task = TXCRSF_SEND_LINK_STATISTICS; return true;
         case 1: *task = TXCRSF_SEND_LINK_STATISTICS_TX; return true;
         case 2: *task = TXCRSF_SEND_LINK_STATISTICS_RX; return true;
