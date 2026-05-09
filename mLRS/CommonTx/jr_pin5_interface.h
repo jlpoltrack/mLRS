@@ -345,7 +345,7 @@ void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
 
     if (transmit_start()) { // check if a transmission waits, put it into buf and return true to start
         if (txclock.HasCC1Callback()) {
-            txclock.StartCC1Delay(100); // 100 us delay, should be plenty, EdgeTx say 70 us or so is safe
+            txclock.StartCC1Delay(250); // 100 us delay, should be plenty, EdgeTx say 70 us or so is safe // 100 us was not sufficient on H7
             state = STATE_TRANSMIT_PENDING;
         } else {
             pin5_tx_enable();
