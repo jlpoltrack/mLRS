@@ -477,7 +477,7 @@ RESTARTCONTROLLER
     tx_frames_cnt = 0;
     rx_frames_cnt = 0;
 
-    rxclock.Init(2 * Config.frame_rate_ms);
+    rxclock.Init(Config.frame_rate_ms);
 
     tick_1hz = 0;
     resetSysTask();
@@ -498,8 +498,6 @@ INITCONTROLLER_END
         if (link_state == LINK_STATE_RECEIVE_WAIT &&
             got_tx_frame &&
             (uwTick - tx_frame_tick) >= (Config.frame_rate_ms / 2)) {
-            decoder_tx.Reset();
-            decoder_rx.Reset();
             do_hop();
         }
 
@@ -603,10 +601,6 @@ IF_SX(
         if (got_tx_frame) {
             return;
         }
-
-        // reset parser state so partial parses don't carry across gaps
-        decoder_tx.Reset();
-        decoder_rx.Reset();
 
         // LISTEN: hop slowly through frequencies
         if (connect_state == CONNECT_STATE_LISTEN) {
