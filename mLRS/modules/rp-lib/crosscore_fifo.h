@@ -76,6 +76,7 @@ class tCrossCoreFifo
 
     T Get(void) {
         if (head == tail) return 0;
+        __dmb();  // order the head read before the data read
         T c = buf[tail];
         __dmb();
         tail = (tail + 1) & MASK;
@@ -89,6 +90,7 @@ class tCrossCoreFifo
         uint16_t avail = (h - t) & MASK;
         if (len > avail) len = avail;
         if (len == 0) return 0;
+        __dmb();  // order the head read before the data reads
 
         // read in up to two chunks (wrap-around)
         uint16_t to_end = SIZE - t;

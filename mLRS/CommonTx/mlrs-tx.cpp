@@ -752,6 +752,7 @@ RESTARTCONTROLLER
     info.Init();
 #ifdef DEVICE_HAS_CYW_WIFI
     strncpy(info.wireless.device_name, wifi_ssid(), sizeof(info.wireless.device_name)-1);
+    info.wireless.device_id = wifi_device_id();
 #endif
 
     // start up sx

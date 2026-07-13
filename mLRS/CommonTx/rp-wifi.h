@@ -38,7 +38,7 @@
 #define WIFI_UDP_PAYLOAD_LEN_MAX  1400    // keep a UDP datagram within one ethernet frame
 
 // UDP STA: WiFi network to join, leave "" for the defaults, which are (like the esp bridge)
-// - network name "mLRS STA UDP XXXX" (XXXX from serial number, published via info.wireless)
+// - network name "mLRS-13427 STA UDP" (id from serial number, published via info.wireless)
 // - network password "mLRS-<bindphrase>", e.g. "mLRS-mlrs.0"
 // so a phone hotspot can be set up to match without touching the code
 #define WIFI_STA_NETWORK_SSID     ""
@@ -193,7 +193,9 @@ class tTxWifiNative : public tSerialBase
     {
         if (tx_flush_request) {
             tx_flush_request = false;
+            __disable_irq(); // BLE also drains tx_fifo from btstack irq context, keep the flush atomic
             tx_fifo.Flush();
+            __enable_irq();
         }
 
         switch (protocol) {
@@ -477,6 +479,11 @@ class tTxWifiNative : public tSerialBase
         tcp_recv(newpcb, tcp_recv_callback);
         tcp_err(newpcb, tcp_err_callback);
         tcp_nagle_disable(newpcb);
+        // keepalive, so a silently vanished client is aborted by the stack and frees the single slot
+        ip_set_option(newpcb, SOF_KEEPALIVE);
+        newpcb->keep_idle = 5000; // ms, probe after 5 s idle
+        newpcb->keep_intvl = 2000; // ms, then every 2 s
+        newpcb->keep_cnt = 4; // aborted (-> tcp_err_callback) after ~13 s
         self->tcp_client_pcb = newpcb;
         return ERR_OK;
     }
@@ -563,6 +570,7 @@ static bool wifi_initialized = false;  // Core 0 local state
 static uint8_t wifi_cfg_protocol;
 static uint8_t wifi_cfg_channel;
 static uint8_t wifi_cfg_power;
+static uint16_t wifi_cfg_device_id = 0;  // device id as used in the name
 static char wifi_cfg_name[32+1] = "";  // AP ssid / STA network name / BT,BLE device name
 static char wifi_cfg_password[64] = "";  // STA network password
 
@@ -573,30 +581,41 @@ static const char* wifi_ssid(void) // "" when the wireless bridge is not enabled
 }
 
 
+static uint16_t wifi_device_id(void) // 0 when the wireless bridge is not enabled
+{
+    return wifi_cfg_device_id;
+}
+
+
 // called from main_loop() on Core 1 during init
 void wifi_init(void)
 {
-    if (Setup.Tx[Config.ConfigId].SerialPort != TX_SERIAL_PORT_WIRELESS_BRIDGE) return;
+    if (Setup.Tx[Config.ConfigId].SerialPort != TX_SERIAL_PORT_WIRELESS_BRIDGE &&
+        Setup.Tx[Config.ConfigId].SerialPort2 != TX_SERIAL_PORT2_WIRELESS_BRIDGE) return;
 
     wifi_cfg_protocol = Setup.Tx[Config.ConfigId].WifiProtocol;
     wifi_cfg_channel = Setup.Tx[Config.ConfigId].WifiChannel;
     wifi_cfg_power = Setup.Tx[Config.ConfigId].WifiPower;
 
+    // device id like the esp bridge computes from its MAC, here from the unique serial number
     uint8_t sn[8];
     mcu_serial_number(sn);
-    char sn_str[5];
-    snprintf(sn_str, sizeof(sn_str), "%02X%02X", sn[6], sn[7]);
+    uint16_t device_id = 0;
+    for (uint8_t i = 2; i < 7; i++) device_id += sn[i] + ((uint16_t)sn[i + 1] << 8) / 39;
+    device_id += sn[7];
+    wifi_cfg_device_id = device_id;
 
-    // device resp. network name, also published via info.wireless
+    // device resp. network name, named like the esp bridge (e.g. "mLRS-13427 AP UDP"),
+    // also published via info.wireless
     switch (wifi_cfg_protocol) {
     case WIFI_PROTOCOL_TCP:
-        snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS AP TCP %s", sn_str);
+        snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS-%u AP TCP", device_id);
         break;
     case WIFI_PROTOCOL_UDPSTA:
         if (WIFI_STA_NETWORK_SSID[0] != '\0') {
             snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "%s", WIFI_STA_NETWORK_SSID);
         } else {
-            snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS STA UDP %s", sn_str);
+            snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS-%u STA UDP", device_id);
         }
         if (WIFI_STA_NETWORK_PASSWORD[0] != '\0') {
             snprintf(wifi_cfg_password, sizeof(wifi_cfg_password), "%s", WIFI_STA_NETWORK_PASSWORD);
@@ -605,13 +624,13 @@ void wifi_init(void)
         }
         break;
     case WIFI_PROTOCOL_BT:
-        snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS BT %s", sn_str);
+        snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS-%u BT", device_id);
         break;
     case WIFI_PROTOCOL_BLE:
-        snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS BLE %s", sn_str);
+        snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS-%u BLE", device_id);
         break;
     default: // WIFI_PROTOCOL_UDP
-        snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS AP UDP %s", sn_str);
+        snprintf(wifi_cfg_name, sizeof(wifi_cfg_name), "mLRS-%u AP UDP", device_id);
         break;
     }
 

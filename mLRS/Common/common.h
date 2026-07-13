@@ -84,7 +84,7 @@ class tUsbPort : public tSerialBase
 // tx: serial2 or wireless bridge
 class tUartDPort : public tSerialBase
 {
-#ifdef USE_SERIAL2 // DEVICE_HAS_SERIAL2 || USE_WIRELESS_BRIDGE
+#ifdef USE_SERIAL2 // DEVICE_HAS_SERIAL2 or uart wireless bridge (the on-chip CYW wifi bridge does not use uartd)
   public:
     void Init(void) override { uartd_init(); }
     void SetBaudRate(uint32_t baud) override { uartd_setprotocol(baud, XUART_PARITY_NO, UART_STOPBIT_1); }
