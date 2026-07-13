@@ -177,6 +177,13 @@
   #define FREQUENCY_BAND_2P4_GHZ
 #endif
 
+#ifdef RX_DAKEFPV_2400_1W_C3_LR1121_ESP32C3
+  #define DEVICE_NAME "DakeFPV 1W 2400"
+  #define DEVICE_IS_RECEIVER
+  #define DEVICE_HAS_LR11xx
+  #define FREQUENCY_BAND_2P4_GHZ
+#endif
+
 
 //-- ELRS Tx Modules (external)
 
