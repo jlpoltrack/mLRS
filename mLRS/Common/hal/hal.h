@@ -61,7 +61,7 @@ In tx-hal files:
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_BUTTON2_FLASH    // board has button used to enter ESP flash mode
 #define DEVICE_HAS_HC04_MODULE      // board has HC04 module
 #define DEVICE_HAS_I2C_DISPLAY          // board has a DISPLAY on I2C, and 5-way switch
-#define DEVICE_HAS_I2C_DISPLAY_ROT180   // board has a DISPLAY on I2C, rotated 180°, and 5-way switch
+#define DEVICE_HAS_I2C_DISPLAY_ROT180   // board has a DISPLAY on I2C, rotated 180 degree, and 5-way switch
 #define DEVICE_HAS_FIVEWAY          // board has 5-way switch (without display)
 #define DEVICE_HAS_SINGLE_LED       // board has only one LED
 #define DEVICE_HAS_SINGLE_LED_RGB   // board has only one LED which is RGB WS2812, and thus can do more colors
@@ -237,6 +237,17 @@ extern "C" { void delay_ms(uint16_t ms); }
 
 #ifdef TX_DIY_E77_E28_DUALBAND_WLE5CC
 #include "stm32/tx-hal-easysolder-e77-e28-dualband-wle5cc.h"
+#endif
+
+
+//-- DIY Boards, LR2021 Devices
+
+#if defined RX_DIY_NICERF_LR2021_G431KB
+#include "stm32/rx-hal-diy-NiceRF-LR2021-g431kb.h"
+#endif
+
+#if defined TX_DIY_NICERF_LR2021_G431KB
+#include "stm32/tx-hal-diy-NiceRF-LR2021-g431kb.h"
 #endif
 
 
