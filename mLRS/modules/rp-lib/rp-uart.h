@@ -391,6 +391,7 @@ void _uart_initit(uint32_t baud, UARTPARITYENUM parity, UARTSTOPBITENUM stopbits
     }
 
     UART_SERIAL_NO.begin(baud, config);
+    UART_SERIAL_NO.ignoreFlowControl();  // send USB CDC data regardless of DTR
 }
 
 
