@@ -16,7 +16,45 @@
 #include <SerialBT.h>
 #include <cyw43_wrappers.h> // __lockBluetooth()/__unlockBluetooth(), btstack runs on the async context IRQ
 #include <btstack.h>
+#include <pico/btstack_flash_bank.h>
 #include "ble/gatt-service/nordic_spp_service_server.h"
+
+
+//-------------------------------------------------------
+//-- btstack TLV storage in RAM
+//-------------------------------------------------------
+// btstack_cyw43_init() (called from cyw43_arch_init() at boot when BT is enabled) sets up
+// btstack's TLV storage on pico_flash_bank_instance(). The framework implementation
+// (cores/rp2040/sdkoverride/btstack_flash_bank.cpp) places __bluetooth_tlv[] in .rodata and
+// runs flash_range_erase/program on (its address - flash start). With the copy-to-ram linker
+// script .rodata lives in RAM, so that "flash offset" is bogus (~0x10059000, beyond flash) and
+// the very first TLV erase crashes both cores at boot, before USB is even up.
+// This override stores the TLV in RAM instead: no flash ops, no idling of the other core.
+// The cost is that BT pairing data does not persist across power cycles.
+
+#define BT_TLV_BANK_SIZE          2048
+
+static uint8_t bt_tlv_storage[2 * BT_TLV_BANK_SIZE]; // zeros = no valid header, btstack formats it at init
+
+static uint32_t bt_tlv_get_size(void*) { return BT_TLV_BANK_SIZE; }
+static uint32_t bt_tlv_get_alignment(void*) { return 1; }
+static void bt_tlv_erase(void*, int bank) { memset(&bt_tlv_storage[bank * BT_TLV_BANK_SIZE], 0xff, BT_TLV_BANK_SIZE); }
+static void bt_tlv_read(void*, int bank, uint32_t offset, uint8_t* buffer, uint32_t size) { memcpy(buffer, &bt_tlv_storage[bank * BT_TLV_BANK_SIZE + offset], size); }
+static void bt_tlv_write(void*, int bank, uint32_t offset, const uint8_t* data, uint32_t size) { memcpy(&bt_tlv_storage[bank * BT_TLV_BANK_SIZE + offset], data, size); }
+
+static const hal_flash_bank_t bt_tlv_instance_obj = {
+    /* get_size */      &bt_tlv_get_size,
+    /* get_alignment */ &bt_tlv_get_alignment,
+    /* erase */         &bt_tlv_erase,
+    /* read */          &bt_tlv_read,
+    /* write */         &bt_tlv_write,
+};
+
+// strong override of the framework's flash-based version, linked in place of the archive member
+extern "C" const hal_flash_bank_t* pico_flash_bank_instance(void)
+{
+    return &bt_tlv_instance_obj;
+}
 
 
 static uint8_t bt_chunk_buf[512]; // bounds the blocking time of a single SPP write
