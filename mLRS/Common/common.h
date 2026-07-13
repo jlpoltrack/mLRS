@@ -217,8 +217,16 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2
 #endif
 
     switch (serial_port) {
+#ifdef DEVICE_HAS_CYW_WIFI
+    case TX_SERIAL_PORT_WIRELESS_BRIDGE:
+        serial = &wifi;
+        com = com_port();
+        break;
+    case TX_SERIAL_PORT_SERIAL2:
+#else
     case TX_SERIAL_PORT_SERIAL2:
     case TX_SERIAL_PORT_WIRELESS_BRIDGE:
+#endif
         serial = &uartd_port;
         com = com_port();
         break;
@@ -235,8 +243,15 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2
     case TX_SERIAL_PORT2_SERIAL:
         serial2 = &uartb_port;
         break;
+#ifdef DEVICE_HAS_CYW_WIFI
+    case TX_SERIAL_PORT2_WIRELESS_BRIDGE:
+        serial2 = &wifi;
+        break;
+    case TX_SERIAL_PORT2_SERIAL2:
+#else
     case TX_SERIAL_PORT2_SERIAL2:
     case TX_SERIAL_PORT2_WIRELESS_BRIDGE:
+#endif
         serial2 = &uartd_port;
         break;
     default:

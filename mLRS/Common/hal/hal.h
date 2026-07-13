@@ -60,6 +60,7 @@ In tx-hal files:
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266    // board has ESP82xx in fact, not ESP32
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_BUTTON2_FLASH    // board has button used to enter ESP flash mode
 #define DEVICE_HAS_HC04_MODULE      // board has HC04 module
+#define DEVICE_HAS_CYW_WIFI      // board has on-chip/on-board wifi acting as wireless bridge (e.g. Pico 2 W CYW43)
 #define DEVICE_HAS_I2C_DISPLAY          // board has a DISPLAY on I2C, and 5-way switch
 #define DEVICE_HAS_I2C_DISPLAY_ROT180   // board has a DISPLAY on I2C, rotated 180°, and 5-way switch
 #define DEVICE_HAS_FIVEWAY          // board has 5-way switch (without display)
@@ -282,11 +283,11 @@ extern "C" { void delay_ms(uint16_t ms); }
   #endif
 #endif
 
-#if defined DEVICE_HAS_ESP_WIFI_BRIDGE || defined DEVICE_HAS_HC04_MODULE
+#if defined DEVICE_HAS_ESP_WIFI_BRIDGE || defined DEVICE_HAS_HC04_MODULE || defined DEVICE_HAS_CYW_WIFI
   #define USE_WIRELESS_BRIDGE
 #endif
-#if defined DEVICE_HAS_SERIAL2 || defined USE_WIRELESS_BRIDGE
-  #define USE_SERIAL2
+#if defined DEVICE_HAS_SERIAL2 || defined DEVICE_HAS_ESP_WIFI_BRIDGE || defined DEVICE_HAS_HC04_MODULE
+  #define USE_SERIAL2 // note: the CYW wifi bridge is on-chip, it does not need the UARTD serial2 port
 #endif
 #endif // DEVICE_IS_TRANSMITTER
 
@@ -496,6 +497,10 @@ extern "C" { void delay_ms(uint16_t ms); }
 
 #ifndef USE_ESP_WIFI_BRIDGE
   void esp_init(void) {}
+#endif
+
+#ifndef DEVICE_HAS_CYW_WIFI
+  void wifi_init(void) {} // wifi_loop() needs no dummy, its call site in rp-glue.h is guarded
 #endif
 
 #if !defined DEVICE_HAS_FIVEWAY && !defined USE_DISPLAY

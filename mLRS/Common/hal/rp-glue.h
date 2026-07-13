@@ -55,6 +55,9 @@ inline void __enable_irq(void)  { interrupts(); }
 static uint8_t restart_controller = 0;
 void main_loop(void);
 
+#ifdef DEVICE_HAS_CYW_WIFI
+void wifi_loop(void);
+#endif
 #ifdef DEVICE_HAS_DRONECAN
 void dc_hal_poll_core0(void);
 #endif
@@ -71,6 +74,9 @@ void setup()
 
 void loop()
 {
+#ifdef DEVICE_HAS_CYW_WIFI
+    wifi_loop();
+#endif
 #ifdef DEVICE_HAS_DRONECAN
     dc_hal_poll_core0();
 #endif

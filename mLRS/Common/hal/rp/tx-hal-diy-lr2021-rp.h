@@ -8,9 +8,10 @@
 // RP2040/RP2350, DIY LR2021 TX
 //-------------------------------------------------------
 
-#define DEVICE_HAS_SINGLE_LED_RGB
+#define DEVICE_HAS_SINGLE_LED
+
 #define DEVICE_HAS_JRPIN5
-#define DEVICE_HAS_NO_COM
+#define DEVICE_HAS_COM_ON_SERIAL
 
 
 //-- UARTS
@@ -20,14 +21,7 @@
 
 #define UARTB_USE_SERIAL          // serial via USB
 
-#define UARTC_USE_SERIAL          // COM (CLI) via USB
-
-#define UARTD_USE_SERIAL1         // serial2 BT/ESP
-#define UARTD_BAUD                115200
-#define UARTD_TX_PIN              IO_P0
-#define UARTD_RX_PIN              IO_P1
-#define UARTD_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
-#define UARTD_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
+// #define UARTC_USE_SERIAL       // com is on serial (USB), UARTC must be a dummy port
 
 #define UART_USE_PIO_HALF_DUPLEX  // JR Pin5 UART
 #define UART_BAUD                 400000
@@ -85,17 +79,36 @@ void sx_dio_exti_isr_clearflag(void) {}
 
 //-- Button
 
-#define BUTTON                    IO_P24  // usr button on YD-RP2040 clone board
+#define BUTTON                    IO_P20
+
 
 void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
 bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
 
 
+//-- Serial or Com Switch
+// use com if BUTTON is pressed during power up, else use serial
+
+#ifdef DEVICE_HAS_COM_ON_SERIAL
+bool ser_or_com_init(void) // return true if is_serial
+{
+    uint8_t cnt = 0;
+    for (uint8_t i = 0; i < 16; i++) {
+        if (button_pressed()) cnt++;
+    }
+    return !(cnt > 8);
+}
+#endif // DEVICE_HAS_COM_ON_SERIAL
+
+
 //-- LEDs
 
-#define LED_RGB                   IO_P23  // RGB LED on YD-RP2040 clone board
-#define LED_RGB_PIXEL_NUM         1
-#include "../rp-hal-led-rgb.h"
+#define LED_RED                   IO_P21  // external LED (Pico 2 W: on-board LED is behind CYW43)
+
+void leds_init(void) { gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW); }
+void led_red_off(void) { gpio_low(LED_RED); }
+void led_red_on(void) { gpio_high(LED_RED); }
+void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 
 //-- POWER
@@ -128,7 +141,7 @@ void lr20xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actua
             *sx_power = -39;
             *actual_power_dbm = 10;  // about 12 dBm
         }
-    } else { // measured at using 915 FCC band
+    } else { // measured using 915 FCC band
         if (power_dbm >= POWER_30_DBM) {
             *sx_power = 44;
             *actual_power_dbm = 30;

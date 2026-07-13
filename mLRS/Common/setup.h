@@ -214,7 +214,13 @@ void setup_configure_metadata(void)
 #endif
 
     // Tx Bridge WiFi Protocol : "TCP,UDP,BT,UDPSTA,BLE,ESPNOW"
-#if defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
+#if defined DEVICE_HAS_CYW_WIFI
+  #if CYW43_ENABLE_BLUETOOTH
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b011111; // TCP, UDP, BT, UDPSTA, BLE (no ESPNOW on CYW43)
+  #else
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b001011; // TCP, UDP, UDPSTA
+  #endif
+#elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b101011; // TCP, UDP, UDPSTA, ESPNOW (no BT, no BLE)
 #elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b111011; // all except BT (no classic BT on C3)
@@ -538,7 +544,7 @@ void setup_sanitize_config(uint8_t config_id)
         Setup.Tx[config_id].SerialPort2 = TX_SERIAL_PORT2_NONE;
     }
 
-#ifdef USE_ESP_WIFI_BRIDGE_CONFIGURE
+#if defined USE_ESP_WIFI_BRIDGE_CONFIGURE || defined DEVICE_HAS_CYW_WIFI
     SANITIZE(Tx[config_id].WifiProtocol, WIFI_PROTOCOL_NUM, WIFI_PROTOCOL_UDP, WIFI_PROTOCOL_UDP);
     TST_NOTALLOWED(Tx_WiFiProt_allowed_mask, Tx[config_id].WifiProtocol, WIFI_PROTOCOL_UDP);
     SANITIZE(Tx[config_id].WifiChannel, WIFI_CHANNEL_NUM, WIFI_CHANNEL_6, WIFI_CHANNEL_6);

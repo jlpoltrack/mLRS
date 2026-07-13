@@ -55,6 +55,9 @@
 #ifdef USE_I2C
 #include "../modules/rp-lib/rp-i2c.h"
 #endif
+#ifdef DEVICE_HAS_CYW_WIFI
+#include "rp-wifi.h" // declares tTxWifiNative wifi, used by tSerialPorts routing in common.h
+#endif
 #include "../Common/hal/rp-timer.h"
 
 #elif defined ESP8266 || defined ESP32
@@ -203,6 +206,10 @@ tTxDisp disp;
 // Wifi Bridge
 //-------------------------------------------------------
 
+#ifdef DEVICE_HAS_CYW_WIFI
+tTxWifiNative wifi; // declared in rp-wifi.h
+#endif
+
 #include "esp.h"
 
 tTxEspWifiBridge esp;
@@ -301,6 +308,7 @@ void init_hw(void)
 
     setup_init();
 
+    wifi_init();
     esp_enable(Setup.Tx[Config.ConfigId].SerialPort, Setup.Tx[Config.ConfigId].SerialPort2);
     Serials.Init(Setup.Tx[Config.ConfigId].SerialPort, Config.SerialBaudrate, Setup.Tx[Config.ConfigId].SerialPort2, Config.SerialBaudrate2);
 #ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_JRPIN5
@@ -742,6 +750,9 @@ RESTARTCONTROLLER
     // startup sign of life
     leds.Init();
     info.Init();
+#ifdef DEVICE_HAS_CYW_WIFI
+    strncpy(info.wireless.device_name, wifi_ssid(), sizeof(info.wireless.device_name)-1);
+#endif
 
     // start up sx
     if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
