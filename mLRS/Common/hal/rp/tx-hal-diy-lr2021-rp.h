@@ -128,7 +128,7 @@ void lr20xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actua
             *sx_power = -39;
             *actual_power_dbm = 10;  // about 12 dBm
         }
-    } else { // measured at using 915 FCC band
+    } else { // measured using 915 FCC band
         if (power_dbm >= POWER_30_DBM) {
             *sx_power = 44;
             *actual_power_dbm = 30;
