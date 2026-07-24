@@ -18,7 +18,7 @@
     #include "tx-hal-diy-2400-rp.h"
 #endif
 
-#if defined TX_DIY_LR2021_RP2040
+#if defined TX_DIY_LR2021_RP2040 || defined TX_DIY_LR2021_RP2350
     #include "tx-hal-diy-lr2021-rp.h"
 #endif
 

@@ -44,6 +44,10 @@ static volatile bool sync_complete = false;  // don't TX until first frame recei
 class tPin5BridgeBase;
 static tPin5BridgeBase* g_pin5_bridge;
 
+// alarm pool serviced on the core which runs Init(), so alarm callbacks fire on the
+// same core as the PIO IRQ (the default alarm pool is serviced on core 0)
+static alarm_pool_t* pin5_alarm_pool;
+
 // pio uart rx program (from pico-examples uart_rx_mini)
 static const uint16_t pio_uart_rx_mini[] = {
     0x2020,  // wait 0 pin 0 - wait for start bit
@@ -174,7 +178,7 @@ void pio_uart_irq_handler(void) {
         if (tx_in_progress && tx_index >= tx_buf_len && 
             pio_sm_is_tx_fifo_empty(pio_uart, pio_sm_tx)) {
             // wait 2 byte times for stop bit to complete before switching to RX
-            add_alarm_in_us(TX_STOP_BIT_DELAY_US, tx_complete_alarm_callback, NULL, true);
+            alarm_pool_add_alarm_in_us(pin5_alarm_pool, TX_STOP_BIT_DELAY_US, tx_complete_alarm_callback, NULL, true);
         }
     }
     
@@ -204,7 +208,7 @@ void pio_uart_irq_handler(void) {
                 g_pin5_bridge->state = tPin5BridgeBase::STATE_IDLE;
             } else if (g_pin5_bridge->transmit_start()) {
                 g_pin5_bridge->state = tPin5BridgeBase::STATE_TRANSMIT_PENDING;
-                add_alarm_in_us(150, tx_turnaround_alarm_callback, NULL, true);  // edgetx H7 workaround
+                alarm_pool_add_alarm_in_us(pin5_alarm_pool, 150, tx_turnaround_alarm_callback, NULL, true);  // edgetx H7 workaround
             } else {
                 g_pin5_bridge->state = tPin5BridgeBase::STATE_IDLE;
             }
@@ -225,14 +229,32 @@ void tPin5BridgeBase::Init(void)
     tlast_us = 0;
     telemetry_start_next_tick = false;
     telemetry_state = 0;
-    
+
     // don't TX until first frame received (parser needs to sync first)
     sync_complete = false;
-    
+
+    tx_in_progress = false;
+    tx_buf_len = 0;
+    tx_index = 0;
+
+    // must be set before pin5_init_rx() enables the RX IRQ
+    g_pin5_bridge = this;
+
+    // claim PIO resources only once, a repeated Init() would exhaust SMs and program space
+    // (not expected, a controller restart on RP is a full MCU reboot, but guard anyway)
+    static bool pio_initialized = false;
+    if (pio_initialized) {
+        pin5_rx_enable();
+        return;
+    }
+    pio_initialized = true;
+
+    // alarm callbacks must run on the same core as the PIO IRQ (the core calling Init());
+    // both IRQs are at default priority, so they cannot preempt each other
+    pin5_alarm_pool = alarm_pool_create_with_unused_hardware_alarm(4);
+
     pin5_init_rx();
     pin5_init_tx();
-    
-    g_pin5_bridge = this;
 }
 
 
