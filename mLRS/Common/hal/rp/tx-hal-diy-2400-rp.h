@@ -11,9 +11,6 @@
 #define DEVICE_HAS_SINGLE_LED
 #define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_SERIAL_OR_COM // hold 5-way in down direction at boot to enable CLI
-#define DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
-#define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
-#define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
 #define DEVICE_HAS_I2C_DISPLAY
 
 
@@ -27,13 +24,6 @@
 #define UARTB_USE_SERIAL          // serial via USB
 
 #define UARTC_USE_SERIAL          // COM (CLI) via USB
-
-#define UARTD_USE_SERIAL1         // serial2 BT/ESP
-#define UARTD_BAUD                115200
-#define UARTD_TX_PIN              IO_P0
-#define UARTD_RX_PIN              IO_P1
-#define UARTD_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
-#define UARTD_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
 #define UART_USE_PIO_HALF_DUPLEX  // JR Pin5 UART
 #define UART_BAUD                 400000
@@ -189,23 +179,3 @@ bool ser_or_com_init(void) // return true if is_serial
 }
 #endif // DEVICE_HAS_SERIAL_OR_COM
 
-
-//-- ESP WiFi Bridge
-
-#define ESP_RESET                 IO_P12
-#define ESP_GPIO0                 IO_P13
-
-#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
-
-void esp_init(void)
-{
-    gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_HIGH); // high -> esp runs normally
-    gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW);  // low -> esp is in reset
-}
-
-void esp_reset_high(void) { gpio_high(ESP_RESET); }
-void esp_reset_low(void) { gpio_low(ESP_RESET); }
-void esp_gpio0_high(void) { gpio_high(ESP_GPIO0); }
-void esp_gpio0_low(void) { gpio_low(ESP_GPIO0); }
-
-#endif
