@@ -9,14 +9,19 @@
 #define RPLIB_SPIB_H
 
 #include <SPI.h>
+#include <hardware/spi.h>
 #include "rp-peripherals.h"
 
 // select hardware SPI instance
 #ifdef SPIB_USE_SPI1
-  #define SPIB_BUS  SPI1
+  #define SPIB_BUS   SPI1
+  #define SPIB_INST  spi1
 #else
-  #define SPIB_BUS  SPI   // default to SPI0
+  #define SPIB_BUS   SPI   // default to SPI0
+  #define SPIB_INST  spi0
 #endif
+
+static uint8_t spib_nop = 0; // fill byte sent during reads, set via spib_setnop()
 
 //-- select functions
 
@@ -41,7 +46,9 @@ void spib_transfer(const uint8_t* dataout, uint8_t* datain, const uint8_t len)
 
 void spib_read(uint8_t* datain, const uint8_t len)
 {
-    SPIB_BUS.transfer(nullptr, datain, len);
+    // SDK call to control the fill byte: the radios require their NOP byte
+    // during reads, Arduino's transfer(nullptr, ...) would send 0xFF
+    spi_read_blocking(SPIB_INST, spib_nop, datain, len);
 }
 
 
@@ -55,7 +62,10 @@ void spib_write(const uint8_t* dataout, uint8_t len)
 // INIT routines
 //-------------------------------------------------------
 
-void spib_setnop(uint8_t nop) {}
+void spib_setnop(uint8_t nop)
+{
+    spib_nop = nop;
+}
 
 
 void spib_init(void)

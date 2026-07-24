@@ -188,6 +188,12 @@ inline EE_STATUS_ENUM ee_writedata(void* data, uint16_t datalen)
 
     ee_flash_erase_and_program(next);
 
+    // verify via XIP readback (the SDK flash functions flush the XIP cache);
+    // on failure keep the previous sector active, its data is still intact
+    if (memcmp(ee_sector_xip_ptr(next), ee_sector_buf, EE_HEADER_SIZE + datalen) != 0) {
+        return EE_STATUS_FLASH_FAIL;
+    }
+
     ee_active_sector = next;
     ee_active_sequence = next_seq;
 

@@ -8,9 +8,10 @@
  python script to generate rp-spiX.h libraries
 ********************************************************
 '''
-import re
-import datetime
+import os
 
+# generate next to this script, independent of where it is invoked from
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 templatefname = "rp-spi-template.h"
 

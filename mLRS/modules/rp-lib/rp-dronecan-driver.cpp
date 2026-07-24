@@ -11,6 +11,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <hardware/irq.h>
+#include <hardware/clocks.h>
+#include <hardware/timer.h>
 
 extern "C" {
 #include "can2040.h"
@@ -62,9 +64,6 @@ static uint32_t dc_hal_bitrate;
 // inter-core signaling: core 1 sets ready, core 0 does hw start, sets started
 static volatile bool dc_hal_ready_to_start = false;
 static volatile bool dc_hal_started = false;
-
-// flush request from core 1, handled on core 0
-static volatile bool dc_hal_flush_requested = false;
 
 
 //-------------------------------------------------------
@@ -144,10 +143,10 @@ int16_t dc_hal_init
     (void)iface_mode;
 
     // re-init after a soft controller restart: can2040 is already running with
-    // its IRQ live on core 0, so don't touch cbus or the buffers from here,
-    // request a buffer flush on core 0 instead (a bitrate change needs a reboot)
+    // its IRQ live on core 0, so don't touch cbus or re-claim anything, just
+    // empty the rx buffer (a bitrate change needs a reboot)
     if (dc_hal_started) {
-        dc_hal_flush_requested = true;
+        dc_hal_rx_flush();
         return 0;
     }
 
@@ -180,8 +179,12 @@ int16_t dc_hal_start(void)
     // keeping the priority-1 CAN interrupt off the radio core
     dc_hal_ready_to_start = true;
 
-    // wait for core 0 to complete — typically < 2 ms
-    while (!dc_hal_started) {}
+    // wait for core 0 to complete — typically < 2 ms, time out instead of
+    // freezing the radio core should core 0's loop not be running
+    uint32_t tstart_us = time_us_32();
+    while (!dc_hal_started) {
+        if ((time_us_32() - tstart_us) > 100000) return -DC_HAL_ERROR_CAN_START;
+    }
 
     return 0;
 }
@@ -252,10 +255,11 @@ int16_t dc_hal_receive(CanardCANFrame* const frame)
 }
 
 
-// called from core 1 — signals core 0 to flush rx buffer
+// called from core 1 — emptying is done consumer-side by advancing readpos,
+// which is safe against the IRQ writer on core 0 without any signaling
 void dc_hal_rx_flush(void)
 {
-    dc_hal_flush_requested = true;
+    dc_hal_rxbuf.readpos = dc_hal_rxbuf.writepos;
 }
 
 
@@ -280,13 +284,11 @@ void dc_hal_poll_core0(void)
 {
     // one-shot: hardware start
     if (dc_hal_ready_to_start && !dc_hal_started) {
-        uint32_t sys_clock = F_CPU;
-
         irq_set_exclusive_handler(DC_HAL_PIO_IRQ, dc_hal_pio1_irq_handler);
         irq_set_priority(DC_HAL_PIO_IRQ, DRONECAN_IRQ_PRIORITY);
         irq_set_enabled(DC_HAL_PIO_IRQ, true);
 
-        can2040_start(&dc_hal_cbus, sys_clock, dc_hal_bitrate,
+        can2040_start(&dc_hal_cbus, clock_get_hz(clk_sys), dc_hal_bitrate,
                       dc_hal_gpio_rx, dc_hal_gpio_tx);
 
         dc_hal_started = true;
@@ -294,18 +296,6 @@ void dc_hal_poll_core0(void)
     }
 
     if (!dc_hal_started) return;
-
-    // handle flush request from core 1
-    if (dc_hal_flush_requested) {
-        irq_set_enabled(DC_HAL_PIO_IRQ, false);
-        dc_hal_rxbuf.writepos = 0;
-        dc_hal_rxbuf.readpos = 0;
-        dc_hal_txbuf.writepos = 0;
-        dc_hal_txbuf.readpos = 0;
-        dc_hal_stats.rx_overflow_count = 0;
-        irq_set_enabled(DC_HAL_PIO_IRQ, true);
-        dc_hal_flush_requested = false;
-    }
 
     // drain TX ring buffer — call can2040_transmit on core 0
     while (dc_hal_txbuf.readpos != dc_hal_txbuf.writepos) {

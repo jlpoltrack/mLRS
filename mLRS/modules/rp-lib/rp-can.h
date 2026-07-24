@@ -22,8 +22,7 @@ void can_init(void)
     int16_t res = dc_hal_compute_timings(F_CPU, 1000000, &timings);
     if (res < 0) return;
 
-    res = dc_hal_init(DC_HAL_CAN1, &timings, DC_HAL_IFACE_MODE_NORMAL);
-    if (res < 0) return;
+    dc_hal_init(DC_HAL_CAN1, &timings, DC_HAL_IFACE_MODE_NORMAL);
 }
 
 

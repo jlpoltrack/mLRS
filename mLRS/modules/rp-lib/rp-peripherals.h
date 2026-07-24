@@ -86,7 +86,12 @@ inline uint8_t gpio_read_activehigh(uint8_t pin) { return gpio_read(pin); }
 inline uint8_t gpio_read_activelow(uint8_t pin) { return !gpio_read(pin); }
 
 inline void gpio_init(uint8_t pin, IOMODEENUM mode) {
-    if (mode == MODE_GPIO_INPUT) {
+    if (mode == MODE_ANALOG) {
+        // hi-Z: pulls and input buffer disabled (closest to STM32 analog mode)
+        pinMode(pin, INPUT);
+        gpio_disable_pulls(pin);
+        gpio_set_input_enabled(pin, false);
+    } else if (mode == MODE_GPIO_INPUT) {
         pinMode(pin, INPUT);
     } else if (mode == MODE_GPIO_INPUT_PU) {
         pinMode(pin, INPUT_PULLUP);

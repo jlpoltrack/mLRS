@@ -147,12 +147,25 @@ void uart_irq_handler(void)
 // non-blocking single char - returns 0 if buffer full
 inline uint16_t uart_putc(char c)
 {
+    uart_hw_t* hw = uart_get_hw(UART_UART_INST);
+
+    // fast path: if SW buffer is empty, write directly to HW FIFO
+    // also required to start transmission: the PL011 TX interrupt asserts only on a
+    // downward transition through the FIFO trigger level, so enabling TXIM with an
+    // idle FIFO would not fire the IRQ. data must always enter via the FIFO, the SW
+    // buffer is only ever filled when the FIFO is full (32 > trigger level 16), which
+    // guarantees a later transition
+    if ((uart_txwritepos == uart_txreadpos) && !(hw->fr & UART_UARTFR_TXFF_BITS)) {
+        hw->dr = (uint8_t)c;
+        return 1;
+    }
+
     uint16_t next = (uart_txwritepos + 1) & UART_TXBUFSIZEMASK;
     if (uart_txreadpos != next) {  // not full
         uart_txbuf[next] = c;
         uart_txwritepos = next;
         // enable TX IRQ using direct register access (faster than uart_set_irq_enables)
-        hw_set_bits(&uart_get_hw(UART_UART_INST)->imsc, UART_UARTIMSC_TXIM_BITS);
+        hw_set_bits(&hw->imsc, UART_UARTIMSC_TXIM_BITS);
         return 1;
     }
     return 0;
@@ -203,8 +216,10 @@ inline void uart_tx_flush(void)
 {
     // wait for software buffer to drain
     while (uart_txwritepos != uart_txreadpos) {}
-    // wait for HW FIFO to empty
-    while (!(uart_get_hw(UART_UART_INST)->fr & UART_UARTFR_TXFE_BITS)) {}
+    // wait for HW FIFO and shift register to empty (BUSY covers both,
+    // it is set as soon as the FIFO is non-empty and stays set until
+    // the last byte including stop bits has left the shift register)
+    while (uart_get_hw(UART_UART_INST)->fr & UART_UARTFR_BUSY_BITS) {}
 }
 
 

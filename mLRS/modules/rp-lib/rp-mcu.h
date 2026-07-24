@@ -8,6 +8,7 @@
 #ifndef RP_MCU_H
 #define RP_MCU_H
 
+#include <string.h>
 #include <pico/unique_id.h>
 
 #define RP_MCU_UID_LEN  8

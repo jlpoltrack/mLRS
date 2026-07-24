@@ -18,6 +18,7 @@
 #include "hardware/i2c.h"
 #include "hardware/dma.h"
 #include "hardware/irq.h"
+#include "hardware/timer.h"
 
 // select i2c bus based on hal define
 #ifdef I2C_USE_WIRE1
@@ -50,7 +51,7 @@ typedef struct {
     volatile bool abort_detected;
 } i2c_dma_state_t;
 
-static i2c_dma_state_t i2c_dma;
+static i2c_dma_state_t i2c_dma = { -1 }; // dma_chan = -1: not yet claimed
 
 
 //-------------------------------------------------------
@@ -201,7 +202,7 @@ extern "C" HAL_StatusTypeDef i2c_put(uint8_t reg_adr, uint8_t* buf, uint16_t len
 // cmdhome sets column range 0-127 and page range 0-7 via register 0x00.
 extern "C" HAL_StatusTypeDef i2c_put_with_cmdhome(uint8_t reg_adr, uint8_t* buf, uint16_t len)
 {
-    if (len == 0) return HAL_ERROR;
+    if (len == 0 || len > I2C_DMA_CMD_BUF_SIZE - 9) return HAL_ERROR; // 8 cmdhome words + 1 reg word
     if (i2c_dma.transfer_active) return HAL_BUSY;
 
     if (i2c_dma.abort_detected) {
@@ -252,6 +253,18 @@ void i2c_spin(uint16_t chunksize) {}
 
 void i2c_init(void)
 {
+    // re-init safe: on a soft controller restart everything is already set up,
+    // in particular the DMA channel must not be claimed a second time.
+    // wait out any in-flight framebuffer DMA (~2.6 ms at 400 kHz), recover
+    // the peripheral if it does not complete
+    if (i2c_dma.dma_chan >= 0) {
+        uint32_t tstart_us = time_us_32();
+        while (i2c_dma.transfer_active) {
+            if ((time_us_32() - tstart_us) > 10000) { i2c_dma_handle_error(); break; }
+        }
+        return;
+    }
+
     // Wire is still used for blocking init commands (i2c_put_blocked)
     I2C_WIRE.setSDA(I2C_SDA_IO);
     I2C_WIRE.setSCL(I2C_SCL_IO);

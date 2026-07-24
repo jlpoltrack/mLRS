@@ -17,7 +17,7 @@ This directory contains template-based code generation for RP2040/RP2350 periphe
 
 ### Usage
 ```bash
-cd mLRS/Common/rp-lib
+cd mLRS/modules/rp-lib
 python3 rp-uart-generate.py
 ```
 
@@ -141,7 +141,7 @@ RX state machines (guarded by pin validity checks).
 
 ### Usage
 ```bash
-cd mLRS/Common/rp-lib
+cd mLRS/modules/rp-lib
 python3 rp-spi-generate.py
 ```
 

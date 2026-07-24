@@ -8,12 +8,13 @@
  python script to generate rp-uartX.h librarires
 ********************************************************
 '''
-import re
-import datetime
+import os
 
+# generate next to this script, independent of where it is invoked from
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 templatefname = "rp-uart-template.h"
-    
+
 F = open(templatefname, "r")
 templatecode = F.read()
 F.close()
