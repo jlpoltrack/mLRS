@@ -86,7 +86,8 @@ void loop()
     restart_controller = UINT8_MAX; \
     }
 #define GOTO_RESTARTCONTROLLER \
-    watchdog_reboot(0, 0, 0);
+    restart_controller = 1; \
+    return;
 
 #endif // __cplusplus
 

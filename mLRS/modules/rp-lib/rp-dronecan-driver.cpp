@@ -143,6 +143,14 @@ int16_t dc_hal_init
     (void)can_instance;
     (void)iface_mode;
 
+    // re-init after a soft controller restart: can2040 is already running with
+    // its IRQ live on core 0, so don't touch cbus or the buffers from here,
+    // request a buffer flush on core 0 instead (a bitrate change needs a reboot)
+    if (dc_hal_started) {
+        dc_hal_flush_requested = true;
+        return 0;
+    }
+
     memset(&dc_hal_stats, 0, sizeof(dc_hal_stats));
     memset(&dc_hal_rxbuf, 0, sizeof(dc_hal_rxbuf));
     memset(&dc_hal_txbuf, 0, sizeof(dc_hal_txbuf));

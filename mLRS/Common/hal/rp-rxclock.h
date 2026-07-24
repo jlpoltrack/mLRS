@@ -27,7 +27,7 @@ class tRxClock
     void Reset(void);
 
   private:
-    volatile alarm_id_t alarm_id;
+    volatile alarm_id_t alarm_id = -1;
     volatile uint32_t clock_period_us;
     volatile uint32_t clock_shift_us;
     volatile uint64_t next_event_time_us;
@@ -48,13 +48,12 @@ int64_t tRxClock::alarm_callback(alarm_id_t id, void* user_data)
 
 void tRxClock::Init(uint16_t period_ms)
 {
-    alarm_id = -1;
     clock_period_us = period_ms * 1000;
     clock_shift_us = 1000; // 1 ms
     doPostReceive = false;
     next_event_time_us = 0;
 
-    Reset();
+    Reset(); // also cancels the pending alarm on a re-init, must not clobber alarm_id before
 }
 
 
