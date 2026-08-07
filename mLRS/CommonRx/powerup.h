@@ -29,8 +29,8 @@ extern volatile uint32_t millis32(void);
 // Generic PowerupCounter Class
 //-------------------------------------------------------
 
-#if !defined EE_USE_WORD && !defined EE_USE_DOUBLEWORD
-#error Either EE_USE_WORD or EE_USE_DOUBLEWORD must be defined !
+#if !defined EE_USE_WORD && !defined EE_USE_DOUBLEWORD && !defined EE_USE_QUADWORD
+#error Either EE_USE_WORD or EE_USE_DOUBLEWORD or EE_USE_QUADWORD must be defined !
 #endif
 #ifndef EE_PAGE_SIZE
 #error POWERUPCNT needs EE_PAGE_SIZE !
@@ -67,6 +67,149 @@ typedef enum {
     POWERUPCNT_TASK_NONE = 0,
     POWERUPCNT_TASK_BIND,
 } POWERUPCNT_TASK_ENUM;
+
+
+#if defined EE_USE_QUADWORD
+//-------------------------------------------------------
+// PowerupCounter for quad-word-only flash (STM32H5)
+//-------------------------------------------------------
+// The FF -> AA -> 00 scheme of the classic implementation writes the same flash
+// unit twice. On H5 that is not allowed: main flash is programmed in 128 bit
+// quad-words and each quad-word may be programmed only once per erase, because
+// it carries its own ECC. So here every power up consumes a *fresh* quad-word.
+//
+// The page is divided into groups of POWERUPCNT_SLOTS quad-words. A power up
+// writes the AA marker into the first still-erased quad-word; its index within
+// the group is the number of power ups counted so far. Reaching the last slot of
+// a group triggers the bind task. After POWERUPCNT_TMO_MS of uptime Do() closes
+// the group by writing 00 into all of its remaining quad-words, so the next power
+// up starts counting at the beginning of the next group.
+
+#define POWERUPCNT_QUADWORD_SIZE      16 // bytes
+#define POWERUPCNT_SLOTS              4  // power ups needed to trigger bind, = quad-words per group
+#define POWERUPCNT_GROUP_SIZE         (POWERUPCNT_SLOTS * POWERUPCNT_QUADWORD_SIZE)
+
+
+class tPowerupCounter
+{
+  public:
+    void Init(void);
+    void Do(void);
+    uint8_t Task(void);
+
+  private:
+    bool powerup_do;
+    uint8_t task;
+
+    uint32_t cur_adr; // address of the quad-word this power up has claimed
+
+    bool is_erased(uint32_t adr);
+    void ee_program_marker(uint32_t adr, uint32_t marker);
+    void close_group(void);
+};
+
+
+bool tPowerupCounter::is_erased(uint32_t adr)
+{
+    for (uint8_t i = 0; i < POWERUPCNT_QUADWORD_SIZE / 4; i++) {
+        if (((uint32_t*)adr)[i] != 0xFFFFFFFF) return false;
+    }
+    return true;
+}
+
+
+void tPowerupCounter::ee_program_marker(uint32_t adr, uint32_t marker)
+{
+uint32_t val[POWERUPCNT_QUADWORD_SIZE / 4];
+
+    for (uint8_t i = 0; i < POWERUPCNT_QUADWORD_SIZE / 4; i++) val[i] = marker;
+
+    ee_hal_unlock();
+    ee_hal_programquadword(adr, val);
+    ee_hal_lock();
+}
+
+
+void tPowerupCounter::close_group(void)
+{
+    uint32_t group_end = (cur_adr - (cur_adr % POWERUPCNT_GROUP_SIZE)) + POWERUPCNT_GROUP_SIZE;
+
+    for (uint32_t adr = cur_adr + POWERUPCNT_QUADWORD_SIZE; adr < group_end; adr += POWERUPCNT_QUADWORD_SIZE) {
+        ee_program_marker(adr, 0x00000000);
+    }
+}
+
+
+void tPowerupCounter::Init(void)
+{
+    powerup_do = true;
+    task = POWERUPCNT_TASK_NONE;
+
+    // check if this really was a power up, or just a reset
+    if (powerup_counter_signature == POWERUPCNT_SIGNATURE_B) {
+        powerup_do = false;
+        return;
+    }
+    powerup_counter_signature = POWERUPCNT_SIGNATURE_B;
+
+    // search for the first still-erased quad-word
+    cur_adr = 0;
+
+    for (uint32_t ofs = 0; ofs < EE_PAGE_SIZE; ofs += POWERUPCNT_QUADWORD_SIZE) {
+        if (is_erased(POWERUPCNT_EE_PAGE_ADDRESS + ofs)) {
+            cur_adr = POWERUPCNT_EE_PAGE_ADDRESS + ofs;
+            break;
+        }
+    }
+
+    // page is full, so erase it
+    if (!cur_adr) {
+        __disable_irq();
+        ee_hal_unlock();
+        ee_hal_erasepage(POWERUPCNT_EE_PAGE_ADDRESS, POWERUPCNT_EE_PAGE);
+        ee_hal_lock();
+        __enable_irq();
+        cur_adr = POWERUPCNT_EE_PAGE_ADDRESS; // let's assume erase was successful
+    }
+
+    // claim this quad-word, its index in the group is the power up count
+    ee_program_marker(cur_adr, 0xAAAAAAAA);
+
+    uint8_t cnt = ((cur_adr % POWERUPCNT_GROUP_SIZE) / POWERUPCNT_QUADWORD_SIZE) + 1;
+
+    if (cnt >= POWERUPCNT_SLOTS) { // the group is used up, this was the last power up
+        task = POWERUPCNT_TASK_BIND;
+        powerup_do = false;
+    }
+}
+
+
+void tPowerupCounter::Do(void)
+{
+    if (!powerup_do) return;
+
+    uint32_t tnow_ms = millis32();
+    if (tnow_ms < POWERUPCNT_TMO_MS) return;
+
+    powerup_do = false;
+
+    close_group();
+}
+
+
+uint8_t tPowerupCounter::Task(void)
+{
+    switch (task) {
+    case POWERUPCNT_TASK_BIND:
+        task = POWERUPCNT_TASK_NONE;
+        return POWERUPCNT_TASK_BIND;
+    }
+
+    return POWERUPCNT_TASK_NONE;
+}
+
+
+#else // !EE_USE_QUADWORD
 
 
 class tPowerupCounter
@@ -298,6 +441,8 @@ void tPowerupCounter::ee_program_val(uint32_t adr, uint64_t* const data, uint8_t
 }
 
 #endif
+
+#endif // !EE_USE_QUADWORD
 
 
 #endif // POWERUP_CNT

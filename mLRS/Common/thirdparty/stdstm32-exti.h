@@ -24,6 +24,9 @@ typedef enum {
   #define _LL_EXTI_APPEND(x)  LL_GPIO_AF_EXTI ## x
 #elif defined STM32G4 || defined STM32F3 || defined STM32WL || defined STM32L4
   #define _LL_EXTI_APPEND(x)  LL_SYSCFG_EXTI ## x
+#elif defined STM32H5
+  // H5 has no SYSCFG, the EXTI source mux lives in the EXTI peripheral itself (EXTI_EXTICRn)
+  #define _LL_EXTI_APPEND(x)  LL_EXTI_EXTI ## x
 #else
   #error MCU not supported by EXTI library!
 #endif
@@ -91,16 +94,28 @@ typedef enum {
 #endif
 
 
+// H5 splits the single pending register into a rising (RPR1) and a falling (FPR1) one,
+// so there is no LL_EXTI_ClearFlag_0_31(); both need to be cleared
+#if defined STM32H5
+  #define _LL_EXTI_CLEARFLAG_0_31(ExtiLine) \
+      LL_EXTI_ClearRisingFlag_0_31(ExtiLine); \
+      LL_EXTI_ClearFallingFlag_0_31(ExtiLine)
+#else
+  #define _LL_EXTI_CLEARFLAG_0_31(ExtiLine) \
+      LL_EXTI_ClearFlag_0_31(ExtiLine)
+#endif
+
+
 static inline void exti_enableisr(uint32_t Port, uint32_t Line, uint32_t ExtiLine)
 {
-  LL_EXTI_ClearFlag_0_31(ExtiLine);
+  _LL_EXTI_CLEARFLAG_0_31(ExtiLine);
   LL_EXTI_EnableIT_0_31(ExtiLine);
 }
 
 
 static inline void exti_clearisrflag(uint32_t Port, uint32_t Line, uint32_t ExtiLine)
 {
-  LL_EXTI_ClearFlag_0_31(ExtiLine);
+  _LL_EXTI_CLEARFLAG_0_31(ExtiLine);
 }
 
 
@@ -112,6 +127,8 @@ void exti_init_isroff(uint32_t Port, uint32_t Line, uint32_t ExtiLine, uint32_t 
   LL_GPIO_AF_SetEXTISource(Port, Line);
 #elif defined STM32G4 || defined STM32F3 || defined STM32WL || defined STM32L4
   LL_SYSCFG_SetEXTISource(Port, Line);
+#elif defined STM32H5
+  LL_EXTI_SetEXTISource(Port, Line);
 #endif
 
   // let's not use LL_EXTI_Init(), but let's do it by hand, is easier to allow enabling isr later

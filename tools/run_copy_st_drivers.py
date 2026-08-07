@@ -96,6 +96,11 @@ for f in MLRS_SOURCES_HAL_STM32F3:
     if '_hal' in f:
         f3xx_hal_files_to_include.append(os.path.basename(f))
 
+h5xx_hal_files_to_include = []
+for f in MLRS_SOURCES_HAL_STM32H5:
+    if '_hal' in f:
+        h5xx_hal_files_to_include.append(os.path.basename(f))
+
 
 # some targets also need the USB driver
 # we can go through TLIST and watch for 'STDSTM32_USE_USB' to determine which do
@@ -161,6 +166,8 @@ def create_exclude_list(dirlist, chip_short):
         files_to_include = wlxx_hal_files_to_include
     if chip_short == 'f3':
         files_to_include = f3xx_hal_files_to_include
+    if chip_short == 'h5':
+        files_to_include = h5xx_hal_files_to_include
 
     # exclude all hal files which are not included
     for f in dirlist:

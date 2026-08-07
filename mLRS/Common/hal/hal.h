@@ -205,6 +205,10 @@ extern "C" { void delay_ms(uint16_t ms); }
 #include "stm32/rx-hal-diy-e22-g441kb.h"
 #endif
 
+#ifdef RX_DIY_WEACT_E22_H503CB
+#include "stm32/rx-hal-diy-WeAct-E22-h503cb.h"
+#endif
+
 #ifdef TX_DIY_E22_G431KB
 #include "stm32/tx-hal-diy-e22-g431kb.h"
 #endif

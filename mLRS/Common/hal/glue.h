@@ -91,6 +91,24 @@
 #include "stm32l4xx_hal_flash_ex.h"
 
 #endif
+#ifdef STM32H503xx
+
+#include "stm32h5xx_ll_bus.h"
+#include "stm32h5xx_ll_rcc.h"
+#include "stm32h5xx_ll_gpio.h"
+#include "stm32h5xx_ll_tim.h"
+#include "stm32h5xx_ll_usart.h"
+#include "stm32h5xx_ll_spi.h"
+#include "stm32h5xx_ll_system.h"
+#include "stm32h5xx_ll_exti.h"
+#include "stm32h5xx_ll_lpuart.h"
+#include "stm32h5xx_ll_adc.h"
+#include "stm32h5xx_ll_dac.h"
+#include "stm32h5xx_hal.h"
+#include "stm32h5xx_hal_flash.h"
+#include "stm32h5xx_hal_flash_ex.h"
+
+#endif
 #ifdef STM32WLE5xx
 
 #include "stm32wlxx_ll_cortex.h"

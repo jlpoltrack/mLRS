@@ -242,6 +242,13 @@ The default selection of frequency bands can be overruled by feature defines.
   //#define FREQUENCY_BAND_866_MHZ_IN
 #endif
 
+#ifdef RX_DIY_WEACT_E22_H503CB
+  #define DEVICE_NAME "DIY WeAct E22 H503"
+  #define DEVICE_IS_RECEIVER
+  #define DEVICE_HAS_SX126x
+  #define FREQUENCY_BAND_915_MHZ_FCC
+#endif
+
 #ifdef TX_DIY_E22_G431KB
   #define DEVICE_NAME "DIY E22 G431KB"
   #define DEVICE_IS_TRANSMITTER
