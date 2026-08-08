@@ -31,11 +31,16 @@
 //   module NRST -> PB0    module BUSY -> PB1    module DIO1 -> PB2
 //   module RXEN -> PB4    module TXEN -> PB5
 //
+// Wiring to the CAN transceiver (not on the board, e.g. a SN65HVD230 or TCAN332 breakout):
+//   transceiver RX -> PB12  (FDCAN1_RX, AF9)
+//   transceiver TX -> PB15  (FDCAN1_TX, AF9)
+//
 // The board has only one user LED, so DEVICE_HAS_SINGLE_LED is used and only the
 // led_red_xxx() functions are provided.
 
 #define DEVICE_HAS_OUT
 #define DEVICE_HAS_SINGLE_LED
+#define DEVICE_HAS_DRONECAN // classic CAN only, the H503's FDCAN kernel clock allows CAN FD but it is not used
 
 
 //-- Timers, Timing, EEPROM, and such stuff
@@ -85,6 +90,16 @@
 #define UARTF_USE_TX_ISR
 //#define UARTF_USE_RX
 //#define UARTF_RXBUFSIZE           512
+
+
+//-- CAN
+
+// FDCAN1 is the only CAN on the H503, and all its pin options are AF9.
+// RX can be PA8, PA11, PB3, PB5, PB8, PB12 and TX can be PA12, PB4, PB6, PB7, PB10, PB13, PB15,
+// and they can be combined freely. Not free on this board: PA11/PA12 (USB), PB4/PB5 (E22 RX/TX EN),
+// PB6/PB7 (debug LPUART). So PA8, PB3, PB8, PB12 for RX and PB10, PB13, PB15 for TX.
+#define CAN_USE_FDCAN1_RX_PB12
+#define CAN_USE_FDCAN1_TX_PB15
 
 
 //-- SX1: SX12xx & SPI

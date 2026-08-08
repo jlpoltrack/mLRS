@@ -32,6 +32,8 @@
     #error SystemClock_Config() settings are incorrect for FDCAN !
   #endif
 #endif
+// on STM32H5 the FDCAN kernel clock is not derived from the SystemClock_Config() settings,
+// can_init() sets up PLL2 for it, so nothing needs to be checked here
 
 #include "../Common/hal/hal.h"
 #include "../modules/stm32-dronecan-lib/stdstm32-can.h"
@@ -59,6 +61,8 @@ void dc_hal_rx_flush(void) {}
 #define DRONECAN_PREFERRED_NODE_ID  RX_DRONECAN_PREFERRED_NODE_ID // moved to common_conf.h
 
 #ifdef STM32G4
+#define CANARD_POOL_SIZE  4096
+#elif defined STM32H5
 #define CANARD_POOL_SIZE  4096
 #elif defined STM32F1
 #define CANARD_POOL_SIZE  1024

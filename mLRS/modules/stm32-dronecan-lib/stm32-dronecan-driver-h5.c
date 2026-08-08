@@ -7,9 +7,18 @@
 // DroneCAN Driver Library for STM32 using HAL
 // for use with libcanard
 //*******************************************************
-#if defined STM32G431xx ||defined STM32G441xx || defined STM32G491xx || defined STM32G474xx
+// This is the STM32H5 version. The H5's FDCAN peripheral is the same as the G4's,
+// so this file is a copy of stm32-dronecan-driver-g4.c. Keep the two in sync, but
+// mind these intentional differences:
+// - the guard and the HAL include
+// - the H503 has FDCAN1 only, the FDCAN2 sections are inactive
+// - pTxHeader.DataLength is NOT shifted, see the comment in dc_hal_transmit(). The
+//   H5 ships a newer FDCAN HAL which changed the meaning of FDCAN_DLC_BYTES_x from
+//   the pre-shifted register value to the plain DLC code.
+//*******************************************************
+#if defined STM32H503xx
 
-#include "stm32g4xx_hal.h"
+#include "stm32h5xx_hal.h"
 
 #ifdef HAL_FDCAN_MODULE_ENABLED
 #include "stm32-dronecan-driver.h"
@@ -320,7 +329,7 @@ int16_t dc_hal_transmit(const CanardCANFrame* const frame, uint32_t tnow_ms)
 
     _process_error_status();
 
-    // thx to the TxFiFo in the G4 we can do the crude method and just put the message into the fifo if there is space
+    // thx to the TxFiFo in the H5 we can do the crude method and just put the message into the fifo if there is space
     // check for space in fifo
     if (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan) == 0) {
         if (tx_tlast_ms > 0 && (tnow_ms - tx_tlast_ms) > 10) {
@@ -352,7 +361,11 @@ int16_t dc_hal_transmit(const CanardCANFrame* const frame, uint32_t tnow_ms)
     pTxHeader.IdType = FDCAN_EXTENDED_ID;
     pTxHeader.TxFrameType = FDCAN_DATA_FRAME;
 
-    pTxHeader.DataLength = (uint32_t)_dlc_from_data_len(frame->data_len) << 16;
+    // ATTENTION: the H5 HAL wants the plain DLC code here and shifts it into the T1 word
+    // itself (FDCAN_DLC_BYTES_8 = 8), while the older G4 HAL wants it pre-shifted into the
+    // register position (FDCAN_DLC_BYTES_8 = 0x00080000). So this must NOT be shifted here,
+    // this line intentionally differs from the G4 driver.
+    pTxHeader.DataLength = (uint32_t)_dlc_from_data_len(frame->data_len);
 
     HAL_StatusTypeDef hres = HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan, &pTxHeader, frame->data);
     if (hres != HAL_OK) {
@@ -389,7 +402,7 @@ typedef struct
 } tDcRxFifoElement;
 
 
-typedef enum // see table 400 in datasheet, unfortunately defined in stm32g4xx_hal_fdcan.c and not in .h file
+typedef enum // see table 400 in datasheet, unfortunately defined in stm32h5xx_hal_fdcan.c and not in .h file
 {
     DC_RX_FIFO_R0_XTD_BIT     = 0x40000000U, // extended identifier, equals FDCAN_ELEMENT_MASK_XTD
     DC_RX_FIFO_R0_RTR_BIT     = 0x20000000U, // remote transmission request, equals FDCAN_ELEMENT_MASK_RTR
@@ -451,7 +464,7 @@ void _dc_hal_receive_isr(uint32_t* RxAddress)
         dronecan_rxbuf[next].r0 = r0;
         dronecan_rxbuf[next].r1 = r1;
         RxAddress++;
-        // copy all data bytes based on actual DLC (G4 message RAM supports 64 bytes)
+        // copy all data bytes based on actual DLC (H5 message RAM supports 64 bytes)
         uint32_t dlc = (r1 & DC_RX_FIFO_R1_DLC_MASK) >> 16;
         uint8_t data_len = _data_len_from_dlc(dlc);
         uint8_t word_len = (data_len + 3) / 4; // round up to full words
@@ -589,7 +602,7 @@ HAL_StatusTypeDef hres;
     memset(&dc_hal_stats, 0, sizeof(dc_hal_stats));
     fd_frame_detected = 0;
 
-// doc in stm32g4xx_hal_fdcan.c says: By default, all interrupts are assigned to line 0
+// doc in stm32h5xx_hal_fdcan.c says: By default, all interrupts are assigned to line 0
 // so we should not have to do this
 //    hres = HAL_FDCAN_ConfigInterruptLines(
 //        &hfdcan,
@@ -947,7 +960,7 @@ int16_t dc_hal_compute_data_timings(
     }
 
     // transceiver delay compensation (TDC) is only needed for fast data prescalers
-    // RM0440: TDC is intended for data prescaler 1 or 2, slower ones (prescaler > 2) do not need it
+    // RM0492: TDC is intended for data prescaler 1 or 2, slower ones (prescaler > 2) do not need it
     // TDC offset is in FDCAN clock cycles (= 125 ns @ 80 MHz)
     // ArduPilot's value is 10 (tuned for a 120 ns MCP2557FD-class transceiver)
     data_timings->tdco = (data_timings->bit_rate_prescaler <= 2) ? 10 : 0;
@@ -990,4 +1003,4 @@ https://www.csselectronics.com/pages/can-bus-errors-intro-tutorial
 
 
 #endif // HAL_PCD_MODULE_ENABLED
-#endif // STM32G4
+#endif // STM32H5
