@@ -40,8 +40,7 @@
 
 #define DEVICE_HAS_OUT
 #define DEVICE_HAS_SINGLE_LED
-#define DEVICE_HAS_DRONECAN // classic CAN only, the H503's FDCAN kernel clock allows CAN FD but it is not used
-
+#define DEVICE_HAS_DRONECAN_FD
 
 //-- Timers, Timing, EEPROM, and such stuff
 
@@ -107,7 +106,7 @@
 #define SPI_USE_SPI1              // SCK = PA5, MISO = PA6, MOSI = PA7, all AF5
 #define SPI_CS_IO                 IO_PA4
 #define SPI_USE_CLK_LOW_1EDGE     // datasheet says CPHA = 0  CPOL = 0
-#define SPI_USE_CLOCKSPEED_9MHZ   // 250 MHz kernel clock / 32 = 7.8125 MHz
+#define SPI_USE_CLOCKSPEED_18MHZ  // 250 MHz kernel clock / 16 = 15.625 MHz
 
 #define SX_RESET                  IO_PB0
 #define SX_BUSY                   IO_PB1
@@ -131,6 +130,9 @@ void sx_init_gpio(void)
 
 bool sx_busy_read(void)
 {
+    if (gpio_read_activehigh(SX_BUSY)) return true;
+    uint32_t t = DWT->CYCCNT;
+    while ((DWT->CYCCNT - t) < 50) {} // 200 ns at 250 MHz
     return (gpio_read_activehigh(SX_BUSY)) ? true : false;
 }
 
