@@ -42,7 +42,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
 {
   if(pcdHandle->Instance==USBD_INST)
   {
-#if defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G474xx
+#if defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G474xx || defined STM32H503xx
     // initialize HSI48, copied with adaption from SystemClock_Config()
     RCC_OscInitTypeDef RCC_OscInitStruct = {};
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48;
@@ -51,6 +51,18 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
     if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
         //Error_Handler();
     }
+#endif
+
+#if defined STM32H503xx
+    // USB_DRD_FS does not take over its pins by itself, PA11/PA12 must be set to AF10
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitTypeDef GPIO_InitStruct = {};
+    GPIO_InitStruct.Pin = GPIO_PIN_11 | GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF10_USB;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 #endif
 
     // copied from SystemClock_Config()
@@ -63,6 +75,8 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
     PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_HSI48;
 #elif defined STM32F072xB
     PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
+#elif defined STM32H503xx
+    PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_HSI48; // PLL3 does not exist on H503
 #endif
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK) {
         //Error_Handler();

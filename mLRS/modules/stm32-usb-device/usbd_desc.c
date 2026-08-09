@@ -179,6 +179,29 @@ uint8_t *USBD_FS_InterfaceStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *lengt
 }
 
 
+// H5: the UID sits in the OTP area, which is not cacheable, reading it with the ICACHE on
+// raises a bus error, see mcu_uid() in stm32ll-lib/src/stdstm32-mcu.h. Unlike there it must be
+// cached here, Get_SerialNum() below runs in isr context where HAL_ICACHE_Disable() would spin
+// on HAL_GetTick() forever, SysTick cannot preempt the USB isr.
+#if defined STM32H5
+static uint32_t usbd_uid[3];
+#undef DEVICE_ID1
+#undef DEVICE_ID2
+#undef DEVICE_ID3
+#define DEVICE_ID1  (&usbd_uid[0])
+#define DEVICE_ID2  (&usbd_uid[1])
+#define DEVICE_ID3  (&usbd_uid[2])
+
+void USBD_ReadSerialNum(void) // must be called once, from thread context, before USBD_Start()
+{
+    uint32_t icache_was_enabled = READ_BIT(ICACHE->CR, ICACHE_CR_EN);
+    if (icache_was_enabled) HAL_ICACHE_Disable();
+    memcpy(usbd_uid, (uint8_t*)UID_BASE, sizeof(usbd_uid));
+    if (icache_was_enabled) HAL_ICACHE_Enable();
+}
+#endif
+
+
 static void Get_SerialNum(void)
 {
     uint32_t deviceserial0;

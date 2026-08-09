@@ -11,6 +11,7 @@
 #ifdef STDSTM32_USE_USB
 
 #include "usbd_cdc.h"
+#include "usbd_desc.h" // for USBD_ReadSerialNum()
 
 
 USBD_HandleTypeDef husbd_CDC;
@@ -83,6 +84,8 @@ uint32_t usb_baudrate(void) { return USBD_CDC_LineCoding.bitrate; }
 
 void usb_init(void)
 {
+    USBD_ReadSerialNum(); // before the host can ask for it from isr context
+
     // copied from MX_USB_DEVICE_Init()
     if (USBD_Init(&husbd_CDC, &USBD_Desc, 0) != USBD_OK) {
         //Error_Handler();
@@ -119,7 +122,7 @@ void usb_deinit(void)
 
     USBD_DeInit(&husbd_CDC);
 
-#if defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G474xx
+#if defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G474xx || defined STM32H503xx
     RCC_OscInitTypeDef RCC_OscInitStruct = {};
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48;
     RCC_OscInitStruct.HSI48State = RCC_HSI48_OFF;

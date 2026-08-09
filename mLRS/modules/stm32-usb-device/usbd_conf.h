@@ -29,7 +29,7 @@ extern "C" {
 #if defined STM32F072xB
 #define USB_RXBUFSIZE       256
 #define USB_TXBUFSIZE       256
-#elif defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G474xx
+#elif defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G474xx || defined STM32H503xx
 #define USB_RXBUFSIZE       2048 // for serial
 #define USB_TXBUFSIZE       2048 // helps with cli
 #else
@@ -60,6 +60,12 @@ extern "C" {
   #define USBD_IRQn         USB_IRQn
   #define USBD_IRQHandler   USB_IRQHandler
   #define USBD_INST         USB
+#elif defined STM32H503xx // H5 has USB_DRD_FS, not the classic USB peripheral, only the names differ
+  #include "stm32h5xx.h"
+  #include "stm32h5xx_hal.h"
+  #define USBD_IRQn         USB_DRD_FS_IRQn
+  #define USBD_IRQHandler   USB_DRD_FS_IRQHandler
+  #define USBD_INST         USB_DRD_FS
 #else
   #error STM32 device not supported by USBD library !
 #endif

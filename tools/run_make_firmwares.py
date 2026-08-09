@@ -404,6 +404,8 @@ MLRS_SOURCES_HAL_STM32H5 = [
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_i2c.c'),
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_i2c_ex.c'),
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_icache.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_pcd.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_pcd_ex.c'),
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_pwr.c'),
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_pwr_ex.c'),
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_rcc.c'),
@@ -424,6 +426,7 @@ MLRS_SOURCES_HAL_STM32H5 = [
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_spi.c'),
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_tim.c'),
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_usart.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_usb.c'),
     os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_utils.c'),
     ]
 
@@ -1145,6 +1148,9 @@ TLIST = [
     },{
         'target' : 'tx-diy-NiceRF-LR2021-g431kb',       'target_D' : 'TX_DIY_NICERF_LR2021_G431KB',
         'extra_D_list' : [], 'appendix' : ''
+    },{
+        'target' : 'tx-diy-WeAct-E22-h503cb',           'target_D' : 'TX_DIY_WEACT_E22_H503CB',
+        'extra_D_list' : ['STDSTM32_USE_USB'], 'appendix' : ''
     },{
 #-- tx WioE5 Mini
         'target' : 'tx-Wio-E5-Mini-wle5jc',             'target_D' : 'TX_WIO_E5_MINI_WLE5JC',
