@@ -132,7 +132,7 @@ bool sx_busy_read(void)
 {
     if (gpio_read_activehigh(SX_BUSY)) return true;
     uint32_t t = DWT->CYCCNT;
-    while ((DWT->CYCCNT - t) < 50) {} // 200 ns at 250 MHz
+    while ((DWT->CYCCNT - t) < 100) {} // 400 ns at 250 MHz
     return (gpio_read_activehigh(SX_BUSY)) ? true : false;
 }
 
