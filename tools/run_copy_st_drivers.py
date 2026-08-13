@@ -96,6 +96,11 @@ for f in MLRS_SOURCES_HAL_STM32F3:
     if '_hal' in f:
         f3xx_hal_files_to_include.append(os.path.basename(f))
 
+c5xx_hal_files_to_include = []
+for f in MLRS_SOURCES_HAL_STM32C5:
+    if '_hal' in f:
+        c5xx_hal_files_to_include.append(os.path.basename(f))
+
 
 # some targets also need the USB driver
 # we can go through TLIST and watch for 'STDSTM32_USE_USB' to determine which do
@@ -209,6 +214,47 @@ def copy_hal_driver(folder, chip, clean=False, silent=False):
         shutil.copy(os.path.join(source,'..','LICENSE.md'), os.path.join(target,'..'))
 
 
+def copy_c5_drivers(folder, clean=False, silent=False):
+    """C5 ships ST's HAL2 package, whose layout differs from every other family:
+    the drivers repo has hal/ and ll/ side by side (headers and sources together, and the
+    LL is header only), and the device headers live in a separate 'dfp' repo. Flatten that
+    into the Drivers/ shape the rest of the tooling expects."""
+    print('--- COPY C5 HAL + CMSIS device ---')
+    if not silent: print('folder:', folder)
+
+    hal_target = os.path.join(mLRSdirectory, folder, 'Drivers', 'STM32C5xx_HAL_Driver')
+    create_clean_dir(hal_target)
+    dev_target = os.path.join(mLRSdirectory, folder, 'Drivers', 'CMSIS', 'Device', 'ST', 'STM32C5xx', 'Include')
+    create_clean_dir(dev_target)
+    if clean: return
+
+    drivers = os.path.join(mLRSProjectdirectory, 'tools', 'st-drivers', 'stm32c5xx_drivers')
+    dfp = os.path.join(mLRSProjectdirectory, 'tools', 'st-drivers', 'stm32c5xx_dfp')
+
+    # Inc gets both the hal and the ll headers
+    target = os.path.join(hal_target, 'Inc')
+    create_clean_dir(target)
+    for sub in ['hal', 'll']:
+        source = os.path.join(drivers, sub)
+        for f in os.listdir(source):
+            if f.endswith('.h'):
+                shutil.copy(os.path.join(source, f), target)
+
+    # Src gets only the hal .c files mLRS actually builds, there are no ll .c files
+    target = os.path.join(hal_target, 'Src')
+    create_clean_dir(target)
+    source = os.path.join(drivers, 'hal')
+    for f in os.listdir(source):
+        if f.endswith('.c') and f in c5xx_hal_files_to_include:
+            shutil.copy(os.path.join(source, f), target)
+
+    # device headers come from the dfp repo
+    source = os.path.join(dfp, 'Include')
+    for f in os.listdir(source):
+        if f.endswith('.h'):
+            shutil.copy(os.path.join(source, f), dev_target)
+
+
 def copy_usb_device_library_driver(folder, clean=False, silent=False):
     print('--- COPY USB Device Library ---')
     if not silent: print('folder:', folder)
@@ -261,8 +307,11 @@ def do_for_each_target(clean=False, silent=False, target_folder='', usb=False):
             
             if not clean:
                 copy_cmsis_core(f, clean, silent)
-                copy_cmsis_device_driver(f, chip, clean, silent)
-                copy_hal_driver(f, chip, clean, silent)
+                if chip[:2] == 'c5':
+                    copy_c5_drivers(f, clean, silent)
+                else:
+                    copy_cmsis_device_driver(f, chip, clean, silent)
+                    copy_hal_driver(f, chip, clean, silent)
             
             if f in targets_with_usb_to_include or usb:
                 copy_usb_device_library_driver(f,clean,silent)

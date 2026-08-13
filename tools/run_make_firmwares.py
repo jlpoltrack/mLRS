@@ -391,7 +391,14 @@ MLRS_SOURCES_HAL_STM32F3 = [
     os.path.join('Drivers','STM32F3xx_HAL_Driver','Src','stm32f3xx_ll_utils.c'),
     ]
 
-MLRS_SOURCES_CORE = [ # the ?? are going to be replaced with mcu_family label, f1, g4, wl, l4
+MLRS_SOURCES_HAL_STM32C5 = [
+    # C5 ships ST's HAL2 package: the LL is header only, there are no stm32c5xx_ll_*.c to build
+    os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal.c'),
+    os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal_cortex.c'),
+    os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal_rcc.c'),
+    ]
+
+MLRS_SOURCES_CORE = [ # the ?? are going to be replaced with mcu_family label, f1, g4, wl, l4, c5
     os.path.join('Core','Src','main.cpp'),
     os.path.join('Core','Src','stm32??xx_hal_msp.c'),
     os.path.join('Core','Src','stm32??xx_it.c'),
@@ -505,6 +512,8 @@ class cTarget:
             self.mcu_family = 'wl'
         elif 'F3' in self.mcu_D and 'F3' in self.mcu_HAL:
             self.mcu_family = 'f3'
+        elif 'C5' in self.mcu_D and 'C5' in self.mcu_HAL:
+            self.mcu_family = 'c5'
         else:
             printError('SHSHHSKHSKHSKHKSHKSHKH')
             print('mcu_D',self.mcu_D)
@@ -539,6 +548,8 @@ class cTarget:
             self.MLRS_SOURCES_HAL = MLRS_SOURCES_HAL_STM32L4
         elif self.mcu_family == 'f3':
             self.MLRS_SOURCES_HAL = MLRS_SOURCES_HAL_STM32F3
+        elif self.mcu_family == 'c5':
+            self.MLRS_SOURCES_HAL = MLRS_SOURCES_HAL_STM32C5
 
         self.MLRS_SOURCES_CORE = []
         for file in MLRS_SOURCES_CORE:
@@ -831,6 +842,15 @@ class cTargetF3(cTarget):
             ['-mcpu=cortex-m4', '-mfpu=fpv4-sp-d16', '-mfloat-abi=hard'],
             extra_D_list, build_dir, elf_name)
 
+class cTargetC5(cTarget):
+    def __init__(self, target, target_D, mcu_D, startup_script, linker_script, extra_D_list, build_dir, elf_name):
+        super().__init__(
+            target, target_D,
+            mcu_D, 'STM32C5xx',
+            startup_script, linker_script,
+            ['-mcpu=cortex-m33', '-mfpu=fpv5-sp-d16', '-mfloat-abi=hard'],
+            extra_D_list, build_dir, elf_name)
+
 
 #-- mcu specific targets
 
@@ -934,6 +954,15 @@ class cTargetF303CC(cTargetF3):
             extra_D_list, build_dir, elf_name)
 
 
+class cTargetC552CE(cTargetC5):
+    def __init__(self, target, target_D, extra_D_list, build_dir, elf_name, package):
+        if package == '': package = 'tx' # WeAct core board is a STM32C552CET6, LQFP48
+        super().__init__(
+            target, target_D,
+            'STM32C552xx', 'startup_stm32c552xx.c', 'STM32C552CE'+package.upper()+'_FLASH.ld',
+            extra_D_list, build_dir, elf_name)
+
+
 #--------------------------------------------------
 # application
 #--------------------------------------------------
@@ -1027,6 +1056,9 @@ TLIST = [
 
 #RX
 #-- rx diy
+        'target' : 'rx-diy-WeAct-E22-c552ce',           'target_D' : 'RX_DIY_WEACT_E22_C552CE',
+        'extra_D_list' : [], 'appendix' : ''
+    },{
         'target' : 'rx-diy-e22-g441kb',                 'target_D' : 'RX_DIY_E22_G441KB',
         'extra_D_list' : [], 'appendix' : ''
     },{
@@ -1208,6 +1240,8 @@ def mlrs_create_targetlist(appendix, extra_D_list):
             tlist.append( cTargetWLE5JC(t['target'], t['target_D'], t['extra_D_list'], build_dir, elf_name) )
         elif 'l433cb' in t['target']:
             tlist.append( cTargetL433CB(t['target'], t['target_D'], t['extra_D_list'], build_dir, elf_name, package) )
+        elif 'c552ce' in t['target']:
+            tlist.append( cTargetC552CE(t['target'], t['target_D'], t['extra_D_list'], build_dir, elf_name, package) )
         elif 'f303cc' in t['target']:
             tlist.append( cTargetF303CC(t['target'], t['target_D'], t['extra_D_list'], build_dir, elf_name, package) )
         else:

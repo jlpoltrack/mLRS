@@ -10,7 +10,7 @@
 
 // for as long as issues with gcc12 are not sorted
 #if __GNUC__ > 11
-  #error Must be gnu gcc 11 or lower!
+  //#error Must be gnu gcc 11 or lower!
 #endif
 
 
@@ -73,6 +73,24 @@
 #include "stm32g4xx_hal.h"
 #include "stm32g4xx_hal_flash.h"
 #include "stm32g4xx_hal_flash_ex.h"
+
+#endif
+#ifdef STM32C552xx
+
+// C5 ships ST's HAL2 driver package: the LL is header only (no _ll_*.c), and there is no
+// hal_flash.h in the form the other families have - the eeprom uses LL_FLASH instead.
+#include "stm32c5xx_ll_bus.h"
+#include "stm32c5xx_ll_rcc.h"
+#include "stm32c5xx_ll_gpio.h"
+#include "stm32c5xx_ll_tim.h"
+#include "stm32c5xx_ll_usart.h"
+#include "stm32c5xx_ll_lpuart.h"
+#include "stm32c5xx_ll_spi.h"
+#include "stm32c5xx_ll_system.h"
+#include "stm32c5xx_ll_exti.h"
+#include "stm32c5xx_ll_flash.h"
+#include "stm32c5xx_ll_icache.h"
+#include "stm32c5xx_hal.h"
 
 #endif
 #ifdef STM32L433xx

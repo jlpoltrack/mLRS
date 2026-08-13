@@ -6,7 +6,8 @@
 	url = https://github.com/olliw42/fastmavlink.git
 [submodule "mLRS/modules/stm32ll-lib"]
 	path = mLRS/modules/stm32ll-lib
-	url = https://github.com/olliw42/stm32ll-lib.git
+	url = https://github.com/jlpoltrack/stm32ll-lib.git
+	branch = C5-Support
 [submodule "mLRS/modules/sx12xx-lib"]
 	path = mLRS/modules/sx12xx-lib
 	url = https://github.com/olliw42/sx12xx-lib.git
@@ -46,3 +47,11 @@
 [submodule "mLRS/modules/dronecan/DSDL"]
 	path = mLRS/modules/dronecan/DSDL
 	url = https://github.com/dronecan/DSDL.git
+[submodule "tools/st-drivers/stm32c5xx_drivers"]
+	path = tools/st-drivers/stm32c5xx_drivers
+	url = https://github.com/STMicroelectronics/stm32c5xx-drivers.git
+	branch = main
+[submodule "tools/st-drivers/stm32c5xx_dfp"]
+	path = tools/st-drivers/stm32c5xx_dfp
+	url = https://github.com/STMicroelectronics/stm32c5xx-dfp.git
+	branch = main
