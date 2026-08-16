@@ -204,9 +204,9 @@ tTxDisp disp;
 // Wifi Bridge
 //-------------------------------------------------------
 
-#include "esp.h"
+#include "esp-wifi-bridge.h"
 
-tTxEspWifiBridge esp;
+tTxEspWifiBridge espWifiBridge;
 
 #include "hc04.h"
 
@@ -782,7 +782,7 @@ RESTARTCONTROLLER
     msp.Init(); // serial port selected by SerialPort
     sx_serial.Init(&mbridge); // serial port selected by SerialPort, ChannelsSource
     cli.Init();
-    esp.Init();
+    espWifiBridge.Init();
     hc04.Init();
     fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
     whileTransmit.Init();
@@ -835,7 +835,7 @@ INITCONTROLLER_END
             disp.Tick_ms(); // can take long
             fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
             fan.Tick_ms();
-            esp.Tick_ms();
+            espWifiBridge.Tick_ms();
 
             if (!tick_1hz) {
                 dbg.puts(".");
@@ -1274,13 +1274,13 @@ IF_IN(
     case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
     case TASK_CHANGE_CONFIG_ID: config_id.Change(tasks.GetConfigIdValue()); break;
     }
-    esp.HandleTask(tx_task, tasks.GetEspStr());
+    espWifiBridge.HandleTask(tx_task, tasks.GetEspStr());
     hc04.HandleTask(tx_task, tasks.GetHc04Value());
     if (tx_task == TASK_RESTART_CONTROLLER) { GOTO_RESTARTCONTROLLER; }
 
     //-- Handle ESP wifi bridge
 
-    esp.Do();
+    espWifiBridge.Do();
 
     //-- more
 
