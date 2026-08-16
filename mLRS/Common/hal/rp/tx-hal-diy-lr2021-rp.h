@@ -95,7 +95,7 @@ bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
 
 #define LED_RGB                   IO_P23  // RGB LED on YD-RP2040 clone board
 #define LED_RGB_PIXEL_NUM         1
-#include "../rp-hal-led-rgb.h"
+#include "rp-hal-led-rgb.h"
 
 
 //-- POWER

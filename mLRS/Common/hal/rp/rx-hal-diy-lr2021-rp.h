@@ -121,7 +121,7 @@ void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 #define LED_RGB                   IO_P23  // RGB LED on YD-RP2040 clone board
 #define LED_RGB_PIXEL_NUM         1
-#include "../rp-hal-led-rgb.h"
+#include "rp-hal-led-rgb.h"
 
 #endif
 
