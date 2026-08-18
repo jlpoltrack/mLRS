@@ -32,9 +32,8 @@
 #define DEVICE_HAS_FAN_ONOFF
 #define DEVICE_HAS_NO_SERIAL
 #define DEVICE_HAS_NO_COM
-#define DEVICE_HAS_ESP_WIFI_BRIDGE
-#define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_JRPIN5
 #define DEVICE_HAS_NO_DEBUG
 
@@ -197,7 +196,7 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actua
             *sx_power = 0;
             *actual_power_dbm = 24;
         } else if (power_dbm >= POWER_20_DBM) { // -> 20
-            *sx_power = -14;
+            *sx_power = -4;
             *actual_power_dbm = 20;
         } else if (power_dbm >= POWER_17_DBM) { // -> 17
             *sx_power = -7;
