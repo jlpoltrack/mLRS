@@ -72,6 +72,8 @@ bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false;
 void sx_amp_transmit(void) {}
 void sx_amp_receive(void) {}
 
+void sx_band(bool high_band) {} // band switching is done by the LR20xx DIO rf switch config
+
 void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO1); }
 void sx_dio_enable_exti_isr(void) { attachInterrupt(digitalPinToInterrupt(SX_DIO1), SX_DIO_EXTI_IRQHandler, RISING); }
 void sx_dio_exti_isr_clearflag(void) {}
