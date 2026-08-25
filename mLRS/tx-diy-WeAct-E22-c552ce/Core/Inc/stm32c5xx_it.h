@@ -1,12 +1,12 @@
+/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file    usbd_desc_template.h
-  * @author  MCD Application Team
-  * @brief   Header for usbd_desc_template.c module
+  * @file    stm32c5xx_it.h
+  * @brief   This file contains the headers of the interrupt handlers.
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2015 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -15,35 +15,27 @@
   *
   ******************************************************************************
   */
-#ifndef __USBD_DESC_H
-#define __USBD_DESC_H
+/* USER CODE END Header */
+
+#ifndef __STM32C5xx_IT_H
+#define __STM32C5xx_IT_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-
-#include "usbd_def.h"
-
-
-#define DEVICE_ID1              (UID_BASE)
-#define DEVICE_ID2              (UID_BASE + 0x4U)
-#define DEVICE_ID3              (UID_BASE + 0x8U)
-
-#define USB_SIZ_STRING_SERIAL   0x1AU
-
-
-#if defined STM32C5
-void USBD_ReadSerialNum(void);
-#else
-#define USBD_ReadSerialNum()
-#endif
-
-
+void NMI_Handler(void);
+void HardFault_Handler(void);
+void MemManage_Handler(void);
+void BusFault_Handler(void);
+void UsageFault_Handler(void);
+void SVC_Handler(void);
+void DebugMon_Handler(void);
+void PendSV_Handler(void);
+void SysTick_Handler(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __USBD_DESC_H */
-
+#endif /* __STM32C5xx_IT_H */

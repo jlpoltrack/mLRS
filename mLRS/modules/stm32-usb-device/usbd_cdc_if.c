@@ -11,6 +11,7 @@
 #ifdef STDSTM32_USE_USB
 
 #include "usbd_cdc.h"
+#include "usbd_desc.h" // for USBD_ReadSerialNum()
 
 
 USBD_HandleTypeDef husbd_CDC;
@@ -83,6 +84,8 @@ uint32_t usb_baudrate(void) { return USBD_CDC_LineCoding.bitrate; }
 
 void usb_init(void)
 {
+    USBD_ReadSerialNum(); // before the host can ask for it from isr context
+
     // copied from MX_USB_DEVICE_Init()
     if (USBD_Init(&husbd_CDC, &USBD_Desc, 0) != USBD_OK) {
         //Error_Handler();

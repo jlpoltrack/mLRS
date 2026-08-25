@@ -29,7 +29,7 @@ extern "C" {
 #if defined STM32F072xB
 #define USB_RXBUFSIZE       256
 #define USB_TXBUFSIZE       256
-#elif defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G474xx
+#elif defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G474xx || defined STM32C552xx
 #define USB_RXBUFSIZE       2048 // for serial
 #define USB_TXBUFSIZE       2048 // helps with cli
 #else
@@ -60,6 +60,28 @@ extern "C" {
   #define USBD_IRQn         USB_IRQn
   #define USBD_IRQHandler   USB_IRQHandler
   #define USBD_INST         USB
+#elif defined STM32C552xx // C5 has USB_DRD_FS, and ships ST's HAL2, see the shims in usbd_conf.c
+  #include "stm32c5xx.h"
+  #include "stm32c5xx_hal.h"
+  #include "stm32c5xx_hal_pcd.h"
+  #define USBD_IRQn         USB_DRD_FS_IRQn
+  #define USBD_IRQHandler   USB_DRD_FS_IRQHandler
+  #define USBD_INST         HAL_PCD_DRD_FS
+  // HAL2 renamed both of these. Alias them back so the glue, and usbd_cdc_if.c, are common.
+  typedef hal_pcd_handle_t  PCD_HandleTypeDef;
+  typedef hal_status_t      HAL_StatusTypeDef;
+  // HAL2 also dropped UNUSED() and prefixed the register access macros, same shims as in
+  // stm32ll-lib's stdstm32-peripherals.h, which this module does not include
+  #ifndef UNUSED
+  #define UNUSED(x)             ((void)(x))
+  #endif
+  #ifndef SET_BIT
+  #define SET_BIT(REG, BIT)     STM32_SET_BIT(REG, BIT)
+  #define CLEAR_BIT(REG, BIT)   STM32_CLEAR_BIT(REG, BIT)
+  #define READ_BIT(REG, BIT)    STM32_READ_BIT(REG, BIT)
+  #define WRITE_REG(REG, VAL)   STM32_WRITE_REG(REG, VAL)
+  #define READ_REG(REG)         STM32_READ_REG(REG)
+  #endif
 #else
   #error STM32 device not supported by USBD library !
 #endif

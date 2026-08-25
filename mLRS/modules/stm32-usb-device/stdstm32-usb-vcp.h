@@ -16,12 +16,20 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#ifndef HAL_PCD_MODULE_ENABLED
+#include "usbd_conf.h" // for the device selection, it is what defines STM32C5 for a C5 target
+
+#if defined STM32C5 // C5 ships ST's HAL2, where the module switch is named differently
+  #if !defined USE_HAL_PCD_MODULE || (USE_HAL_PCD_MODULE != 1)
+    #error USE_HAL_PCD_MODULE not set to 1, set it in Core\Inc\stm32c5xx_hal_conf.h!
+  #endif
+#elif !defined HAL_PCD_MODULE_ENABLED
   #error HAL_PCD_MODULE_ENABLED not defined, enable it in Core\Inc\stm32yyxx_hal_conf.h!
-#else
+#endif
+
 #if !defined STM32G431xx && !defined STM32G441xx && !defined STM32G491xx && !defined STM32G474xx
   #warning NAK flow control not tested on non STM32G4 MCUs!
 #endif
+
 
 
 #include "usbd_cdc.h"
@@ -61,7 +69,6 @@ void usb_deinit(void);
 
 
 //-------------------------------------------------------
-#endif
 #ifdef __cplusplus
 }
 #endif

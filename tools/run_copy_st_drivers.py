@@ -96,10 +96,11 @@ for f in MLRS_SOURCES_HAL_STM32F3:
     if '_hal' in f:
         f3xx_hal_files_to_include.append(os.path.basename(f))
 
-c5xx_hal_files_to_include = []
-for f in MLRS_SOURCES_HAL_STM32C5:
-    if '_hal' in f:
-        c5xx_hal_files_to_include.append(os.path.basename(f))
+# no '_hal' filter here, the usb source is not named that way, and the list is already
+# exactly the set of sources mLRS builds. The usb ones are copied to every C5 target, only
+# the targets with STDSTM32_USE_USB actually compile them.
+c5xx_hal_files_to_include = [os.path.basename(f)
+                             for f in MLRS_SOURCES_HAL_STM32C5 + MLRS_SOURCES_HAL_STM32C5_USB]
 
 
 # some targets also need the USB driver

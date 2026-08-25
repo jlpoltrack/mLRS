@@ -398,6 +398,13 @@ MLRS_SOURCES_HAL_STM32C5 = [
     os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal_rcc.c'),
     ]
 
+# C5 has no ll .c files, so unlike the other families its PCD driver has to be built from
+# the HAL. Only targets with STDSTM32_USE_USB need it, see cTarget below.
+MLRS_SOURCES_HAL_STM32C5_USB = [
+    os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal_pcd.c'),
+    os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_usb_drd_core.c'),
+    ]
+
 MLRS_SOURCES_CORE = [ # the ?? are going to be replaced with mcu_family label, f1, g4, wl, l4, c5
     os.path.join('Core','Src','main.cpp'),
     os.path.join('Core','Src','stm32??xx_hal_msp.c'),
@@ -565,6 +572,9 @@ class cTarget:
                 self.MLRS_SOURCES_EXTRA.append(file)
             for file in MLRS_INCLUDES_USB:
                 self.MLRS_INCLUDES.append(file)
+            if self.mcu_family == 'c5':
+                for file in MLRS_SOURCES_HAL_STM32C5_USB:
+                    self.MLRS_SOURCES_HAL.append(file)
         else: # add stm32-usb-device sources to every target (we could have excluded them in the IDE, but are too lazy LOL)
             for file in MLRS_SOURCES_USB:
                 if 'modules' in file:
@@ -1098,6 +1108,9 @@ TLIST = [
 
 #TX
 #-- tx diy
+        'target' : 'tx-diy-WeAct-E22-c552ce',           'target_D' : 'TX_DIY_WEACT_E22_C552CE',
+        'extra_D_list' : ['STDSTM32_USE_USB'], 'appendix' : ''
+    },{
         'target' : 'tx-diy-e22dual-module02-g491re',    'target_D' : 'TX_DIY_E22DUAL_MODULE02_G491RE',
         'extra_D_list' : [] , 'appendix' : ''
     },{

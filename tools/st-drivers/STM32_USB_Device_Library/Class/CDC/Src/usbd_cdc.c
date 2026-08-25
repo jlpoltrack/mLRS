@@ -545,8 +545,13 @@ static uint8_t USBD_CDC_DataIn(USBD_HandleTypeDef *pdev, uint8_t epnum)
 
   hcdc = (USBD_CDC_HandleTypeDef *)pdev->pClassDataCmsit[pdev->classId];
 
+#if defined STM32C5 // OW: C5 ships ST's HAL2, which renamed these two handle members
+  if ((pdev->ep_in[epnum & 0xFU].total_length > 0U) &&
+      ((pdev->ep_in[epnum & 0xFU].total_length % hpcd->in_ep[epnum & 0xFU].max_packet) == 0U))
+#else
   if ((pdev->ep_in[epnum & 0xFU].total_length > 0U) &&
       ((pdev->ep_in[epnum & 0xFU].total_length % hpcd->IN_ep[epnum & 0xFU].maxpacket) == 0U))
+#endif
   {
     /* Update the packet total length */
     pdev->ep_in[epnum & 0xFU].total_length = 0U;

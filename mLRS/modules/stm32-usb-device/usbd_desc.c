@@ -179,6 +179,39 @@ uint8_t *USBD_FS_InterfaceStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *lengt
 }
 
 
+// C5: the UID sits in the OTP area, which is not cacheable, so reading it with the ICACHE on
+// raises a bus error, see mcu_uid() in stm32ll-lib/src/stdstm32-mcu.h. Unlike there it must be
+// cached here, Get_SerialNum() below runs in isr context, where turning the ICACHE off and
+// waiting for the invalidate to finish is not something we want to do.
+#if defined STM32C5
+static uint32_t usbd_uid[3];
+#undef DEVICE_ID1
+#undef DEVICE_ID2
+#undef DEVICE_ID3
+#define DEVICE_ID1  (&usbd_uid[0])
+#define DEVICE_ID2  (&usbd_uid[1])
+#define DEVICE_ID3  (&usbd_uid[2])
+
+void USBD_ReadSerialNum(void) // must be called once, from thread context, before USBD_Start()
+{
+    uint32_t icache_was_enabled = READ_BIT(ICACHE->CR, ICACHE_CR_EN);
+    if (icache_was_enabled) {
+        WRITE_REG(ICACHE->FCR, ICACHE_FCR_CBSYENDF);
+        CLEAR_BIT(ICACHE->CR, ICACHE_CR_EN);
+        while (READ_BIT(ICACHE->CR, ICACHE_CR_EN) != 0U) {}
+    }
+
+    memcpy(usbd_uid, (uint8_t*)UID_BASE, sizeof(usbd_uid));
+
+    if (icache_was_enabled) {
+        while (READ_BIT(ICACHE->SR, ICACHE_SR_BSYENDF) == 0U) {}
+        WRITE_REG(ICACHE->FCR, ICACHE_FCR_CBSYENDF);
+        SET_BIT(ICACHE->CR, ICACHE_CR_EN);
+    }
+}
+#endif
+
+
 static void Get_SerialNum(void)
 {
     uint32_t deviceserial0;
