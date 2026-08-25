@@ -52,6 +52,7 @@
 #define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_IN_ON_JRPIN5_TX
 #define DEVICE_HAS_COM_ON_USB
+#define DEVICE_HAS_I2C_DISPLAY
 #define DEVICE_HAS_SINGLE_LED
 
 
@@ -106,6 +107,13 @@
 #define UARTF_USE_TX_ISR
 //#define UARTF_USE_RX
 //#define UARTF_RXBUFSIZE           512
+
+
+//-- I2C
+// the OLED, an SSD1306 on a 4 pin module. External pull-ups are on the module.
+
+#define I2C_USE_I2C1              // SCL = PB8, SDA = PB9, both AF4
+#define I2C_CLOCKSPEED_400KHZ     // not all displays seem to work well with 1000 kHz
 
 
 //-- SX1: SX12xx & SPI
@@ -210,7 +218,39 @@ void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 
 //-- 5 Way Switch
-// has none
+// resistor ladder on PA1, read by ADC1. The thresholds are the BetaFPV 1W Micro scheme the
+// Matek modules use, they will want trimming for whatever ladder is actually wired up.
+
+#define FIVEWAY_ADCx              ADC1
+#define FIVEWAY_ADC_IO            IO_PA1 // ADC1_IN1
+#define FIVEWAY_ADC_CHANNELx      LL_ADC_CHANNEL_1
+
+#define KEY_UP_THRESH             3230
+#define KEY_DOWN_THRESH           0
+#define KEY_LEFT_THRESH           1890
+#define KEY_RIGHT_THRESH          2623
+#define KEY_CENTER_THRESH         1205
+
+void fiveway_init(void)
+{
+    adc_init_begin(FIVEWAY_ADCx);
+    adc_init_one_channel(FIVEWAY_ADCx);
+    adc_config_channel(FIVEWAY_ADCx, LL_ADC_REG_RANK_1, FIVEWAY_ADC_CHANNELx, FIVEWAY_ADC_IO);
+    adc_enable(FIVEWAY_ADCx);
+    delay_us(100);
+    adc_start_conversion(FIVEWAY_ADCx);
+}
+
+uint8_t fiveway_read(void)
+{
+    int16_t adc = LL_ADC_REG_ReadConversionData12(FIVEWAY_ADCx);
+    if (adc > (KEY_CENTER_THRESH-250) && adc < (KEY_CENTER_THRESH+250)) return (1 << KEY_CENTER);
+    if (adc > (KEY_LEFT_THRESH-250) && adc < (KEY_LEFT_THRESH+250)) return (1 << KEY_LEFT);
+    if (adc > (KEY_DOWN_THRESH-250) && adc < (KEY_DOWN_THRESH+250)) return (1 << KEY_DOWN);
+    if (adc > (KEY_UP_THRESH-250) && adc < (KEY_UP_THRESH+250)) return (1 << KEY_UP);
+    if (adc > (KEY_RIGHT_THRESH-250) && adc < (KEY_RIGHT_THRESH+250)) return (1 << KEY_RIGHT);
+    return 0;
+}
 
 
 //-- Buzzer

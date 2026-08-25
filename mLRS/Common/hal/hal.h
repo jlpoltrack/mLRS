@@ -337,7 +337,11 @@ extern "C" { void delay_ms(uint16_t ms); }
 
 #if defined DEVICE_HAS_I2C_DAC || defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180
   #define USE_I2C
-  #ifndef HAL_I2C_MODULE_ENABLED
+  #if defined STM32C5 // HAL2 names the module switch differently, and the C5 i2c arm is LL only
+    #if !defined USE_HAL_I2C_MODULE || (USE_HAL_I2C_MODULE != 1)
+      #error USE_HAL_I2C_MODULE is not set to 1, but I2C is used!
+    #endif
+  #elif !defined HAL_I2C_MODULE_ENABLED
     #error HAL_I2C_MODULE_ENABLED is not defined, but I2C is used!
   #endif
 #endif
