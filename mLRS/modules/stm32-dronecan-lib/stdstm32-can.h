@@ -226,7 +226,8 @@ void can_init(uint8_t canfd_enable)
     gpio_init_af(CAN_RX_IO, IO_MODE_OUTPUT_ALTERNATE_PP, CAN_RX_IO_AF, IO_SPEED_VERYFAST);
     gpio_init_af(CAN_TX_IO, IO_MODE_OUTPUT_ALTERNATE_PP, CAN_TX_IO_AF, IO_SPEED_VERYFAST);
 
-    // FDCAN kernel clock initialization, PSIK = PSI / 2 = 72 MHz
+    // FDCAN kernel clock initialization, PSIK = PSI / 2 = 72 MHz.
+    // PSIKDIV is owned by FDCAN, the ADC uses HSIK so the two do not fight over it.
     LL_RCC_PSIK_SetDivider(LL_RCC_PSIK_DIV_2);
     LL_RCC_PSIK_Enable();
     while (LL_RCC_PSIK_IsReady() != 1U) {}
