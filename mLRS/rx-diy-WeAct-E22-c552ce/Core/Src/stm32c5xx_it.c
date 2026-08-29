@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32c5xx_it.h"
+#include "stm32c5xx_ll_flash.h"
 
 /******************************************************************************/
 /*           Cortex Processor Interruption and Exception Handlers             */
@@ -30,6 +31,18 @@
   */
 void NMI_Handler(void)
 {
+  /* An uncorrectable flash ECC error raises an NMI on this family, and reading a word that
+     was never programmed is exactly such an error. The emulated eeprom does read erased
+     pages - ee_init() reads the two page headers before it knows anything about them - so
+     this must be survivable: clear the flag and resume, the read returns all ones which is
+     what the eeprom expects to see for an erased page. Only a genuinely unexpected NMI
+     (there is no other source enabled here, the CSS is off) is left to hang. */
+  if (LL_FLASH_IsActiveFlag_ECCD(FLASH)) /* ECCD lives in ECCDETR, not in SR */
+  {
+    LL_FLASH_ClearFlag_ECCD(FLASH);
+    return;
+  }
+
   while (1)
   {
   }
