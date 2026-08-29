@@ -28,9 +28,8 @@
 // Deltas vs the H503 board, all forced by the silicon or the board:
 //   - the user LED is on PE2, not PC13 (PC13 is only broken out to a header here)
 //   - the C55x has no TIM3, so MICROS_TIMx uses TIM5 (32 bit, otherwise unused)
-//   - PB15 has no FDCAN function on C5, so CAN TX moves PB15 -> PB13. Note that RX and TX
-//     land on different AFs here (PB12 = AF10, PB13 = AF9), unlike the H503 where all
-//     FDCAN1 options were AF9.
+//   - PB15 has no FDCAN function on C5, so CAN TX moves PB15 -> PB13. Both are AF9, same
+//     as the FDCAN1 options on the H503.
 //
 // Wiring to the E22-900M / SX1262 module:
 //   module NSS  -> PA4    (GPIO out, software NSS)
@@ -41,7 +40,7 @@
 //   module RXEN -> PB4    module TXEN -> PB5
 //
 // Wiring to the CAN transceiver (not on the board, e.g. a SN65HVD230 or TCAN332 breakout):
-//   transceiver RX -> PB12  (FDCAN1_RX, AF10)
+//   transceiver RX -> PB12  (FDCAN1_RX, AF9)
 //   transceiver TX -> PB13  (FDCAN1_TX, AF9)
 //
 // The board has only one user LED, so DEVICE_HAS_SINGLE_LED is used and only the
@@ -49,6 +48,7 @@
 
 #define DEVICE_HAS_OUT
 #define DEVICE_HAS_SINGLE_LED
+#define DEVICE_HAS_DRONECAN_FD
 
 //-- Timers, Timing, EEPROM, and such stuff
 
@@ -215,6 +215,13 @@ void leds_init(void)
 void led_red_off(void) { gpio_high(LED_RED); }
 void led_red_on(void) { gpio_low(LED_RED); }
 void led_red_toggle(void) { gpio_toggle(LED_RED); }
+
+
+//-- DroneCAN
+// FDCAN1 on PB12/PB13, the only FDCAN mapping bonded in this package. The pin and AF
+// details are in stdstm32-can.h, both pins are AF9.
+
+#define CAN_USE_FDCAN1_PB12PB13
 
 
 //-- POWER

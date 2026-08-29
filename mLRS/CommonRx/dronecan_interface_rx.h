@@ -60,6 +60,8 @@ void dc_hal_rx_flush(void) {}
 
 #ifdef STM32G4
 #define CANARD_POOL_SIZE  4096
+#elif defined STM32C5
+#define CANARD_POOL_SIZE  4096 // the C552 has 128 kB of RAM, so it can afford the G4's size
 #elif defined STM32F1
 #define CANARD_POOL_SIZE  1024
 #endif

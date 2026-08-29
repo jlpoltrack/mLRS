@@ -396,6 +396,7 @@ MLRS_SOURCES_HAL_STM32C5 = [
     os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal.c'),
     os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal_cortex.c'),
     os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal_rcc.c'),
+    os.path.join('Drivers','STM32C5xx_HAL_Driver','Src','stm32c5xx_hal_fdcan.c'),
     ]
 
 # C5 has no ll .c files, so unlike the other families its PCD driver has to be built from
@@ -429,6 +430,7 @@ MLRS_SOURCES_MODULES = [
     os.path.join('modules','stm32-dronecan-lib','libcanard','canard.c'),
     os.path.join('modules','stm32-dronecan-lib','stm32-dronecan-driver-f1.c'),
     os.path.join('modules','stm32-dronecan-lib','stm32-dronecan-driver-g4.c'),
+    os.path.join('modules','stm32-dronecan-lib','stm32-dronecan-driver-c5.c'),
     os.path.join('modules','sx12xx-lib','src','sx126x.cpp'),
     os.path.join('modules','sx12xx-lib','src','sx127x.cpp'),
     os.path.join('modules','sx12xx-lib','src','sx128x.cpp'),
