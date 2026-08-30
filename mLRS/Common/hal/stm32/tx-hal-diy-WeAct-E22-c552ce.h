@@ -54,8 +54,8 @@
 #define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_IN_ON_JRPIN5_TX
 #define DEVICE_HAS_COM_ON_USB
-//#define DEVICE_HAS_I2C_DISPLAY // TEMP off, no display wired up yet
-#define DEVICE_HAS_FIVEWAY // 5 way without display, also keeps hal.h from stubbing fiveway_init()
+#define DEVICE_HAS_I2C_DISPLAY
+#define DEVICE_HAS_FIVEWAY
 #define DEVICE_HAS_SINGLE_LED
 
 
