@@ -842,16 +842,8 @@ int16_t dc_hal_compute_timings(
     // which can be achieved with prescaler 10, BS1 = 6, BS2 = 1, SJW = 1, -> SP = 7/8 = 87.5%.
     // It also would give SP 87.5% which ChatGPT says is industry standard. ??
 #if 1
-    // 72 MHz is what the C5 can actually produce, PSIK = PSI 144 MHz / 2, see stdstm32-can.h.
-    // 72 MHz / 1 Mbps = 72 tq, and prescaler 9 splits that into exactly 8 tq per bit:
-    // SP = (1 + BS1) / (1 + BS1 + BS2) = 7/8 = 87.5%, the industry standard value, and the
-    // 8 tq the comment above calls optimal.
-    if (peripheral_clock_rate == 72000000) { // 72 MHz
-        timings->bit_rate_prescaler = 9;
-        timings->bit_segment_1 = 6;
-        timings->bit_segment_2 = 1;
-        timings->sync_jump_width = 1;
-    } else if (peripheral_clock_rate == 80000000) { // 80 MHz
+    // the C5 runs FDCAN at 80 MHz, PSIK = PSI 160 MHz / 2, see stdstm32-can.h
+    if (peripheral_clock_rate == 80000000) { // 80 MHz
         timings->bit_rate_prescaler = 8;
         timings->bit_segment_1 = 8;
         timings->bit_segment_2 = 1;
@@ -929,39 +921,8 @@ int16_t dc_hal_compute_data_timings(
     const uint32_t target_data_bit_rate,
     tDcHalCanDataTimings* const data_timings)
 {
-    if ((peripheral_clock_rate != 80000000) && (peripheral_clock_rate != 72000000)) {
+    if (peripheral_clock_rate != 80000000) {
         return -DC_HAL_ERROR_UNSUPPORTED_CLOCK_FREQUENCY;
-    }
-
-    // table for the C5's 72 MHz FDCAN clock, PSIK = PSI 144 MHz / 2, see stdstm32-can.h.
-    // Every entry lands on 18 tq per bit with SP = 14/18 = 77.8%, except 8 Mbps which only
-    // has 9 tq to work with. 5 Mbps is absent on purpose: 72 MHz / 5 Mbps = 14.4, not a whole
-    // number of tq, and no prescaler can fix that - 144 MHz has no factor of 5.
-    if (peripheral_clock_rate == 72000000) {
-        if (target_data_bit_rate == 1000000) {
-            data_timings->bit_rate_prescaler = 4;
-            data_timings->bit_segment_1 = 13;
-            data_timings->bit_segment_2 = 4;
-            data_timings->sync_jump_width = 4;
-        } else if (target_data_bit_rate == 2000000) {
-            data_timings->bit_rate_prescaler = 2;
-            data_timings->bit_segment_1 = 13;
-            data_timings->bit_segment_2 = 4;
-            data_timings->sync_jump_width = 4;
-        } else if (target_data_bit_rate == 4000000) {
-            data_timings->bit_rate_prescaler = 1;
-            data_timings->bit_segment_1 = 13;
-            data_timings->bit_segment_2 = 4;
-            data_timings->sync_jump_width = 4;
-        } else if (target_data_bit_rate == 8000000) {
-            data_timings->bit_rate_prescaler = 1;
-            data_timings->bit_segment_1 = 6;
-            data_timings->bit_segment_2 = 2;
-            data_timings->sync_jump_width = 2;
-        } else {
-            return -DC_HAL_ERROR_UNSUPPORTED_BIT_RATE;
-        }
-        goto CHECK_DATA_TIMINGS;
     }
 
     // ArduPilot table for 80 MHz, ardupilot/libraries/AP_HAL_ChibiOS/CANFDIface.cpp
@@ -994,7 +955,6 @@ int16_t dc_hal_compute_data_timings(
         return -DC_HAL_ERROR_UNSUPPORTED_BIT_RATE;
     }
 
-CHECK_DATA_TIMINGS: ;
     // let's do a check
     const uint32_t bit_time = (1 + data_timings->bit_segment_1 + data_timings->bit_segment_2) * data_timings->bit_rate_prescaler;
     const uint32_t expected = peripheral_clock_rate / target_data_bit_rate;

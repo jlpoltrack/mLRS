@@ -28,6 +28,7 @@ extern "C" {
 #include "stm32c5xx_hal.h"
 #include "stm32c5xx_ll_bus.h"
 #include "stm32c5xx_ll_rcc.h"
+#include "stm32c5xx_ll_crs.h"
 #include "stm32c5xx_ll_gpio.h"
 #include "stm32c5xx_ll_system.h"
 #include "stm32c5xx_ll_flash.h"

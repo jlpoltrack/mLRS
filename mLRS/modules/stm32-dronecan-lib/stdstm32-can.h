@@ -206,14 +206,11 @@ void can_init(uint8_t canfd_enable)
 
 #elif defined STM32C5
 //-- STM32C5
-// The FDCAN kernel clock can be sourced from PCLK1, PSIS, PSIK or HSE. The C5 has no PLL,
-// so there is no free PLL output to dial in the 80 MHz the G4 and H5 targets use (see the
-// comments for the G4 above): PSIK is the only source that can be divided independently of
-// SYSCLK, and with PSI at 144 MHz the reachable set is 144/n for n in 0.5 steps, so PSIK/2
-// = 72 MHz is the closest usable value. dc_hal_compute_timings() is a lookup table, not a
-// solver, so 72 MHz needs its own entries there - see stm32-dronecan-driver-c5.c.
-// Note this rules out a 5 Mbps data rate: 72/5 is not a whole number of tq, and no
-// divider can fix that since 144 has no factor of 5. 1/2/4/8 Mbps are all exact.
+// PSIK is the only FDCAN source divisible independently of SYSCLK, and PSI only outputs
+// 100/144/160 MHz (RM0522 Table 66), so 160/2 = 80 MHz is the one way to reach 80 - the
+// only rate where 1/2/4/5/8 Mbps are all a whole number of tq.
+// The cost: PSIFREQ is shared, so PSI at 160 puts PSIS over the 144 MHz SYSCLK limit and
+// the Rx runs SYSCLK from CRS-disciplined HSIS instead, see the target's main.cpp.
 
 #if !defined USE_HAL_FDCAN_MODULE || (USE_HAL_FDCAN_MODULE != 1)
   #error USE_HAL_FDCAN_MODULE not 1, enable it in Core\Inc\stm32c5xx_hal_conf.h!
@@ -226,14 +223,27 @@ void can_init(uint8_t canfd_enable)
     gpio_init_af(CAN_RX_IO, IO_MODE_OUTPUT_ALTERNATE_PP, CAN_RX_IO_AF, IO_SPEED_VERYFAST);
     gpio_init_af(CAN_TX_IO, IO_MODE_OUTPUT_ALTERNATE_PP, CAN_TX_IO_AF, IO_SPEED_VERYFAST);
 
-    // FDCAN kernel clock initialization, PSIK = PSI / 2 = 72 MHz.
-    // PSIKDIV is owned by FDCAN, the ADC uses HSIK so the two do not fight over it.
+    // PSI is ours alone here: nothing else uses PSIS/PSIDIV3, and the ADC runs off HSIK.
+    // PSIS cannot be stopped while it clocks the system, so PSIFREQ could not be changed.
+    if (LL_RCC_GetSysClkSource() == LL_RCC_SYS_CLKSOURCE_STATUS_PSIS) {
+        DBG_DC(dbg.puts("\nERROR: FDCAN needs PSI at 160 MHz, but SYSCLK runs from PSIS");)
+        return;
+    }
+
+    // PSI = 160 MHz off the HSE crystal, PSIK = PSI / 2 = 80 MHz.
+    // PSIFREQ/PSIREF are only writable with PSI off, so stop the outputs first.
+    LL_RCC_PSIS_Disable();
+    LL_RCC_PSIK_Disable();
+    LL_RCC_SetPSIClkSource(LL_RCC_PSISOURCE_HSE);
+    LL_RCC_SetPSIRef(LL_RCC_PSIREF_8MHZ);
+    LL_RCC_SetPSIFreqOutput(LL_RCC_PSIFREQ_160MHZ);
+
     LL_RCC_PSIK_SetDivider(LL_RCC_PSIK_DIV_2);
     LL_RCC_PSIK_Enable();
     while (LL_RCC_PSIK_IsReady() != 1U) {}
     LL_RCC_SetFDCANClockSource(LL_RCC_FDCAN_CLKSOURCE_PSIK);
 
-    uint32_t peripheral_clock_rate = 72000000;
+    uint32_t peripheral_clock_rate = 80000000;
 
     LL_APB1_GRP2_EnableClock(LL_APB1_GRP2_PERIPH_FDCAN); // FDCAN is on APB1H on the C5
 
