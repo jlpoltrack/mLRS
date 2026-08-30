@@ -37,7 +37,8 @@
 //   Serial  Tx -> PA9    Rx -> PA10   (USART1, AF7)
 //   JR Pin5 -> PA2                    (USART2 Tx pin, AF7, half duplex)
 //   JR GND  -> PA1                    (GPIO out low, sits next to PA2 on the header)
-//   5 way   -> PA0                    (ADC1_IN0, one pin, no external pull-up)
+//   5 way   -> PA0                    (ADC1_IN0, one pin, pulled up from PC13)
+//   pull-up -> PC13                   (GPIO out high, 1k external resistor to PA0)
 //   Debug   Tx -> PB6                 (LPUART1, AF8)
 //   Com/CLI -> the Type-C connector    (USB, PA11/PA12)
 //
@@ -222,45 +223,56 @@ void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 //-- 5 Way Switch
 // one ADC pin for all five keys, as on the G4 Tx boards:
-//   PA0 - 5 switches to GND, through 0R / 10k / 22k / 47k / 100k, plus one pull-up to 3V3
+//   PA0 - 5 switches to GND, through 0R / 8k / 20k / 44k / 116k, plus one pull-up to PC13
+// Those are the resistances back-computed from the measured codes, R = R_pu * code/(4095-code),
+// and the key order along the chain is down, right, up, left, center, not the G4 boards' order.
 //
 // The pull-up must be an external resistor. PCSEL is an additional switch in front of the ADC
 // on the C5, it does not replace GPIO MODER: with PA0 in digital input mode the pad is still
 // cut off from the ADC and every conversion returns 0, measured on the board (IDR read high
 // while DR stayed 0 with ADEN/ADSTART set). So the pin stays in analog mode, and analog mode
 // disables the internal pull-up, exactly as on G4.
+// The top of the resistor is not 3V3 but PC13, driven high as a push-pull output. PC13 is
+// otherwise unused on this board and sits on the header, so the resistor is easy to fit.
 // The board's KEY SW1 hangs on PA0 too, through R1 330R to GND, i.e. it is the 0R key.
 // PA0 is the only ADC pin left anyway: the C552 in LQFP48 has ADC1 on PA0..PA7 only
 // (PC0..PC3, ADC1_IN8..11, are not bonded) and PA1..PA7 are all taken.
 //
 // FIVEWAY_PULLUP_KOHM is the fitted resistor. The key codes are 4095*R/(R+R_pu) and the
 // thresholds are the midpoints between them, so retuning for another resistor is a one line
-// change. 47k spreads the upper keys much wider than 10k does. Use fiveway_adc_read() to check.
+// change. With the 1k fitted here the four upper keys sit between 3635 and 4060, i.e. only
+// 35..110 counts apart; a 10k resistor spreads the same chain over 1820..3770. Measured with
+// fiveway_adc_read(): 110 / 3635 / 3895 / 4005 / 4060, released 4095.
 //
 // PA1 is driven low, so that the JR pin5 lead can pick up its ground on the pin right
 // next to PA2 rather than being run to a GND pad.
 
 #define JRPIN5_GND                IO_PA1
 
+#define FIVEWAY_PULLUP_IO         IO_PC13 // top of the external pull-up resistor
+
 #define FIVEWAY_ADCx              ADC1
 #define FIVEWAY_ADC_IO            IO_PA0 // ADC1_IN0
 #define FIVEWAY_ADC_CHANNELx      LL_ADC_CHANNEL_0
 
-#define FIVEWAY_PULLUP_KOHM       47 // external pull-up from PA0 to 3V3
+#define FIVEWAY_PULLUP_KOHM       1 // external pull-up from PA0 to PC13
 
 #define FIVEWAY_CODE(r_kohm)      ((4095 * (r_kohm)) / ((r_kohm) + FIVEWAY_PULLUP_KOHM))
 #define FIVEWAY_THRESH(r1, r2)    ((FIVEWAY_CODE(r1) + FIVEWAY_CODE(r2)) / 2)
 
-#define KEY_DOWN_THRESH           FIVEWAY_THRESH(0, 10)   // 0R
-#define KEY_LEFT_THRESH           FIVEWAY_THRESH(10, 22)  // 10k
-#define KEY_RIGHT_THRESH          FIVEWAY_THRESH(22, 47)  // 22k
-#define KEY_UP_THRESH             FIVEWAY_THRESH(47, 100) // 47k
-#define KEY_CENTER_THRESH         ((FIVEWAY_CODE(100) + 4095) / 2) // 100k vs released
+#define KEY_DOWN_THRESH           FIVEWAY_THRESH(0, 8)    // 0R
+#define KEY_RIGHT_THRESH          FIVEWAY_THRESH(8, 20)   // 8k
+#define KEY_UP_THRESH             FIVEWAY_THRESH(20, 44)  // 20k
+#define KEY_LEFT_THRESH           FIVEWAY_THRESH(44, 116) // 44k
+#define KEY_CENTER_THRESH         ((FIVEWAY_CODE(116) + 4095) / 2) // 116k vs released
 
 void fiveway_init(void)
 {
     gpio_init(JRPIN5_GND, IO_MODE_OUTPUT_PP_LOW, IO_SPEED_DEFAULT);
     gpio_low(JRPIN5_GND);
+
+    gpio_init(FIVEWAY_PULLUP_IO, IO_MODE_OUTPUT_PP_HIGH, IO_SPEED_DEFAULT);
+    gpio_high(FIVEWAY_PULLUP_IO);
 
     adc_init_begin(FIVEWAY_ADCx);
     adc_init_one_channel(FIVEWAY_ADCx);
@@ -279,9 +291,9 @@ uint8_t fiveway_read(void)
 {
     uint16_t adc = LL_ADC_REG_ReadConversionData12(FIVEWAY_ADCx);
     if (adc < KEY_DOWN_THRESH) return (1 << KEY_DOWN);
-    if (adc < KEY_LEFT_THRESH) return (1 << KEY_LEFT);
     if (adc < KEY_RIGHT_THRESH) return (1 << KEY_RIGHT);
     if (adc < KEY_UP_THRESH) return (1 << KEY_UP);
+    if (adc < KEY_LEFT_THRESH) return (1 << KEY_LEFT);
     if (adc < KEY_CENTER_THRESH) return (1 << KEY_CENTER);
     return 0;
 }
@@ -310,5 +322,4 @@ uint32_t portb[] = {
 };
 
 uint32_t portc[] = {
-    LL_GPIO_PIN_13,
 };
