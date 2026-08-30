@@ -23,7 +23,7 @@
 //   PA11/PA12   USB DN/DP, wired to the Type-C connector
 //   PA4..PA7    SPI1 + CS of the W25Qxx footprint (U3); used here for the E22
 //   PE2         blue user LED D1, via R5 5.1k from 3V3 -> LED lights when PE2 is LOW
-//   PA0         user KEY SW1, to GND (via R1 330R)
+//   PA0         user KEY SW1, to GND (via R1 330R); used here as the 5 way ADC input
 //
 // Wiring to the E22-900M / SX1262 module, same as on the receiver:
 //   module NSS  -> PA4    (GPIO out, software NSS)
@@ -36,6 +36,8 @@
 // Wiring of the ports, all on pins broken out to the board's headers:
 //   Serial  Tx -> PA9    Rx -> PA10   (USART1, AF7)
 //   JR Pin5 -> PA2                    (USART2 Tx pin, AF7, half duplex)
+//   JR GND  -> PA1                    (GPIO out low, sits next to PA2 on the header)
+//   5 way   -> PA0                    (ADC1_IN0, one pin, no external pull-up)
 //   Debug   Tx -> PB6                 (LPUART1, AF8)
 //   Com/CLI -> the Type-C connector    (USB, PA11/PA12)
 //
@@ -52,7 +54,8 @@
 #define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_IN_ON_JRPIN5_TX
 #define DEVICE_HAS_COM_ON_USB
-#define DEVICE_HAS_I2C_DISPLAY
+//#define DEVICE_HAS_I2C_DISPLAY // TEMP off, no display wired up yet
+#define DEVICE_HAS_FIVEWAY // 5 way without display, also keeps hal.h from stubbing fiveway_init()
 #define DEVICE_HAS_SINGLE_LED
 
 
@@ -66,8 +69,14 @@
 // and the firmware must stay below 488 kB.
 #define EE_START_PAGE             61 // 512 kB flash, 8 kB page
 
-#define MICROS_TIMx               TIM5 // C55x has no TIM3
-#define MICROS_TIM_NAMEPREFIX     TIM5_ // the tx clock uses the micros timer's CC1
+// C55x has no TIM3, so the micros timer is TIM16 here, as on the other TIM16 targets.
+// It MUST be a 16 bit timer. The tx clock shares the micros timer and puts its CC1 delay on
+// it, and clock_tx.h writes that compare as (uint16_t)(CNT + delay_us). On a 32 bit timer the
+// counter runs past 0xFFFF after 65 ms and never comes back down, so the compare would match
+// once and then never again, and the JR pin5 bridge would hang in TRANSMIT_PENDING forever.
+// The C5's 32 bit timers are TIM2 and TIM5, and TIM6/TIM7 have no capture/compare unit at all.
+#define MICROS_TIMx               TIM16
+#define MICROS_TIM_NAMEPREFIX     TIM16_ // the tx clock uses the micros timer's CC1
 
 #define CLOCK_TIMx                TIM2
 #define CLOCK_IRQn                TIM2_IRQn
@@ -187,18 +196,12 @@ void sx_dio_exti_isr_clearflag(void)
 
 
 //-- Button
+// has none. PA0 carries the 5 way chain now, see below. button_pressed() is not called by
+// the Tx code, only button_init() is, so nothing is lost here.
 
-#define BUTTON                    IO_PA0 // user KEY SW1
+void button_init(void) {}
 
-void button_init(void)
-{
-    gpio_init(BUTTON, IO_MODE_INPUT_PU, IO_SPEED_DEFAULT);
-}
-
-bool button_pressed(void)
-{
-    return gpio_read_activelow(BUTTON);
-}
+bool button_pressed(void) { return false; }
 
 
 //-- LEDs
@@ -218,21 +221,47 @@ void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 
 //-- 5 Way Switch
-// resistor ladder on PA1, read by ADC1. The thresholds are the BetaFPV 1W Micro scheme the
-// Matek modules use, they will want trimming for whatever ladder is actually wired up.
+// one ADC pin for all five keys, as on the G4 Tx boards:
+//   PA0 - 5 switches to GND, through 0R / 10k / 22k / 47k / 100k, plus one pull-up to 3V3
+//
+// The pull-up must be an external resistor. PCSEL is an additional switch in front of the ADC
+// on the C5, it does not replace GPIO MODER: with PA0 in digital input mode the pad is still
+// cut off from the ADC and every conversion returns 0, measured on the board (IDR read high
+// while DR stayed 0 with ADEN/ADSTART set). So the pin stays in analog mode, and analog mode
+// disables the internal pull-up, exactly as on G4.
+// The board's KEY SW1 hangs on PA0 too, through R1 330R to GND, i.e. it is the 0R key.
+// PA0 is the only ADC pin left anyway: the C552 in LQFP48 has ADC1 on PA0..PA7 only
+// (PC0..PC3, ADC1_IN8..11, are not bonded) and PA1..PA7 are all taken.
+//
+// FIVEWAY_PULLUP_KOHM is the fitted resistor. The key codes are 4095*R/(R+R_pu) and the
+// thresholds are the midpoints between them, so retuning for another resistor is a one line
+// change. 47k spreads the upper keys much wider than 10k does. Use fiveway_adc_read() to check.
+//
+// PA1 is driven low, so that the JR pin5 lead can pick up its ground on the pin right
+// next to PA2 rather than being run to a GND pad.
+
+#define JRPIN5_GND                IO_PA1
 
 #define FIVEWAY_ADCx              ADC1
-#define FIVEWAY_ADC_IO            IO_PA1 // ADC1_IN1
-#define FIVEWAY_ADC_CHANNELx      LL_ADC_CHANNEL_1
+#define FIVEWAY_ADC_IO            IO_PA0 // ADC1_IN0
+#define FIVEWAY_ADC_CHANNELx      LL_ADC_CHANNEL_0
 
-#define KEY_UP_THRESH             3230
-#define KEY_DOWN_THRESH           0
-#define KEY_LEFT_THRESH           1890
-#define KEY_RIGHT_THRESH          2623
-#define KEY_CENTER_THRESH         1205
+#define FIVEWAY_PULLUP_KOHM       47 // external pull-up from PA0 to 3V3
+
+#define FIVEWAY_CODE(r_kohm)      ((4095 * (r_kohm)) / ((r_kohm) + FIVEWAY_PULLUP_KOHM))
+#define FIVEWAY_THRESH(r1, r2)    ((FIVEWAY_CODE(r1) + FIVEWAY_CODE(r2)) / 2)
+
+#define KEY_DOWN_THRESH           FIVEWAY_THRESH(0, 10)   // 0R
+#define KEY_LEFT_THRESH           FIVEWAY_THRESH(10, 22)  // 10k
+#define KEY_RIGHT_THRESH          FIVEWAY_THRESH(22, 47)  // 22k
+#define KEY_UP_THRESH             FIVEWAY_THRESH(47, 100) // 47k
+#define KEY_CENTER_THRESH         ((FIVEWAY_CODE(100) + 4095) / 2) // 100k vs released
 
 void fiveway_init(void)
 {
+    gpio_init(JRPIN5_GND, IO_MODE_OUTPUT_PP_LOW, IO_SPEED_DEFAULT);
+    gpio_low(JRPIN5_GND);
+
     adc_init_begin(FIVEWAY_ADCx);
     adc_init_one_channel(FIVEWAY_ADCx);
     adc_config_channel(FIVEWAY_ADCx, LL_ADC_REG_RANK_1, FIVEWAY_ADC_CHANNELx, FIVEWAY_ADC_IO);
@@ -241,14 +270,19 @@ void fiveway_init(void)
     adc_start_conversion(FIVEWAY_ADCx);
 }
 
+uint16_t fiveway_adc_read(void)
+{
+    return LL_ADC_REG_ReadConversionData12(FIVEWAY_ADCx);
+}
+
 uint8_t fiveway_read(void)
 {
-    int16_t adc = LL_ADC_REG_ReadConversionData12(FIVEWAY_ADCx);
-    if (adc > (KEY_CENTER_THRESH-250) && adc < (KEY_CENTER_THRESH+250)) return (1 << KEY_CENTER);
-    if (adc > (KEY_LEFT_THRESH-250) && adc < (KEY_LEFT_THRESH+250)) return (1 << KEY_LEFT);
-    if (adc > (KEY_DOWN_THRESH-250) && adc < (KEY_DOWN_THRESH+250)) return (1 << KEY_DOWN);
-    if (adc > (KEY_UP_THRESH-250) && adc < (KEY_UP_THRESH+250)) return (1 << KEY_UP);
-    if (adc > (KEY_RIGHT_THRESH-250) && adc < (KEY_RIGHT_THRESH+250)) return (1 << KEY_RIGHT);
+    uint16_t adc = LL_ADC_REG_ReadConversionData12(FIVEWAY_ADCx);
+    if (adc < KEY_DOWN_THRESH) return (1 << KEY_DOWN);
+    if (adc < KEY_LEFT_THRESH) return (1 << KEY_LEFT);
+    if (adc < KEY_RIGHT_THRESH) return (1 << KEY_RIGHT);
+    if (adc < KEY_UP_THRESH) return (1 << KEY_UP);
+    if (adc < KEY_CENTER_THRESH) return (1 << KEY_CENTER);
     return 0;
 }
 

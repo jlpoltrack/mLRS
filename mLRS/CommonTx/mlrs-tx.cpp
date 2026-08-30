@@ -811,6 +811,11 @@ INITCONTROLLER_END
 
             if (!tick_1hz) {
                 dbg.puts(".");
+#ifdef TX_DIY_WEACT_E22_C552CE
+                dbg.puts(" 5way adc "); dbg.puts(u16toBCD_s(fiveway_adc_read()));
+                dbg.puts(" key "); dbg.puts(u8toHEX_s(fiveway_read()));
+                dbg.putc('\n');
+#endif
 /*                dbg.puts("\nTX: ");
                 dbg.puts(u8toBCD_s(stats.GetLQ_serial()));
                 dbg.puts("(");

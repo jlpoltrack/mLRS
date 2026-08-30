@@ -99,7 +99,9 @@ void SystemClock_Config(void)
   LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_PSIS);
   while (LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_PSIS) {}
 
-  LL_SetSystemCoreClock(144000000);
+  // HAL_Init() sized the SysTick reload for the 48 MHz boot clock, so it has to be redone
+  // here or uwTick, and with it the whole mLRS SysTask, runs 3x too fast
+  HAL_UpdateCoreClock();
 }
 
 /**

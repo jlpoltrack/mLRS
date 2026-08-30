@@ -183,7 +183,9 @@ void HAL_PCD_MspDeInit(PCD_HandleTypeDef* pcdHandle)
 void HAL_PCD_SetupStageCallback(PCD_HandleTypeDef *hpcd)
 {
 #if defined STM32C5
-  USBD_LL_SetupStage(USBD_PDEV(hpcd), (uint8_t *)hpcd->p_setup);
+  // the HAL2 pcd reads the setup packet into hpcd->setup and never assigns hpcd->p_setup,
+  // which stays NULL and hard faults USBD_ParseSetupRequest on the first SETUP
+  USBD_LL_SetupStage(USBD_PDEV(hpcd), (uint8_t *)hpcd->setup);
 #else
   USBD_LL_SetupStage(USBD_PDEV(hpcd), (uint8_t *)hpcd->Setup);
 #endif
