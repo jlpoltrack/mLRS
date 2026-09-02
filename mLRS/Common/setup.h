@@ -48,6 +48,11 @@ void setup_configure_metadata(void)
     #error Unknown Frequencyband !
   #endif
 //** multi band
+#elif defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && \
+      defined FREQUENCY_BAND_868_MHZ && defined FREQUENCY_BAND_433_MHZ && defined FREQUENCY_BAND_70_CM_HAM
+    // MULTIBAND 2.4 GHz & 868/915 MHz & 433 MHz & 70 cm HAM
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00011111; // 2.4 GHz, 915 FCC, 868, 433, 70
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
 #elif defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ
     // MULTIBAND 2.4 GHz & 868/915 MHz
     SetupMetaData.FrequencyBand_allowed_mask = 0b00000111; // 2.4 GHz, 915 FCC, 868
@@ -213,7 +218,13 @@ void setup_configure_metadata(void)
 #endif
 
     // Tx Bridge WiFi Protocol : "TCP,UDP,BT,UDPSTA,BLE,ESPNOW"
-#if defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
+#if defined DEVICE_HAS_CYW_WIFI
+  #if CYW43_ENABLE_BLUETOOTH
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b011111; // TCP, UDP, BT, UDPSTA, BLE (no ESPNOW on CYW43)
+  #else
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b001011; // TCP, UDP, UDPSTA
+  #endif
+#elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b101011; // TCP, UDP, UDPSTA, ESPNOW (no BT, no BLE)
 #elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
     SetupMetaData.Tx_WiFiProt_allowed_mask = 0b111011; // all except BT (no classic BT on C3)
@@ -540,7 +551,7 @@ if (!only_rx) {
         Setup.Tx[config_id].SerialPort2 = TX_SERIAL_PORT2_NONE;
     }
 
-#ifdef USE_ESP_WIFI_BRIDGE_CONFIGURE
+#if defined USE_ESP_WIFI_BRIDGE_CONFIGURE || defined DEVICE_HAS_CYW_WIFI
     SANITIZE(Tx[config_id].WifiProtocol, WIFI_PROTOCOL_NUM, WIFI_PROTOCOL_UDP, WIFI_PROTOCOL_UDP);
     TST_NOTALLOWED(Tx_WiFiProt_allowed_mask, Tx[config_id].WifiProtocol, WIFI_PROTOCOL_UDP);
     SANITIZE(Tx[config_id].WifiChannel, WIFI_CHANNEL_NUM, WIFI_CHANNEL_6, WIFI_CHANNEL_6);

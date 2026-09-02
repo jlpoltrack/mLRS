@@ -22,6 +22,8 @@ extern "C" {
 
 #ifdef ESP32
 #include "../../Common/hal/esp-glue.h"
+#elif defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+#include "../../Common/hal/rp-glue.h"
 #else
 #include "main.h" // this is to include the correct stm32XXxx_hal.h
 #endif

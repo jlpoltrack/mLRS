@@ -34,7 +34,11 @@
 #endif
 
 #include "../Common/hal/hal.h"
+#if defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+#include "../modules/rp-lib/rp-can.h"
+#else
 #include "../modules/stm32-dronecan-lib/stdstm32-can.h"
+#endif
 
 extern volatile uint32_t millis32(void);
 extern uint64_t micros64(void);
@@ -51,8 +55,10 @@ int16_t dc_hal_enable_isr(void) { return 0; } // dummies to avoid #ifdefs below
 void dc_hal_rx_flush(void) {}
 #endif
 
+#if !defined ARDUINO_ARCH_RP2040 && !defined ARDUINO_ARCH_RP2350
 #if FDCAN_IRQ_PRIORITY != DRONECAN_IRQ_PRIORITY
 #error FDCAN_IRQ_PRIORITY not eq DRONECAN_IRQ_PRIORITY !
+#endif
 #endif
 
 //#define DRONECAN_PREFERRED_NODE_ID  68
@@ -62,6 +68,10 @@ void dc_hal_rx_flush(void) {}
 #define CANARD_POOL_SIZE  4096
 #elif defined STM32F1
 #define CANARD_POOL_SIZE  1024
+#elif defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+// CANARD_ENABLE_CANFD makes the pool blocks 128 bytes instead of 32, so 4096 would leave
+// only 32 blocks; 8192 gives 64, for the multi-frame reassembly of the firmware update
+#define CANARD_POOL_SIZE  8192
 #endif
 
 #define DRONECAN_BUF_SIZE  512 // needs to be larger than the largest DroneCAN frame size
@@ -163,6 +173,11 @@ void tRxDroneCan::Init(uint8_t serial_port)
 
     ser_over_can_enabled = RX_SERIAL_PORT_IS_CAN(serial_port);
 
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+    ota_pending = false;
+#endif
+    firmware_update.Init();
+
     DBG_DC(dbg.puts("\n\n\nCAN init");)
 
     can_init(serial_port == RX_SERIAL_PORT_CANFD);
@@ -189,11 +204,14 @@ void tRxDroneCan::Init(uint8_t serial_port)
     }
 
     // it appears to not matter if first isr is enabled and then start, or vice versa
+#if !defined ARDUINO_ARCH_RP2040 && !defined ARDUINO_ARCH_RP2350
     res = dc_hal_enable_isr();
     if (res < 0) {
         DBG_DC(dbg.puts("\nERROR: can isr config failed");)
     }
+#endif
 
+    // on RP, isr handler is registered from setup() (core 0) in rp-glue.h and enabled by dc_hal_start()
     res = dc_hal_start();
     if (res < 0) {
         DBG_DC(dbg.puts("\nERROR: can start failed");)
@@ -234,6 +252,22 @@ uint8_t filter_num = 0;
         filter_num = 1;
 
     } else {
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+        // set filters for normal operation, accept
+        // - all service frames (requests and responses) addressed to our node
+        // - TUNNEL_TARGETTED broadcasts (if serial-over-CAN enabled)
+        // wider than below because the update needs BeginFirmwareUpdate requests + file.Read
+        // responses. note rp is the only platform taking this branch and can2040 has no
+        // hardware filtering, so there dc_hal_config_acceptance_filters() discards all of
+        // this and dronecan_should_accept_transfer() is what actually filters
+        filter_configs[0].rx_fifo = DC_HAL_RX_FIFO0;
+        filter_configs[0].id =
+            DC_DESTINATION_ID_TO_CAN_ID(canardGetLocalNodeID(&canard)) |
+            DC_SERVICE_NOT_MESSAGE_TO_CAN_ID(0x01); // 1 to indicate service, not message
+        filter_configs[0].mask =
+            DC_DESTINATION_ID_MASK | DC_SERVICE_NOT_MESSAGE_MASK;
+        filter_num = 1;
+#else
         // set reduced filters as needed for normal operation, only accept
         // - GETNODEINFO requests
         // - TUNNEL_TARGETTED broadcasts
@@ -246,6 +280,7 @@ uint8_t filter_num = 0;
         filter_configs[0].mask =
             DC_SERVICE_TYPE_MASK | DC_REQUEST_NOT_RESPONSE_MASK | DC_DESTINATION_ID_MASK | DC_SERVICE_NOT_MESSAGE_MASK;
         filter_num = 1;
+#endif
         if (ser_over_can_enabled) { // we do accept tunnel targetted transfers
             filter_configs[1].rx_fifo = DC_HAL_RX_FIFO1;
             filter_configs[1].id =
@@ -317,6 +352,14 @@ void tRxDroneCan::Do(void)
 {
     dronecan_receive_frames();
     dronecan_process_tx_queue();
+
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+    // run the update here, at the top level, and not from the callback which requested it
+    if (ota_pending) {
+        ota_pending = false;
+        do_firmware_update();
+    }
+#endif
 }
 
 
@@ -333,9 +376,22 @@ DBG_DC(
     tDcHalStatistics dc_stats = dc_hal_get_stats();
     dbg.puts("\n can: ");dbg.puts(dc_hal_is_canfd() ? " fd" : " classic");
     dbg.puts("\n   err dc sum: ");dbg.puts(u16toBCD_s(dc_stats.error_sum_count));
+#if defined STM32G4 || defined STM32F1
     dbg.puts(" tec: ");dbg.puts(utoBCD_s(dc_stats.tec_count));
     dbg.puts(" rec: ");dbg.puts(utoBCD_s(dc_stats.rec_count));
+#endif
 )
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+    // keep printing after an abort: on a failure the last stats are the post-mortem,
+    // they are cleared when the next update starts
+    if (firmware_update.IsActive() || firmware_update.stats_chunks || firmware_update.stats_errors) {
+        dbg.puts("\n   OTA: chunks: ");dbg.puts(u16toBCD_s(firmware_update.stats_chunks));
+        dbg.puts(" bytes: ");dbg.puts(u32toBCD_s(firmware_update.stats_bytes));
+        dbg.puts(" retries: ");dbg.puts(u16toBCD_s(firmware_update.stats_retries));
+        dbg.puts(" stale: ");dbg.puts(u16toBCD_s(firmware_update.stats_stale));
+        dbg.puts(" errs: ");dbg.puts(u16toBCD_s(firmware_update.stats_errors));
+    }
+#endif
 }
 
 
@@ -504,7 +560,9 @@ void tRxDroneCan::send_node_status(void)
 {
     _p.node_status.uptime_sec = millis32() / 1000;
     _p.node_status.health = UAVCAN_PROTOCOL_NODESTATUS_HEALTH_OK;
-    _p.node_status.mode = UAVCAN_PROTOCOL_NODESTATUS_MODE_OPERATIONAL;
+    _p.node_status.mode = firmware_update.IsActive()
+        ? UAVCAN_PROTOCOL_NODESTATUS_MODE_SOFTWARE_UPDATE
+        : UAVCAN_PROTOCOL_NODESTATUS_MODE_OPERATIONAL;
     _p.node_status.sub_mode = 0;
 
     // put something in vendor specific status, simply count up
@@ -783,6 +841,109 @@ void tRxDroneCan::send_tunnel_targetted(void)
 
 
 //-------------------------------------------------------
+// firmware update handlers
+//-------------------------------------------------------
+
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+
+void tRxDroneCan::handle_begin_firmware_update_request(CanardInstance* const ins, CanardRxTransfer* const transfer)
+{
+    bool accepted = firmware_update.HandleBeginFirmwareUpdateRequest(ins, transfer, _buf, sizeof(_buf));
+
+    // IsActive() is not the right test here: it is also true for a request rejected
+    // as in-progress, since it reflects the update already running
+    if (!accepted) return;
+
+    // we are inside canardHandleRxFrame() here, via the on_reception callback. libcanard is
+    // not reentrant: this transfer's rx state and payload blocks are still allocated and get
+    // released only after we return, so the update loop must not pump canard from here.
+    // hand it to Do() instead, which runs once canard is done with this frame
+    ota_pending = true;
+}
+
+
+void tRxDroneCan::do_firmware_update(void)
+{
+    if (!firmware_update.IsActive()) return;
+
+    DBG_DC(dbg.puts("\nOTA: entering blocking loop");)
+
+    // blocking loop — pump CAN and drive the firmware update state machine.
+    // on success, reboot is called inside Tick_ms and we never return.
+    // on error/abort, state returns to IDLE and we break out.
+    // note: we must drain all available CAN frames per iteration, not just one.
+    // file.Read responses are multi-frame transfers (~38 CAN frames for 256 bytes)
+    // and the normal single-frame-per-call helpers would be far too slow.
+    uint32_t last_status_ms = 0;
+    uint32_t ota_start_ms = millis32();
+    while (firmware_update.IsActive()) {
+        uint32_t tnow_ms = millis32();
+
+        // drain all pending rx frames — no dbg output in this path
+        while (1) {
+            CanardCANFrame frame;
+            int16_t res = dc_hal_receive(&frame);
+            if (res <= 0) break;
+            canardHandleRxFrame(&canard, &frame, micros64());
+        }
+
+        // drain the tx queue
+        while (1) {
+            const CanardCANFrame* frame = canardPeekTxQueue(&canard);
+            if (!frame) break;
+            int16_t res = dc_hal_transmit(frame, tnow_ms);
+            if (res != 0) {
+                canardPopTxQueue(&canard);
+            } else {
+                break;
+            }
+        }
+
+        // print success message before Tick_ms triggers reboot
+        if (firmware_update.State() == FWUPDATE_STATE_FINALIZING) {
+            uint32_t elapsed_ms = millis32() - ota_start_ms;
+            dbg.puts("\nOTA: ok ");dbg.puts(u32toBCD_s(firmware_update.stats_bytes));dbg.puts(" bytes in ");
+            dbg.puts(u32toBCD_s(elapsed_ms / 1000));dbg.puts(".");dbg.puts(u16toBCD_s(elapsed_ms % 1000));dbg.puts("s, rebooting...");
+            delay_ms(50); // give dbg time to get the message out before we reboot
+        }
+
+        // drive firmware update state machine
+        firmware_update.Tick_ms(&canard, _buf, sizeof(_buf), tnow_ms);
+
+        // send any frames queued by Tick_ms immediately (e.g. file.Read request)
+        while (1) {
+            const CanardCANFrame* frame = canardPeekTxQueue(&canard);
+            if (!frame) break;
+            int16_t res = dc_hal_transmit(frame, tnow_ms);
+            if (res != 0) {
+                canardPopTxQueue(&canard);
+            } else {
+                break;
+            }
+        }
+
+        // periodically emit node status and OTA stats (safe — not in callback)
+        if ((tnow_ms - last_status_ms) >= 1000) {
+            last_status_ms = tnow_ms;
+            send_node_status();
+            dronecan_process_tx_queue();
+            print_debug_tick();
+        }
+    }
+
+    DBG_DC(dbg.puts("\nOTA: exited");)
+}
+
+
+void tRxDroneCan::handle_file_read_response(CanardRxTransfer* const transfer)
+{
+    firmware_update.HandleFileReadResponse(transfer);
+}
+
+#endif // DRONECAN_HAS_FIRMWARE_UPDATE
+
+
+//-------------------------------------------------------
 // DroneCAN/Libcanard call backs
 //-------------------------------------------------------
 
@@ -806,8 +967,25 @@ bool dronecan_should_accept_transfer(
             if (!dronecan.id_is_allcoated()) return false;
             *out_data_type_signature = UAVCAN_PROTOCOL_GETNODEINFO_REQUEST_SIGNATURE;
             return true;
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+        case UAVCAN_PROTOCOL_FILE_BEGINFIRMWAREUPDATE_REQUEST_ID:
+            if (!dronecan.id_is_allcoated()) return false;
+            *out_data_type_signature = UAVCAN_PROTOCOL_FILE_BEGINFIRMWAREUPDATE_REQUEST_SIGNATURE;
+            return true;
+#endif
         }
     }
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+    // handle service responses (we are a client for file.Read)
+    if (transfer_type == CanardTransferTypeResponse) {
+        switch (data_type_id) {
+        case UAVCAN_PROTOCOL_FILE_READ_RESPONSE_ID:
+            if (!dronecan.firmware_update.IsActive()) return false;
+            *out_data_type_signature = UAVCAN_PROTOCOL_FILE_READ_RESPONSE_SIGNATURE;
+            return true;
+        }
+    }
+#endif
     // handle broadcast
     if (transfer_type == CanardTransferTypeBroadcast) {
         switch (data_type_id) {
@@ -835,8 +1013,23 @@ void dronecan_on_transfer_received(CanardInstance* const ins, CanardRxTransfer* 
         case UAVCAN_PROTOCOL_GETNODEINFO_ID:
             dronecan.handle_get_node_info_request(ins, transfer);
             return;
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+        case UAVCAN_PROTOCOL_FILE_BEGINFIRMWAREUPDATE_REQUEST_ID:
+            dronecan.handle_begin_firmware_update_request(ins, transfer);
+            return;
+#endif
         }
     }
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+    // handle service responses
+    if (transfer->transfer_type == CanardTransferTypeResponse) {
+        switch (transfer->data_type_id) {
+        case UAVCAN_PROTOCOL_FILE_READ_RESPONSE_ID:
+            dronecan.handle_file_read_response(transfer);
+            return;
+        }
+    }
+#endif
     // handle broadcasts
     if (transfer->transfer_type == CanardTransferTypeBroadcast) {
         switch (transfer->data_type_id) {
@@ -859,6 +1052,10 @@ STATIC_ASSERT(DRONECAN_BUF_SIZE >= UAVCAN_PROTOCOL_NODESTATUS_MAX_SIZE, "DRONECA
 STATIC_ASSERT(DRONECAN_BUF_SIZE >= UAVCAN_PROTOCOL_GETNODEINFO_RESPONSE_MAX_SIZE, "DRONECAN_BUF_SIZE too small")
 STATIC_ASSERT(DRONECAN_BUF_SIZE >= DRONECAN_SENSORS_RC_RCINPUT_MAX_SIZE, "DRONECAN_BUF_SIZE too small")
 STATIC_ASSERT(DRONECAN_BUF_SIZE >= UAVCAN_TUNNEL_TARGETTED_MAX_SIZE, "DRONECAN_BUF_SIZE too small")
+#ifdef DRONECAN_HAS_FIRMWARE_UPDATE
+STATIC_ASSERT(DRONECAN_BUF_SIZE >= UAVCAN_PROTOCOL_FILE_BEGINFIRMWAREUPDATE_RESPONSE_MAX_SIZE, "DRONECAN_BUF_SIZE too small")
+STATIC_ASSERT(DRONECAN_BUF_SIZE >= UAVCAN_PROTOCOL_FILE_READ_REQUEST_MAX_SIZE, "DRONECAN_BUF_SIZE too small")
+#endif
 
 
 #endif // USE_DRONECAN
