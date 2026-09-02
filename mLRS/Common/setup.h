@@ -48,6 +48,11 @@ void setup_configure_metadata(void)
     #error Unknown Frequencyband !
   #endif
 //** multi band
+#elif defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && \
+      defined FREQUENCY_BAND_868_MHZ && defined FREQUENCY_BAND_433_MHZ && defined FREQUENCY_BAND_70_CM_HAM
+    // MULTIBAND 2.4 GHz & 868/915 MHz & 433 MHz & 70 cm HAM
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00011111; // 2.4 GHz, 915 FCC, 868, 433, 70
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
 #elif defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ
     // MULTIBAND 2.4 GHz & 868/915 MHz
     SetupMetaData.FrequencyBand_allowed_mask = 0b00000111; // 2.4 GHz, 915 FCC, 868

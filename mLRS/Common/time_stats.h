@@ -37,7 +37,7 @@ static tTsStore ts_data[TS_NUM_BLOCK] = {};
 
 uint32_t TS_MICROS32(uint8_t block)
 {
-#if defined ESP8266 || defined ESP32
+#if defined ESP8266 || defined ESP32 || defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
     return micros(); // allows longer interval between calls
 #else
     // separate overflow and last_cnt for each block
