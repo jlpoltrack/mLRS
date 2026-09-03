@@ -1085,6 +1085,7 @@ void setup_configure_config_crypto(void)
     memset(Config.Uid, 0xFF, 12);
     Config.BindRandom = UINT64_MAX;
     Config.SessionRandom = UINT64_MAX;
+    Config.StaticNonceSeed = 0;
 
     mcu_uid(Config.Uid);
 #ifdef DEVICE_IS_TRANSMITTER
@@ -1099,6 +1100,11 @@ void setup_configure_config_crypto(void)
         if (Config.SessionRandom != 0 && Config.SessionRandom != UINT64_MAX) break;
     }
     // TODO: what to do if either is invalid?
+
+    // the static key is the same on every power cycle, so its nonce must not start at the same value
+    // every time; any value will do, so no retry, without a TRNG it stays 0 as before
+    uint32_t seed = trng_get32();
+    Config.StaticNonceSeed = (seed == UINT32_MAX) ? 0 : seed;
 #endif
 }
 

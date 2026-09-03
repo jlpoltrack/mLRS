@@ -579,6 +579,7 @@ typedef struct
     uint8_t Uid[12];
     uint64_t BindRandom;
     uint64_t SessionRandom;
+    uint32_t StaticNonceSeed;
 } tGlobalConfig;
 
 
