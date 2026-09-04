@@ -21,12 +21,7 @@
 #define LVL3_NONCE_LEN  4
 #define LVL3_MAC_LEN    8
 
-// direction separation
-// the direction tag is placed in a nonce byte which is never transmitted, so it costs no air bytes
-#define DIR_TX_TO_RX        1
-#define DIR_RX_TO_TX        2
-#define DIR_TAG_POS         11 // must be >= max nonce_len
-
+// direction separation, one key per direction
 #define KEY_LABEL_LEN       8
 #define KEY_LABEL_TX_TO_RX  "mLRStx2r"
 #define KEY_LABEL_RX_TO_TX  "mLRSrx2t"
@@ -53,14 +48,10 @@ const crypto_level_t crypto_list[] = {
 // Crypto API
 //-------------------------------------------------------
 
-void tCrypto::Init(uint8_t role, char* const bind_phrase, uint8_t tx_uid[12], uint8_t rx_uid[12], uint64_t tx_random, uint32_t static_nonce_seed)
+void tCrypto::Init(uint8_t role, char* const bind_phrase, uint8_t tx_uid[12], uint8_t rx_uid[12], uint64_t tx_random)
 {
     _privacy_level = 0;
     _role = (role == CRYPTO_ROLE_RX) ? CRYPTO_ROLE_RX : CRYPTO_ROLE_TX;
-
-    // a node encrypts in its own direction and decrypts in the peer's direction
-    _dir_send = (_role == CRYPTO_ROLE_TX) ? DIR_TX_TO_RX : DIR_RX_TO_TX;
-    _dir_recv = (_role == CRYPTO_ROLE_TX) ? DIR_RX_TO_TX : DIR_TX_TO_RX;
 
     memset(_static, 0, sizeof(_static));
     memcpy(_static,                   "mLRS key",    8); //  8 bytes
@@ -69,9 +60,8 @@ void tCrypto::Init(uint8_t role, char* const bind_phrase, uint8_t tx_uid[12], ui
     memcpy(_static + 8 + 6 + 12,      rx_uid,       12); // 12 bytes
     memcpy(_static + 8 + 6 + 12 +12,  &tx_random,    8); //  8 bytes // sum 46 bytes
 
-    // the static key is reused on each Tx power cycle, so start its nonce at a TRNG seeded value,
-    // starting at 0 every time would reuse a (key, nonce) pair for the session random exchange
-    _static_nonce_u32 = static_nonce_seed;
+    // is reused on each Tx power cycle, if there is concern, re-bind
+    _static_nonce_u32 = 0;
 
     _random = 0;
     _random_valid = false; // session key not yet set
@@ -105,8 +95,6 @@ uint8_t key_source[32 + KEY_LABEL_LEN];
 
     memcpy(key_source + 32, (_role == CRYPTO_ROLE_TX) ? KEY_LABEL_RX_TO_TX : KEY_LABEL_TX_TO_RX, KEY_LABEL_LEN);
     crypto_blake2b(_key_recv, 32, key_source, 32 + KEY_LABEL_LEN);
-
-    crypto_wipe(key_source, sizeof(key_source));
 }
 
 
@@ -151,9 +139,6 @@ uint8_t key[32];
     // a fresh key restarts both nonce counters, in either direction
     _nonce_u32 = 0;
     _nonce_u32_last_received = 0;
-
-    crypto_wipe(key_source, sizeof(key_source));
-    crypto_wipe(key, sizeof(key));
 }
 
 
@@ -272,11 +257,11 @@ uint8_t nonce[12];
 uint8_t mac_len = crypto_list[_privacy_level].mac_len;
 uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
 
-    // update nonce, tagged with our own direction
+    // update nonce
     // Note: the counter wraps after 2^32 frames, ca 1.4 years of continuous operation at 100 Hz,
     // rebinding or a Tx power cycle starts a new session key well before that
     _nonce_u32++;
-    _make_nonce(nonce, _nonce_u32, _dir_send);
+    _make_nonce(nonce, _nonce_u32);
 
     // encrypt data at data[0]
     _crypt_it(data, len, _key_send, nonce);
@@ -295,7 +280,7 @@ uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
     // copy mac into data
     memcpy(data, mac, mac_len); // data[0] ... data[mac_len-1]
 
-    // copy nonce into data, only the counter bytes are transmitted, the direction tag is implicit
+    // copy nonce into data
     memcpy(data + mac_len, nonce, nonce_len); // data[mac_len] ... data[mac_len+nonce_len-1]
 }
 
@@ -317,10 +302,10 @@ uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
     // get mac
     memcpy(received_mac, data, mac_len); // data[0] ... data[mac_len-1]
 
-    // get nonce, tagged with the peer's direction
+    // get nonce
     received_nonce_u32 = 0;
     memcpy(&received_nonce_u32, data + mac_len, nonce_len); // data[mac_len] ... data[mac_len+nonce_len-1]
-    _make_nonce(nonce, received_nonce_u32, _dir_recv);
+    _make_nonce(nonce, received_nonce_u32);
 
     // correct len, payload_len for the mac and nonce
     *payload_len -= mac_len + nonce_len;
@@ -333,11 +318,11 @@ uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
         // calculate MAC over nonce + payload
         _mac_it(mac, data, len, _key_recv, nonce);
 
-        // comparison of mac_len byte mac, constant time, no early out and no branch per byte
-        uint8_t diff = 0;
-        for (uint8_t i = 0; i < mac_len; i++) { diff |= (mac[i] ^ received_mac[i]); }
+        // comparison of mac_len byte mac
+        bool ok = true;
+        for (uint8_t i = 0; i < mac_len; i++) { if (mac[i] != received_mac[i]) ok = false; }
 
-        if (diff) { // authentication failed
+        if (!ok) { // authentication failed
             *payload_len = 0; // pretend we didn't got data at all // TODO: what should we do ?
             return false;
         }
@@ -368,13 +353,10 @@ uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
 // Monocypher interface
 //-------------------------------------------------------
 
-// the direction tag sits in a nonce byte beyond the transmitted counter bytes, hence a
-// Tx->Rx and a Rx->Tx frame never share a (key, nonce) pair even for equal counter values
-void tCrypto::_make_nonce(uint8_t nonce[12], uint32_t nonce_u32, uint8_t dir)
+void tCrypto::_make_nonce(uint8_t nonce[12], uint32_t nonce_u32)
 {
     memset(nonce, 0, 12);
     memcpy(nonce, &nonce_u32, 4); // nonce[0] ... nonce[3] = nonce_u32
-    nonce[DIR_TAG_POS] = dir;
 }
 
 
@@ -411,10 +393,8 @@ crypto_poly1305_ctx ctx;
         0);           // ctr
 
     crypto_poly1305_init(&ctx, poly1305_key);
-    crypto_poly1305_update(&ctx, nonce, 12); // the whole nonce, so the direction tag is authenticated too
+    crypto_poly1305_update(&ctx, nonce, NONCE_LEN); // only the counter bytes, the rest of the nonce is zero
     crypto_poly1305_update(&ctx, data, len);
     crypto_poly1305_final(&ctx, mac);
-
-    crypto_wipe(poly1305_key, sizeof(poly1305_key));
 }
 
