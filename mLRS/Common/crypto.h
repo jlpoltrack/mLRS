@@ -76,6 +76,8 @@ class tCrypto
 
     uint8_t _key_send[32];   // key for the direction this node transmits in
     uint8_t _key_recv[32];   // key for the direction the peer transmits in
+    uint8_t _nonce[12];
+    uint8_t _nonce_len;
     uint32_t _nonce_u32;     // nonce counter of the direction this node transmits in
 
     uint32_t _nonce_u32_last_received;
@@ -87,9 +89,8 @@ class tCrypto
     void _encrypt_it(uint8_t* const data, uint8_t len, uint8_t* payload_len);
     bool _decrypt_it(uint8_t* const data, uint8_t len, uint8_t* payload_len);
 
-    void _make_nonce(uint8_t nonce[12], uint32_t nonce_u32, uint8_t nonce_len);
-    void _crypt_it(uint8_t* data, uint16_t len, uint8_t key[32], uint8_t nonce[12]);
-    void _mac_it(uint8_t mac[16], uint8_t* const data, uint16_t len, uint8_t key[32], uint8_t nonce[12], uint8_t nonce_len);
+    void _crypt_it(uint8_t* data, uint16_t len, uint8_t key[32]);
+    void _mac_it(uint8_t mac[16], uint8_t* const data, uint16_t len, uint8_t key[32]);
 };
 
 
