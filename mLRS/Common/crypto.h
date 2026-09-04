@@ -16,8 +16,7 @@ SecretKey handling:
       authenticated with 4 byte nonce and 4 byte mac using the static key
     - a secret session key is generated, which is based on
       the key root data plus the 8-byte random value
-- depending on the privacy level, a mac for authentication is 0, 3, or 8 bytes; the nonce is a
-  4 byte frame counter, transmitted in full so the receiver can check it without wrap ambiguity
+- depending on the privacy level, the nonce is 3 or 4 bytes, and a mac for authentication is 0, 3, or 8 bytes
 - the two link directions are cryptographically separated, so that they can never produce the
   same keystream even though both start their nonce counter at zero: each side derives two keys
   from the session (or static) key, one for the Tx->Rx direction and one for the Rx->Tx direction;
@@ -26,8 +25,8 @@ SecretKey handling:
   mac has been verified, so that a forged frame cannot push the counter forward
 - privacy levels
     off: nothing
-    level 1: only encryption                      (4 bytes nonce, no authentication, no replay attack prevention)
-    level 2: encryption + authentication          (4 bytes nonce, 3 bytes mac, replay attack prevention)
+    level 1: only encryption                      (3 bytes nonce, no authentication, no replay attack prevention)
+    level 2: encryption + authentication          (3 bytes nonce, 3 bytes mac, replay attack prevention)
     level 3: stronger encryption + authentication (4 bytes nonce, 8 bytes mac, replay attack prevention)
 */
 //*******************************************************
@@ -88,9 +87,9 @@ class tCrypto
     void _encrypt_it(uint8_t* const data, uint8_t len, uint8_t* payload_len);
     bool _decrypt_it(uint8_t* const data, uint8_t len, uint8_t* payload_len);
 
-    void _make_nonce(uint8_t nonce[12], uint32_t nonce_u32);
+    void _make_nonce(uint8_t nonce[12], uint32_t nonce_u32, uint8_t nonce_len);
     void _crypt_it(uint8_t* data, uint16_t len, uint8_t key[32], uint8_t nonce[12]);
-    void _mac_it(uint8_t mac[16], uint8_t* const data, uint16_t len, uint8_t key[32], uint8_t nonce[12]);
+    void _mac_it(uint8_t mac[16], uint8_t* const data, uint16_t len, uint8_t key[32], uint8_t nonce[12], uint8_t nonce_len);
 };
 
 

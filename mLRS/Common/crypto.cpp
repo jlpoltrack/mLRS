@@ -14,9 +14,7 @@
 #include "thirdparty/monocypher/src/monocypher.h"
 
 
-// the nonce counter is transmitted in full, so that the receiver can check it exactly and
-// the counter space is 2^32 frames; truncating it would make the wrap ambiguous
-#define NONCE_LEN       4
+#define NONCE_LEN       3
 #define MAC_LEN         3
 #define LVL3_NONCE_LEN  4
 #define LVL3_MAC_LEN    8
@@ -258,17 +256,17 @@ uint8_t mac_len = crypto_list[_privacy_level].mac_len;
 uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
 
     // update nonce
-    // Note: the counter wraps after 2^32 frames, ca 1.4 years of continuous operation at 100 Hz,
-    // rebinding or a Tx power cycle starts a new session key well before that
+    // Note: only the lowest nonce_len bytes are transmitted and used, so the counter wraps
+    // after 2^(8*nonce_len) frames, ca 46 h at 100 Hz for 3 bytes
     _nonce_u32++;
-    _make_nonce(nonce, _nonce_u32);
+    _make_nonce(nonce, _nonce_u32, nonce_len);
 
     // encrypt data at data[0]
     _crypt_it(data, len, _key_send, nonce);
 
     if (mac_len) {
         // MAC = poly1305(nonce || ciphertext)
-        _mac_it(mac, data, len, _key_send, nonce);
+        _mac_it(mac, data, len, _key_send, nonce, nonce_len);
     }
 
     // move data to payload + mac_len + nonce_len
@@ -305,7 +303,7 @@ uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
     // get nonce
     received_nonce_u32 = 0;
     memcpy(&received_nonce_u32, data + mac_len, nonce_len); // data[mac_len] ... data[mac_len+nonce_len-1]
-    _make_nonce(nonce, received_nonce_u32);
+    _make_nonce(nonce, received_nonce_u32, nonce_len);
 
     // correct len, payload_len for the mac and nonce
     *payload_len -= mac_len + nonce_len;
@@ -316,7 +314,7 @@ uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
 
     if (mac_len) {
         // calculate MAC over nonce + payload
-        _mac_it(mac, data, len, _key_recv, nonce);
+        _mac_it(mac, data, len, _key_recv, nonce, nonce_len);
 
         // comparison of mac_len byte mac
         bool ok = true;
@@ -334,8 +332,12 @@ uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
     // Note: this must come after the mac check, or a forged frame could advance the counter
     // Note: the peer sends a fresh nonce per frame, an ARQ retransmit of an already accepted payload
     // is dropped by the receive ARQ before it gets here, so a duplicate nonce really is a replay
+    // Note: the comparison is done modulo the transmitted counter space, so that it also works
+    // across a counter wrap; the accepted window is half that space
     if (_privacy_level >= 2) {
-        if (received_nonce_u32 <= _nonce_u32_last_received) { // seen before, replay
+        uint32_t mask = (nonce_len >= 4) ? UINT32_MAX : ((uint32_t)1 << (8 * nonce_len)) - 1;
+        uint32_t diff = (received_nonce_u32 - _nonce_u32_last_received) & mask;
+        if (diff == 0 || diff > (mask >> 1)) { // seen before, replay
             *payload_len = 0;
             return false;
         }
@@ -353,10 +355,10 @@ uint8_t nonce_len = crypto_list[_privacy_level].nonce_len;
 // Monocypher interface
 //-------------------------------------------------------
 
-void tCrypto::_make_nonce(uint8_t nonce[12], uint32_t nonce_u32)
+void tCrypto::_make_nonce(uint8_t nonce[12], uint32_t nonce_u32, uint8_t nonce_len)
 {
     memset(nonce, 0, 12);
-    memcpy(nonce, &nonce_u32, 4); // nonce[0] ... nonce[3] = nonce_u32
+    memcpy(nonce, &nonce_u32, nonce_len); // nonce[0] ... nonce[nonce_len-1] = nonce_u32
 }
 
 
@@ -375,7 +377,7 @@ void tCrypto::_crypt_it(uint8_t* data, uint16_t len, uint8_t key[32], uint8_t no
 }
 
 
-void tCrypto::_mac_it(uint8_t mac[16], uint8_t* const data, uint16_t len, uint8_t key[32], uint8_t nonce[12])
+void tCrypto::_mac_it(uint8_t mac[16], uint8_t* const data, uint16_t len, uint8_t key[32], uint8_t nonce[12], uint8_t nonce_len)
 {
 uint8_t poly1305_key[32];
 crypto_poly1305_ctx ctx;
@@ -393,7 +395,7 @@ crypto_poly1305_ctx ctx;
         0);           // ctr
 
     crypto_poly1305_init(&ctx, poly1305_key);
-    crypto_poly1305_update(&ctx, nonce, NONCE_LEN); // only the counter bytes, the rest of the nonce is zero
+    crypto_poly1305_update(&ctx, nonce, nonce_len); // only the counter bytes, the rest of the nonce is zero
     crypto_poly1305_update(&ctx, data, len);
     crypto_poly1305_final(&ctx, mac);
 }
