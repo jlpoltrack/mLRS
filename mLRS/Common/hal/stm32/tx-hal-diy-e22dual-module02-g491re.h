@@ -15,7 +15,7 @@
 #define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_I2C_DISPLAY_ROT180
 #define DEVICE_HAS_BUZZER
-#define DEVICE_HAS_ESP_WIFI_BRIDGE
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
 
 
@@ -72,7 +72,8 @@
 #define UART_USE_RX
 #define UART_RXBUFSIZE            512
 
-#define JRPIN5_RX_TX_INVERT_INTERNAL
+//#define JRPIN5_RX_TX_INVERT_INTERNAL // requires external diode from Tx to Rx, gives issues on H7
+#define JRPIN5_FULL_INTERNAL_ON_RX // does not require an external diode
 
 #define UARTF_USE_LPUART1_PC1PC0 // debug
 #define UARTF_BAUD                115200
@@ -312,7 +313,7 @@ uint8_t fiveway_read(void)
 #define ESP_DTR                   IO_PC14 // DTR from USB-TTL adapter -> GPIO
 #define ESP_RTS                   IO_PC3  // RTS from USB-TTL adapter -> RESET
 
-#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE
+#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32
 void esp_init(void)
 {
     gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_HIGH, IO_SPEED_DEFAULT); // low -> esp will start in bootloader mode

@@ -11,8 +11,8 @@
 #pragma once
 
 
-#define VERSION             10401 // leading zero makes it octal!
-#define VERSIONONLYSTR      "v1.4.01"
+#define VERSION             10403 // leading zero makes it octal!
+#define VERSIONONLYSTR      "v1.4.03"
 #define SETUPLAYOUT         10401 // this should be changed then Setup struct and/or serial changes
 
 // Note: The setup layout version does not need to be changed when parameter option lists
@@ -75,7 +75,7 @@
 
 #define SETUP_RX_FAILSAFE_MODE          0 // 0: no signal 1: low throttle, 4: CH1-CH4 center signal
 
-#define SETUP_RX_SERIAL_PORT            0 // 0: serial, 1: can
+#define SETUP_RX_SERIAL_PORT            0 // 0: serial, 1: can, 2: canfd
 
 #define SETUP_RX_SERIAL_BAUDRATE        0 // 0: 57600, 1: 115200, 2: 230400
 

@@ -114,10 +114,10 @@
 #include "../Common/channel_order.h"
 #include "../Common/diversity.h"
 #include "../Common/arq.h"
-#include "../Common/tasks.h"
 //#include "../Common/time_stats.h" // un-comment if you want to use
 //#include "../Common/test.h" // un-comment if you want to compile for board test
 
+#include "tasks.h"
 #include "config_id.h"
 #include "info.h"
 #include "cli.h"
@@ -133,7 +133,7 @@ tChannelOrder channelOrder(tChannelOrder::DIRECTION_TX_TO_MLRS);
 tConfigId config_id;
 tTxInfo info;
 tTxCli cli;
-tTasks tasks;
+tTxTasks tasks;
 
 
 //-------------------------------------------------------
@@ -167,7 +167,7 @@ tTxSxSerial sx_serial;
 // doing one, draw or update, every cycle in 50 Hz mode works, but
 // doing both every cycle does not work! why ???
 
-#include "../CommonTx/disp.h"
+#include "disp.h"
 
 tTxDisp disp;
 
@@ -176,13 +176,13 @@ tTxDisp disp;
 // Wifi Bridge
 //-------------------------------------------------------
 
-#include "esp.h"
+#include "esp-wifi-bridge.h"
 
-tTxEspWifiBridge esp;
+tTxEspWifiBridge espbridge;
 
-#include "hc04.h"
+#include "hc04-bridge.h"
 
-tTxHc04Bridge hc04;
+tTxHc04Bridge hc04bridge;
 
 
 //-------------------------------------------------------
@@ -455,14 +455,17 @@ void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats, tRcD
 
 //-- normal Tx, Rx frames handling
 // transmit
-//   -> do_transmit()
-//       -> prepare_transmit_frame()
+//   -> do_transmit_prepare(antenna, fhss1_curr_i, fhss2_curr_i)
+//       -> prepare_transmit_frame(antenna, fhss1_curr_i, fhss2_curr_i)
+//           -> pack_txframe(...) or pack_txcmdframe(...)
+//   -> do_transmit_send(antenna)
 // receive
 //   isr:        -> irq2_status
-//   isr loop:   -> do_receive()
+//   isr loop:   -> do_receive(antenna)
 //               -> link_rx1_status
-//   post loop:  -> handle_receive() or handle_receive_none()
-//                   if valid -> process_received_frame()
+//   post loop:  -> handle_receive(antenna) or handle_receive_none()
+//                  if valid -> process_received_frame(do_payload, frame)
+//                               -> process_received_rxcmdframe(frame)
 
 void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2_curr_i)
 {
@@ -544,7 +547,63 @@ void process_received_frame(bool do_payload, tRxFrame* const frame)
 }
 
 
-//-- receive/transmit handling api
+//-- transmit/receive handling api
+
+void do_transmit_prepare(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2_curr_i) // we prepare a TX frame to be send to receiver
+{
+    if (bind.IsInBind()) {
+        bind.do_transmit(antenna);
+        return;
+    }
+
+    stats.transmit_seq_no++;
+
+    prepare_transmit_frame(antenna, fhss1_curr_i, fhss2_curr_i);
+}
+
+
+void do_transmit_send(uint8_t antenna) // we send a TX frame to receiver
+{
+    if (bind.IsInBind()) {
+       sxSendFrame(antenna, &txBindFrame, FRAME_TX_RX_LEN, SEND_FRAME_TMO_MS);
+       return;
+    }
+
+    sxSendFrame(antenna, &txFrame, FRAME_TX_RX_LEN, SEND_FRAME_TMO_MS); // 10 ms tmo
+}
+
+
+uint8_t do_receive(uint8_t antenna) // we receive a RX frame from receiver
+{
+uint8_t res;
+uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was received
+
+    if (bind.IsInBind()) {
+        return bind.do_receive(antenna, false);
+    }
+
+    // we don't need to read sx.GetRxBufferStatus(), but hey
+    // we could save 2 byte's time by not reading sync_word again, but hey
+    sxReadFrame(antenna, &rxFrame, &rxFrame2, FRAME_TX_RX_LEN);
+    res = (antenna == ANTENNA_1) ? check_rxframe(&rxFrame) : check_rxframe(&rxFrame2);
+
+    if (res) {
+        DBG_MAIN(dbg.puts("fail ");dbg.putc('\n');)
+//dbg.puts("fail a");dbg.putc(antenna+'0');dbg.puts(" ");dbg.puts(u8toHEX_s(res));dbg.putc('\n');
+    }
+
+    if (res == CHECK_ERROR_SYNCWORD) return RX_STATUS_INVALID; // must not happen !
+
+    if (res == CHECK_OK) {
+        rx_status = RX_STATUS_VALID;
+    }
+
+    // we want to have the rssi,snr stats even if it's a bad packet
+    sxGetPacketStatus(antenna, &stats);
+
+    return rx_status;
+}
+
 
 void handle_receive(uint8_t antenna) // RX_STATUS_INVALID, RX_STATUS_VALID
 {
@@ -602,62 +661,6 @@ tRxFrame* frame;
 void handle_receive_none(void) // RX_STATUS_NONE
 {
     rarq.FrameMissed();
-}
-
-
-void do_transmit_prepare(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2_curr_i) // we prepare a TX frame to be send to receiver
-{
-    if (bind.IsInBind()) {
-        bind.do_transmit(antenna);
-        return;
-    }
-
-    stats.transmit_seq_no++;
-
-    prepare_transmit_frame(antenna, fhss1_curr_i, fhss2_curr_i);
-}
-
-
-void do_transmit_send(uint8_t antenna) // we send a TX frame to receiver
-{
-    if (bind.IsInBind()) {
-       sxSendFrame(antenna, &txBindFrame, FRAME_TX_RX_LEN, SEND_FRAME_TMO_MS);
-       return;
-    }
-
-    sxSendFrame(antenna, &txFrame, FRAME_TX_RX_LEN, SEND_FRAME_TMO_MS); // 10 ms tmo
-}
-
-
-uint8_t do_receive(uint8_t antenna) // we receive a RX frame from receiver
-{
-uint8_t res;
-uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was received
-
-    if (bind.IsInBind()) {
-        return bind.do_receive(antenna, false);
-    }
-
-    // we don't need to read sx.GetRxBufferStatus(), but hey
-    // we could save 2 byte's time by not reading sync_word again, but hey
-    sxReadFrame(antenna, &rxFrame, &rxFrame2, FRAME_TX_RX_LEN);
-    res = (antenna == ANTENNA_1) ? check_rxframe(&rxFrame) : check_rxframe(&rxFrame2);
-
-    if (res) {
-        DBG_MAIN(dbg.puts("fail ");dbg.putc('\n');)
-//dbg.puts("fail a");dbg.putc(antenna+'0');dbg.puts(" ");dbg.puts(u8toHEX_s(res));dbg.putc('\n');
-    }
-
-    if (res == CHECK_ERROR_SYNCWORD) return RX_STATUS_INVALID; // must not happen !
-
-    if (res == CHECK_OK) {
-        rx_status = RX_STATUS_VALID;
-    }
-
-    // we want to have the rssi,snr stats even if it's a bad packet
-    sxGetPacketStatus(antenna, &stats);
-
-    return rx_status;
 }
 
 
@@ -754,8 +757,8 @@ RESTARTCONTROLLER
     msp.Init(); // serial port selected by SerialPort
     sx_serial.Init(&mbridge); // serial port selected by SerialPort, ChannelsSource
     cli.Init();
-    esp.Init();
-    hc04.Init();
+    espbridge.Init();
+    hc04bridge.Init();
     fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
     whileTransmit.Init();
     disp.Init();
@@ -807,7 +810,7 @@ INITCONTROLLER_END
             disp.Tick_ms(); // can take long
             fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
             fan.Tick_ms();
-            esp.Tick_ms();
+            espbridge.Tick_ms();
 
             if (!tick_1hz) {
                 dbg.puts(".");
@@ -1063,13 +1066,6 @@ IF_SX2(
             if (!valid_frame_received) buzzer.BeepLP();
         }
 
-        // store parameters
-        if (doParamsStore) {
-            leds.SetToParamStore();
-            setup_store_to_EEPROM();
-            GOTO_RESTARTCONTROLLER;
-        }
-
         bind.Do();
         switch (bind.Task()) {
         case BIND_TASK_CHANGED_TO_BIND:
@@ -1080,6 +1076,15 @@ IF_SX2(
             // link_state was set to LINK_STATE_TRANSMIT already
             break;
         case BIND_TASK_TX_RESTART_CONTROLLER: GOTO_RESTARTCONTROLLER; break;
+        }
+
+        // store parameters
+        if (doParamsStore) {
+            sx.SetToIdle(); // should not be needed, should not hurt either
+            sx2.SetToIdle();
+            leds.SetToParamStore();
+            setup_store_to_EEPROM();
+            GOTO_RESTARTCONTROLLER;
         }
 
 //dbg.puts((valid_frame_received) ? "\nvalid" : "\ninval");
@@ -1143,10 +1148,10 @@ IF_MBRIDGE_OR_CRSF( // to allow CRSF mBridge emulation
                 doParamsStore = true;
             }
             break;
-        case MBRIDGE_CMD_BIND_START: tasks.SetMBridgeTask(MAIN_TASK_BIND_START); break;
-        case MBRIDGE_CMD_BIND_STOP: tasks.SetMBridgeTask(MAIN_TASK_BIND_STOP); break;
-        case MBRIDGE_CMD_SYSTEM_BOOTLOADER: tasks.SetMBridgeTask(MAIN_TASK_SYSTEM_BOOT); break;
-        case MBRIDGE_CMD_FLASH_ESP: tasks.SetMBridgeTask(TX_TASK_FLASH_ESP); break;
+        case MBRIDGE_CMD_BIND_START: tasks.SetMBridgeTask(TASK_BIND_START); break;
+        case MBRIDGE_CMD_BIND_STOP: tasks.SetMBridgeTask(TASK_BIND_STOP); break;
+        case MBRIDGE_CMD_SYSTEM_BOOTLOADER: tasks.SetMBridgeTask(TASK_SYSTEM_BOOT); break;
+        case MBRIDGE_CMD_FLASH_ESPBRIDGE: tasks.SetMBridgeTask(TASK_ESPBRIDGE_FLASH); break;
         case MBRIDGE_CMD_MODELID_SET:
 //dbg.puts("\nmbridge model id "); dbg.puts(u8toBCD_s(mbridge.GetModelId()));
             config_id.Change(mbridge.GetModelId());
@@ -1185,8 +1190,8 @@ IF_CRSF(
 //dbg.puts("\ncrsf model select id "); dbg.puts(u8toBCD_s(crsf.GetCmdModelId()));
             config_id.Change(crsf.GetCmdModelId());
             break;
-        case TXCRSF_CMD_BIND_START: tasks.SetCrsfTask(MAIN_TASK_BIND_START); break;
-        case TXCRSF_CMD_BIND_STOP: tasks.SetCrsfTask(MAIN_TASK_BIND_START); break;
+        case TXCRSF_CMD_BIND_START: tasks.SetCrsfTask(TASK_BIND_START); break;
+        case TXCRSF_CMD_BIND_STOP: tasks.SetCrsfTask(TASK_BIND_START); break;
         case TXCRSF_CMD_MBRIDGE_IN:
 //dbg.puts("\ncrsf mbridge ");
             mbridge.ParseCrsfFrame(crsf.GetPayloadPtr(), crsf.GetPayloadLen());
@@ -1219,16 +1224,14 @@ IF_IN(
     //-- Handle display or CLI or MAVLink task
 
     uint8_t tx_task = tasks.Task();
-    if (tx_task == MAIN_TASK_NONE) tx_task = mavlink.Task();
-
     switch (tx_task) {
-    case TX_TASK_RX_PARAM_SET:
+    case TASK_RX_PARAM_SET:
         if (connected()) {
             link_task_set(LINK_TASK_TX_SET_RX_PARAMS);
             mbridge.Lock(); // lock mBridge
         }
         break;
-    case TX_TASK_PARAM_STORE:
+    case TASK_PARAM_STORE:
         if (connected()) {
             link_task_set(LINK_TASK_TX_STORE_RX_PARAMS);
             mbridge.Lock(); // lock mBridge
@@ -1236,33 +1239,25 @@ IF_IN(
             doParamsStore = true;
         }
         break;
-    case TX_TASK_PARAM_RELOAD:
+    case TASK_PARAM_RELOAD:
         setup_reload();
         if (connected()) {
             link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD);
             mbridge.Lock(); // lock mBridge
         }
         break;
-    case MAIN_TASK_BIND_START: bind.StartBind(); break;
-    case MAIN_TASK_BIND_STOP: bind.StopBind(); break;
-    case MAIN_TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
-    case TX_TASK_CLI_CHANGE_CONFIG_ID: config_id.Change(tasks.GetCliTaskValue()); break;
-    case TX_TASK_FLASH_ESP: esp.EnterFlash(); break;
-    case TX_TASK_ESP_PASSTHROUGH: esp.EnterPassthrough(); break;
-    case TX_TASK_CLI_ESP_GET_PASSWORD: esp.GetPassword(); break;
-    case TX_TASK_CLI_ESP_SET_PASSWORD: esp.SetPassword(tasks.GetCliTaskStr()); break;
-    case TX_TASK_CLI_ESP_GET_NETWORK_SSID: esp.GetNetSsid(); break;
-    case TX_TASK_CLI_ESP_SET_NETWORK_SSID: esp.SetNetSsid(tasks.GetCliTaskStr()); break;
-    case TX_TASK_HC04_PASSTHROUGH: hc04.EnterPassthrough(); break;
-    case TX_TASK_CLI_HC04_GETPIN: hc04.GetPin(); break;
-    case TX_TASK_CLI_HC04_SETPIN: hc04.SetPin(tasks.GetCliTaskValue()); break;
+    case TASK_BIND_START: bind.StartBind(); break;
+    case TASK_BIND_STOP: bind.StopBind(); break;
+    case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
+    case TASK_CHANGE_CONFIG_ID: config_id.Change(tasks.GetConfigIdValue()); break;
     }
-    if (tx_task == MAIN_TASK_RESTART_CONTROLLER) { GOTO_RESTARTCONTROLLER; }
-
+    espbridge.HandleTask(tx_task, tasks.GetEspBridgeStr());
+    hc04bridge.HandleTask(tx_task, tasks.GetHc04BridgeValue());
+    if (tx_task == TASK_RESTART_CONTROLLER) { GOTO_RESTARTCONTROLLER; }
 
     //-- Handle ESP wifi bridge
 
-    esp.Do();
+    espbridge.Do();
 
     //-- more
 
