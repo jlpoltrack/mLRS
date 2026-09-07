@@ -9,7 +9,6 @@
 #define ESP_POWERUP_CNT_H
 #pragma once
 
-// Needs more work to implement on ESP8266
 // Needed for entering bind mode with rapid power cycles
 
 
@@ -22,9 +21,9 @@ typedef enum {
 } POWERUPCNT_TASK_ENUM;
 
 
-#ifdef ESP32
 // the count is kept in its own nvs namespace, and not in the emulated eeprom, so that
 // the setup data is not rewritten on each power up.
+// ESP32: native nvs. ESP8266: vshymanskyy/Preferences, which is backed by LittleFS.
 
 #include <Preferences.h>
 
@@ -69,13 +68,9 @@ void tPowerupCounter::Init(void)
 
     if (!nvs.begin(POWERUPCNT_NVS_NAMESPACE, false)) return;
 
+    // the count is advanced on every boot, a reset counts like a power up.
+    // the timeout in Do() is what keeps a reset from leaving a stale count behind.
     uint8_t cnt = nvs.getUChar(POWERUPCNT_NVS_KEY, 0);
-
-    // check if this really was a power up, or just a reset, a reset must not leave a stale count behind
-    if (esp_reset_reason() != ESP_RST_POWERON) {
-        if (cnt) nvs.putUChar(POWERUPCNT_NVS_KEY, 0);
-        return;
-    }
 
     cnt++;
     if (cnt > POWERUPCNT_BIND_CNT) cnt = 1; // should not happen, but exit safely
@@ -113,22 +108,6 @@ uint8_t tPowerupCounter::Task(void)
 
     return POWERUPCNT_TASK_NONE;
 }
-
-
-#else
-//-------------------------------------------------------
-// ESP8266: not implemented
-//-------------------------------------------------------
-
-class tPowerupCounter
-{
-  public:
-    void Init(void) {}
-    void Do(void) {}
-    uint8_t Task(void) { return POWERUPCNT_TASK_NONE; }
-};
-
-#endif
 
 
 #endif // ESP_POWERUP_CNT
