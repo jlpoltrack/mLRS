@@ -199,6 +199,15 @@
   #define FREQUENCY_BAND_2P4_GHZ
 #endif
 
+#ifdef TX_ELRS_RADIOMASTER_XR1_ESP32C3 // receiver used as Tx module, SiK only
+  #define DEVICE_NAME "RM XR1 TX"
+  #define DEVICE_IS_TRANSMITTER
+  #define DEVICE_HAS_LR11xx
+  #define FREQUENCY_BAND_2P4_GHZ
+  #define FREQUENCY_BAND_868_MHZ
+  #define FREQUENCY_BAND_915_MHZ_FCC
+#endif
+
 #ifdef TX_ELRS_BETAFPV_MICRO_1W_2400_ESP32
   #define DEVICE_NAME "BetaFPV Micro1W 2.4G"
   #define DEVICE_IS_TRANSMITTER
