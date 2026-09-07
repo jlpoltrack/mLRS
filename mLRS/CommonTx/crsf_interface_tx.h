@@ -107,6 +107,8 @@ class tTxCrsf : public tPin5BridgeBase
     uint8_t tx_frame[CRSF_BUF_SIZE];
     volatile uint8_t tx_available; // this signals if something needs to be send to radio
 
+    bool startup_passed; // send CRSF frames only after at least a RC channels frame has been received, helps with catching MODEILID
+
     // CRSF telemetry
 
     // CRSF_FRAME_ID_GPS (0x02), collected from several MAVLink messages:
@@ -142,7 +144,7 @@ class tTxCrsf : public tPin5BridgeBase
     } tCrsfItem;
 
     // the sequence gives the priority
-    // Note: sequence in CRSFITEMENUM and crsf_items[] must match!
+    // Note: sequence in CRSF_ITEM_ENUM and crsf_items[] must match!
     typedef enum {
         CRSF_ITEM_FLIGHT_MODE = 0,  // CRSF_FRAME_ID_FLIGHT_MODE (0x21), collected from HEARTBEAT
         CRSF_ITEM_GPS,              // CRSF_FRAME_ID_GPS (0x02),        collected from several MAVLink messages (SRy_EXTENDED_STATUS,SRy_EXTRA2,SRy_POSITION)
@@ -333,6 +335,10 @@ void tTxCrsf::parse_nextchar(uint8_t c)
 // 120% = 983 span
 // rcData: 11 bits,  1 .. 1024 .. 2047 for +-120%
 // see design_decissions.h
+// Comment: technically, according to the CRSF spec, frame's len is allowed to be smaller
+// than CRSF_RCCHANNELPACKET_LEN, in which case we would have to not set high rc data.
+// We assume that's not happening. Note, that len can also be larger, which is in fact
+// done by EdgeTx to provide an additional status byte carrying arming info for ELRS.
 
 void tTxCrsf::fill_rcdata(tRcData* const rc)
 {
@@ -375,6 +381,9 @@ void tTxCrsf::Init(bool enable_flag)
 
     tx_available = 0;
     tx_free = false;
+
+    startup_passed = false;
+
     channels_received = false;
     cmd_received = false;
     ping_device_received = false;
@@ -420,6 +429,8 @@ bool tTxCrsf::ChannelsUpdated(tRcData* const rc)
     uint8_t crc = crc8(frame);
     if (crc != frame[frame[1] + 1]) return false;
 
+    startup_passed = true;
+
     fill_rcdata(rc);
     return true;
 }
@@ -433,6 +444,8 @@ bool tTxCrsf::TelemetryUpdate(uint8_t* const task, uint16_t frame_rate_ms)
     // check if we can transmit
     if (!tx_free) return false;
     tx_free = false;
+
+    if (!startup_passed) return false; // not yet ready to send CRSF frames to the radio
 
     // check if we should restart telemetry sequence
     if (telemetry_start_next_tick) {
