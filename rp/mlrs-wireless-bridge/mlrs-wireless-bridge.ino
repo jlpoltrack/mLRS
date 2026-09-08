@@ -41,10 +41,29 @@ Differences to the ESP32 version:
   are available, and AT+WIFICHANNEL=13 is answered with KO
 - flashing is via USB (BOOTSEL) or SWD, not via serial passthrough
 
+Connections (Tx module <-> Pico W / Pico 2 W):
+- Tx module TX  -> GP1 (RX0, = Serial1 RX)
+- Tx module RX  <- GP0 (TX0, = Serial1 TX)
+  (with USE_SERIAL2 the comm port is Serial2, i.e. GP9 = RX1 and GP8 = TX1)
+- USB is never used for communication, it is always the debug output
+- GND           <-> GND, mandatory, the two boards must share ground
+- 5V            -> VSYS (pin 39), the Pico's onboard regulator makes 3.3V from it
+  ATTENTION: when VSYS is fed, do not also plug in the USB port, unless the module's 5V
+  is diode-ored into VSYS (a Schottky to VSYS is the standard way)
+- AT mode line  -> GP2, only needed if GPIO0_IO is enabled, the Tx module drives it
+  low to enter AT mode and high for normal operation. The pin is a plain input without
+  pull, so leave GPIO0_IO commented out if the line is not wired, else a floating GP2
+  will make the bridge randomly fall into AT mode.
+- RUN (pin 30)  NOT connected. Unlike an ESP backpack, the Pico is neither reset nor
+  flashed by the Tx module: AT+RESTART is done in software (watchdog reboot), and
+  firmware goes in via USB (BOOTSEL) or SWD. Leave RUN open.
+- 3V3 (pin 36) is an output, never feed it from the Tx module.
+- the Pico's IOs are 3.3V and are NOT 5V tolerant, level shift a 5V serial
+
 Troubleshooting:
 - Compile error "Set Tools->IP/Bluetooth Stack to ..." or "This library needs Bluetooth
   enabled": set Tools->IP/Bluetooth Stack to "IPv4 + Bluetooth"
-- No serial data: the Pico W has 3.3V IOs and is NOT 5V tolerant
+- No serial data: check GND is shared, and note the Pico W has 3.3V IOs and is NOT 5V tolerant
 */
 
 
@@ -57,7 +76,6 @@ Troubleshooting:
 // (you also need to set the board in the Arduino IDE accordingly)
 //#define MODULE_RP_PICO_W                      // board: Raspberry Pi Pico W
 #define MODULE_RP_PICO_2W                     // board: Raspberry Pi Pico 2W
-//#define MODULE_GENERIC
 
 // Serial level
 // uncomment, if you need inverted serial, e.g. for a FrSky R9M
@@ -75,9 +93,9 @@ Troubleshooting:
 #define WIRELESS_PROTOCOL  1
 
 // GPIO0 usage
-// uncomment if your Tx module drives a line to the Pico W which signals AT mode (aka AT mode)
-// the number determines the IO pin, any free GPIO can be used
-//#define GPIO0_IO  2
+// uncomment if your Tx module drives a line to the Pico which signals AT mode (aka AT mode)
+// GP2 is used on both the Pico W and the Pico 2 W, see Connections above
+//#define GPIO0_IO  2 // = GP2
 
 
 //**********************//
@@ -141,19 +159,10 @@ String ble_device_name = ""; // name of your BLE device as it will be seen by yo
 // Baudrate
 #define BAUD_RATE  115200
 
-// Serial port usage (only effective for MODULE_GENERIC)
-// comment all for default behavior, which is Serial1 for communication and USB Serial for debug
-//#define USE_SERIAL1_NODBG // use Serial1 for communication, no debug output
-//#define USE_SERIAL2_DBG // use Serial2 for communication, and USB Serial for debug output
-
-// Serial pins (only effective for MODULE_GENERIC)
-// uncomment and set as needed, must be valid pins for the used UART
-//#define SERIAL_TXD  0
-//#define SERIAL_RXD  1
-
-// LED pin (only effective for MODULE_GENERIC)
-// uncomment if you want a LED, and set the pin number as desired
-//#define LED_IO  LED_BUILTIN
+// Serial port usage
+// debug output is always on the USB Serial, it is never used for communication
+// comment for default behavior, which is Serial1 (GP0/GP1) for communication
+//#define USE_SERIAL2 // use Serial2 (GP8/GP9) for communication
 
 
 //-------------------------------------------------------

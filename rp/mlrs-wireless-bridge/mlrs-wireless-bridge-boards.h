@@ -15,19 +15,14 @@ board: Raspberry Pi Pico W
 RP2040 + CYW43439 (2.4 GHz WiFi b/g/n, BT 5.2 classic + LE)
 GP0/GP1: TX0/RX0, is Serial1
 GP8/GP9: TX1/RX1, is Serial2
+GP2: AT mode line from the Tx module (see Connections in the sketch)
 LED is on the CYW43 chip (WL_GPIO0), available as LED_BUILTIN
 
 ------------------------------
 Raspberry Pi Pico 2 W
 ------------------------------
 board: Raspberry Pi Pico 2W
-RP2350 + CYW43439, pin compatible with the Pico W
-
-------------------------------
-Generic
-------------------------------
-any other board with a CYW43439 (e.g. Pimoroni Pico Plus 2 W)
-set SERIAL_RXD, SERIAL_TXD and LED_IO in the sketch as needed
+RP2350 + CYW43439, pin compatible with the Pico W, uses the same pins
 
 Notes on all modules:
 - UART pins are freely mappable, but only within the pin group of the UART:
@@ -51,7 +46,6 @@ Notes on all modules:
     #define SERIAL_TXD  0 // = TX0
     #define SERIAL_RXD  1 // = RX0
 
-    #undef LED_IO
     #define LED_IO  LED_BUILTIN
     #define USE_LED
 
@@ -65,16 +59,9 @@ Notes on all modules:
     #define SERIAL_TXD  0 // = TX0
     #define SERIAL_RXD  1 // = RX0
 
-    #undef LED_IO
     #define LED_IO  LED_BUILTIN
     #define USE_LED
 
-
-//-- Generic
-#elif defined MODULE_GENERIC
-    #ifdef LED_IO
-        #define USE_LED
-    #endif
 
 #else
     #error No module selected !
@@ -88,38 +75,32 @@ Notes on all modules:
 // the Arduino API defines SERIAL as 0x0 (a print format constant), so undefine it first
 #undef SERIAL
 
-#if defined USE_SERIAL2_DBG
+// debug is always the USB Serial, the communication port is always a UART, so both are always available
+#define DBG  Serial
+#define DBG_PRINT(x)  Serial.print(x)
+#define DBG_PRINTLN(x)  Serial.println(x)
+
+#if defined USE_SERIAL2
+    #undef SERIAL_TXD // Serial2 is UART1, so the UART0 pins of the module don't apply
+    #undef SERIAL_RXD
+    #define SERIAL_TXD  8 // = TX1
+    #define SERIAL_RXD  9 // = RX1
+
     #define SERIAL  Serial2
-    #define DBG  Serial
-    #define DBG_PRINT(x)  Serial.print(x)
-    #define DBG_PRINTLN(x)  Serial.println(x)
 
-#elif defined USE_SERIAL1_NODBG
+#else // default, Serial1 for communication
     #define SERIAL  Serial1
-
-    #define DBG_PRINT(x)
-    #define DBG_PRINTLN(x)
-
-#else // default, Serial1 for communication, USB Serial for debug
-    #define SERIAL  Serial1
-    #define DBG  Serial
-    #define DBG_PRINT(x)  Serial.print(x)
-    #define DBG_PRINTLN(x)  Serial.println(x)
 #endif
 
 
-#ifdef DBG
-    void dbg_init(void)
-    {
-        DBG.begin(115200);
-        // USB CDC drops TX when the host has not raised DTR, so don't wait for it
-        DBG.ignoreFlowControl(true);
-        DBG_PRINTLN();
-        DBG_PRINTLN("Hello");
-    }
-#else
-    void dbg_init(void) {}
-#endif
+void dbg_init(void)
+{
+    DBG.begin(115200);
+    // USB CDC drops TX when the host has not raised DTR, so don't wait for it
+    DBG.ignoreFlowControl(true);
+    DBG_PRINTLN();
+    DBG_PRINTLN("Hello");
+}
 
 
 #if defined LED_IO && defined USE_LED
