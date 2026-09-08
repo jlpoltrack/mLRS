@@ -58,8 +58,11 @@ mavlink.register_rx_msgid(MLRS_RADIO_LINK_INFORMATION_MSG_ID)
 
 
 ----------------------------------------------------------------------
--- ArduPilot parameters
+-- ArduPilot version & parameters
 ----------------------------------------------------------------------
+
+local ap_fwversion = FWVersion:major() * 10000 + FWVersion:minor() * 100 + FWVersion:patch()
+
 
 assert(param:add_table(PARAM_KEY, "MLRS_", 16), "mLRS SCRIPT: could not create parameter table")
 assert(param:add_param(PARAM_KEY, 1, "SCR_ENABLE", 1)) -- enabled per default
@@ -163,19 +166,8 @@ local function handle_mlrs_radio_link_stats(msg, pos)
     end
 
     -- logging
---[[    logger:write('MLR1',
-        'rx_lq_rc,rx_lq_ser,tx_lq_ser,flags',
-        'BBBI',
-        rx_LQ_rc, rx_LQ_ser, tx_LQ_ser, flags)
-    logger:write('MLR2',
-        'rx_rssi1,rx_snr1,tx_rssi1,tx_snr1,f1',
-        'iiiif',
-        -rx_rssi1, rx_snr1, -tx_rssi1, tx_snr1, frequency1)
-    logger:write('MLR3',
-        'rx_rssi2,rx_snr2,tx_rssi2,tx_snr2,f2',
-        'iiiif',
-        -rx_rssi2, rx_snr2, -tx_rssi2, tx_snr2, frequency2) --]]
-
+	local unit23 = ap_fwversion >= 4.8 and 'RRRRz' or '----z'
+	
     logger:write('MLR1',
         'rx_lq_rc,rx_lq_ser,tx_lq_ser,flags',
         'BBBI',
@@ -186,13 +178,13 @@ local function handle_mlrs_radio_link_stats(msg, pos)
     logger:write('MLR2',
         'rx_rssi1,rx_snr1,tx_rssi1,tx_snr1,f1',
         'iiiif',
-        '----z',
+        unit23,
         '00000',
         -rx_rssi1, rx_snr1, -tx_rssi1, tx_snr1, frequency1)
     logger:write('MLR3',
         'rx_rssi2,rx_snr2,tx_rssi2,tx_snr2,f2',
         'iiiif',
-        '----z',
+        unit23,
         '00000',
         -rx_rssi2, rx_snr2, -tx_rssi2, tx_snr2, frequency2)
 end
@@ -221,16 +213,19 @@ local function handle_mlrs_radio_link_information(msg, pos)
 
     -- 50 0 50 0 128 12 4 16 0 0 6 0 127 13 53 48 72 122 0 0 50 46 52 71 0 0 151 151
 
+	local unit4 = ap_fwversion >= 4.8 and "z-RR" or 'z---'
+	local unit5 = ap_fwversion >= 4.8 and "BBRR" or 'BB--'
+
     logger:write('MLR4',
         'fr_rate,mode,tx_pwr,rx_pwr',
         'IBii',
-        'z---',
+        unit4,
         '0000',
         tx_frame_rate, mode, tx_power, rx_power)
     logger:write('MLR5',
         'tx_ser_rate,rx_ser_rate,tx_sen,rx_sen',
         'IIii',
-        'BB--',
+        unit5,
         '0000',
         tx_ser_data_rate, rx_ser_data_rate, -tx_receive_sensitivity, -rx_receive_sensitivity)
 end
