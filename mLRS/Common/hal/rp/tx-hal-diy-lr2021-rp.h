@@ -126,7 +126,7 @@ bool ser_or_com_init(void) // return true if is_serial
 //-- LEDs
 
 #ifdef DEVICE_HAS_CYW_WIFI
-#define LED_RED                   IO_P21  // external LED (Pico 2 W: on-board LED is behind CYW43)
+#define LED_RED                   IO_P16  // external LED (Pico 2 W: on-board LED is behind CYW43)
 
 void leds_init(void) { gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW); }
 void led_red_off(void) { gpio_low(LED_RED); }

@@ -104,6 +104,31 @@ class tCrossCoreFifo
         return len;
     }
 
+    // bulk read without consuming, pair with Skip() once the data was handed on
+    uint16_t PeekBuf(T* data, uint16_t len) {
+        uint16_t h = head;
+        uint16_t t = tail;
+        uint16_t avail = (h - t) & MASK;
+        if (len > avail) len = avail;
+        if (len == 0) return 0;
+        __dmb();  // order the head read before the data reads
+
+        // read in up to two chunks (wrap-around)
+        uint16_t to_end = SIZE - t;
+        uint16_t first = (len <= to_end) ? len : to_end;
+        memcpy(data, &buf[t], first * sizeof(T));
+        if (first < len) {
+            memcpy(data + first, &buf[0], (len - first) * sizeof(T));
+        }
+        return len;
+    }
+
+    // consume len items previously obtained with PeekBuf()
+    void Skip(uint16_t len) {
+        __dmb();  // the reads must complete before the tail is advanced
+        tail = (tail + len) & MASK;
+    }
+
     void Flush(void) {
         tail = head;
     }

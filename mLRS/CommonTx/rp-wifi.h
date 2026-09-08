@@ -83,11 +83,18 @@ static err_t wifi_netif_init(struct netif* netif)
     return ERR_OK;
 }
 
-// Strong override of the weak symbol in cyw43_wrappers.cpp
-// Must be C++ linkage (no extern "C") to match the weak declaration
+// Strong overrides of the weak symbols in cyw43_wrappers.cpp
+// Must be C++ linkage (no extern "C") to match the weak declarations
 struct netif* __getCYW43Netif()
 {
     return &cyw43_state.netif[wifi_active_itf];
+}
+
+// the rx path and link callbacks go through this one, the framework's weak version
+// returns nullptr for any itf != 0, which drops every frame received in AP mode
+struct netif* __getCYW43NetifByItf(int itf)
+{
+    return (itf == wifi_active_itf) ? &cyw43_state.netif[wifi_active_itf] : nullptr;
 }
 
 
@@ -142,7 +149,8 @@ static bool clm_reload(void)
 static void wifi_set_txpower(uint8_t power, int itf)
 {
     static const int8_t power_dbm[] = { 0, 5, 20 };  // WIFI_POWER_LOW, _MED, _MAX
-    int8_t dbm = (power < sizeof(power_dbm)) ? power_dbm[power] : 5;
+    const uint8_t power_num = sizeof(power_dbm) / sizeof(power_dbm[0]);
+    int8_t dbm = (power < power_num) ? power_dbm[power] : 5;
 
     uint8_t buf[9 + 4];
     memcpy(buf, "qtxpower\x00", 9);
@@ -300,7 +308,7 @@ class tTxWifiNative : public tSerialBase
 
     void sta_setup(const char* ssid, const char* password, uint8_t power)
     {
-        clm_reload(); // 1YN CLM also allows joining networks on channels 12-13
+        clm_ok = clm_reload(); // 1YN CLM also allows joining networks on channels 12-13
 
         wifi_active_itf = CYW43_ITF_STA;
 
@@ -358,15 +366,25 @@ class tTxWifiNative : public tSerialBase
                 }
             } else if (tnow_ms - sta_tlast_ms > 5000) { // join failed or still down, retry
                 sta_tlast_ms = tnow_ms;
+                // without the 1YN CLM a network on channel 12-13 can never be joined,
+                // so retry a failed reload here, it may have been a transient ioctl error
+                if (!clm_ok) clm_ok = clm_reload();
                 sta_join();
             }
             break;
         case STA_CONNECTED:
             if (status != CYW43_LINK_JOIN) { // connection lost
                 link_ready = false;
+                remote_learned = false; // the peer is not ours to keep across a reconnect
                 sta_state = STA_JOINING;
                 sta_tlast_ms = tnow_ms;
                 sta_join();
+            } else if (!remote_learned) {
+                // no client seen yet, follow the lease in case DHCP renewed onto another subnet
+                struct netif* n = &cyw43_state.netif[CYW43_ITF_STA];
+                ip4_addr_set_u32(&remote_ip,
+                    (ip4_addr_get_u32(netif_ip4_addr(n)) & ip4_addr_get_u32(netif_ip4_netmask(n))) |
+                    ~ip4_addr_get_u32(netif_ip4_netmask(n)));
             }
             break;
         }
@@ -422,6 +440,7 @@ class tTxWifiNative : public tSerialBase
         // remember remote endpoint — switch from broadcast to unicast
         self->remote_ip = *addr;
         self->remote_port = port;
+        self->remote_learned = true;
 
         // copy pbuf chain into RX FIFO, drop the whole datagram if it does not fit
         if (self->rx_fifo.HasSpace(p->tot_len)) {
@@ -469,9 +488,13 @@ class tTxWifiNative : public tSerialBase
         if (len > space) len = space;
         if (len > sizeof(tcp_tx_buf)) len = sizeof(tcp_tx_buf);
         if (len > 0) {
-            tx_fifo.GetBuf((char*)tcp_tx_buf, len);
-            tcp_write(tcp_client_pcb, tcp_tx_buf, len, TCP_WRITE_FLAG_COPY);
-            tcp_output(tcp_client_pcb);
+            // peek and consume only after lwIP took the data, so a rejected write
+            // is retried on the next pass instead of losing the bytes
+            len = tx_fifo.PeekBuf((char*)tcp_tx_buf, len);
+            if (tcp_write(tcp_client_pcb, tcp_tx_buf, len, TCP_WRITE_FLAG_COPY) == ERR_OK) {
+                tx_fifo.Skip(len);
+                tcp_output(tcp_client_pcb);
+            }
         }
         cyw43_arch_lwip_end();
     }
@@ -549,6 +572,7 @@ class tTxWifiNative : public tSerialBase
     volatile bool tx_flush_request;  // set by Core 1 flush(), serviced by Core 0 Do()
 
     bool link_ready;  // AP up resp. STA joined with IP, gates UDP TX
+    bool clm_ok;  // 1YN CLM blob loaded, retried on STA rejoin when it failed
 
     // lwIP sockets
     struct udp_pcb* udp_pcb;
@@ -566,9 +590,10 @@ class tTxWifiNative : public tSerialBase
     char sta_ssid[32+1];
     char sta_password[64];
 
-    // remote endpoint, broadcast until first packet received
-    ip_addr_t remote_ip;
+    // remote endpoint, subnet broadcast until the first packet is received
+    ip_addr_t remote_ip;  // IPv4-only build, so the assignment in the rx callback is atomic
     uint16_t remote_port;
+    volatile bool remote_learned;  // set in lwIP context once a client endpoint is known
 };
 
 
@@ -666,6 +691,10 @@ void wifi_loop(void)
         __dmb();  // ensure we see config values written before flag
         wifi.Init(wifi_cfg_protocol, wifi_cfg_name, wifi_cfg_password, wifi_cfg_channel, wifi_cfg_power);
         wifi_initialized = true;
+        // Core 1 has been filling tx_fifo since Serials.Init() while the interface came up,
+        // discard that backlog so the first datagram is not seconds-old telemetry.
+        // safe here: Flush() is the read side, which Core 0 owns for tx_fifo
+        wifi.tx_fifo.Flush();
     }
 
     if (wifi_initialized) {

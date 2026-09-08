@@ -229,7 +229,13 @@ static void ble_do(void)
 {
     if (!ble_connected) {
         ble_send_requested = false; // in case the link dropped between request and event
-        if (wifi.tx_fifo.Available()) wifi.tx_fifo.Flush(); // no client, discard
+        if (wifi.tx_fifo.Available()) { // no client, discard
+            // ble_att_packet_handler() is the other reader of tx_fifo and runs in btstack
+            // (async context irq) context, keep the tail update atomic against it
+            __disable_irq();
+            wifi.tx_fifo.Flush();
+            __enable_irq();
+        }
         return;
     }
 
