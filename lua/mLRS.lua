@@ -280,7 +280,7 @@ local function crsfCmdPush(cmd, payload)
     for i=1, mbridgeCmdLen(cmd) do data[#data + 1] = 0 end -- fill with zeros of correct length
     for i=1, #payload do data[3 + i] = payload[i] end -- fill in data
     -- crossfireTelemetryPush() extends it to
-    -- 0xEE, len, 129, 'O', 'W', len/cmd, payload bytes, crc8
+    -- 0xEE, len, 129=0x81, 'O', 'W', len/cmd, payload bytes, crc8
     return crossfireTelemetryPush(129, data)
 end
 
@@ -288,7 +288,7 @@ local function crsfCmdPop()
     -- crossfireTelemetryPop() is invoked if
     -- address = RADIO_ADDRESS (0xEA) or UART_SYNC (0xC8)
     -- frame id != normal crsf telemetry sensor id
-    -- 0xEE, len, 130, len/cmd, payload bytes, crc8
+    -- 0xEA, len, 130=0x82, len/cmd, payload bytes, crc8
     local cmd, data = crossfireTelemetryPop()
     -- cmd = 130
     -- data = len/cmd, payload bytes
