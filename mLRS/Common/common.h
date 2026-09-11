@@ -289,6 +289,8 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud)
     serial = &dronecan_port;
 #elif defined USE_SERIAL
     serial = &uartb_port;
+#else
+    serial = &uartb_port; // is a dummy port without USE_SERIAL, avoids a nullptr
 #endif
 
     serial->SetBaudRate(baud);
