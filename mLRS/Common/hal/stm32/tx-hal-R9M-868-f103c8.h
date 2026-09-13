@@ -101,6 +101,11 @@
 #define SX_DIO_EXTI_IRQHandler        EXTI15_10_IRQHandler
 //#define SX_DIO_EXTI_IRQ_PRIORITY    11
 
+// no DIO1, so the FSK FifoLevel is polled every 1 ms on CC2 of the micros timer, only set up in FSK mode
+#define DEVICE_HAS_SX127x_FSK
+#define SX_FIFO_POLL_PERIOD_US        1000
+#define TXCLOCK_CC2_IRQHandler        SX_DIO1_EXTI_IRQHandler
+
 // R9M power management:
 // the Sky65111 (S111) PA has two pins, Vapc1, Vapc2, to control the gains of its two amplifier stages
 // Vapc2 is connected to the DAC081C081 (X86C) DAC
@@ -156,6 +161,32 @@ void sx_dio_enable_exti_isr(void)
 void sx_dio_exti_isr_clearflag(void)
 {
     LL_EXTI_ClearFlag_0_31(SX_DIO_EXTI_LINE_x);
+}
+
+void sx_dio1_init_exti_isroff(void)
+{
+    LL_TIM_DisableIT_CC2(MICROS_TIMx);
+    LL_TIM_ClearFlag_CC2(MICROS_TIMx);
+}
+
+// only called in FSK mode, after txclock.Init(), raises the shared TIM3 isr to the DIO isr priority,
+// so the two spi users can't preempt each other
+void sx_dio1_enable_exti_isr(void)
+{
+    nvic_irq_enable_w_priority(TIM3_IRQn, SX_DIO_EXTI_IRQ_PRIORITY);
+    MICROS_TIMx->CCR2 = (uint16_t)(MICROS_TIMx->CNT + SX_FIFO_POLL_PERIOD_US);
+    LL_TIM_ClearFlag_CC2(MICROS_TIMx);
+    LL_TIM_EnableIT_CC2(MICROS_TIMx);
+}
+
+// also schedules the next poll, relative to the last one so it doesn't drift, resyncs if we are late
+void sx_dio1_exti_isr_clearflag(void)
+{
+    LL_TIM_ClearFlag_CC2(MICROS_TIMx);
+    uint16_t cnt = MICROS_TIMx->CNT;
+    uint16_t next = (uint16_t)(MICROS_TIMx->CCR2 + SX_FIFO_POLL_PERIOD_US);
+    if ((uint16_t)(cnt - MICROS_TIMx->CCR2) > SX_FIFO_POLL_PERIOD_US / 2) next = cnt + SX_FIFO_POLL_PERIOD_US;
+    MICROS_TIMx->CCR2 = next;
 }
 
 

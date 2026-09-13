@@ -111,7 +111,11 @@ void setup_configure_metadata(void)
     SetupMetaData.Mode_allowed_mask = 0b010110; // 31 Hz, 19 Hz, FSK
     #define MODE_DEFAULT  MODE_31HZ
 #elif defined DEVICE_HAS_SX127x
+  #ifdef DEVICE_HAS_SX127x_FSK
+    SetupMetaData.Mode_allowed_mask = 0b110000; // FSK, 19 Hz 7x
+  #else
     SetupMetaData.Mode_allowed_mask = 0b100000; // 19 Hz 7x, not editable
+  #endif
     #define MODE_DEFAULT  MODE_19HZ_7X
 #elif defined DEVICE_HAS_LR11xx
     // MULTIBAND

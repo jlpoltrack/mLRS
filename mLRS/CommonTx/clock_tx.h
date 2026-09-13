@@ -93,15 +93,25 @@ tTxClock txclock;
 // Tx Clock ISR
 //-------------------------------------------------------
 
+#ifdef TXCLOCK_CC2_IRQHandler
+IRQHANDLER(void TXCLOCK_CC2_IRQHandler(void);) // must clear the CC2 flag
+#endif
+
 IRQHANDLER(
 void TXCLOCK_IRQHandler(void)
 {
-    if (LL_TIM_IsActiveFlag_CC1(TXCLOCK_TIMx)) {
+    // check the IT enable too, CC flags are set on every compare match, also when the isr was entered for another channel
+    if (LL_TIM_IsEnabledIT_CC1(TXCLOCK_TIMx) && LL_TIM_IsActiveFlag_CC1(TXCLOCK_TIMx)) {
         LL_TIM_ClearFlag_CC1(TXCLOCK_TIMx);
         LL_TIM_DisableIT_CC1(TXCLOCK_TIMx);
         // now call callback
         txclock.cc1_callback_ptr();
     }
+#ifdef TXCLOCK_CC2_IRQHandler
+    if (LL_TIM_IsEnabledIT_CC2(TXCLOCK_TIMx) && LL_TIM_IsActiveFlag_CC2(TXCLOCK_TIMx)) {
+        TXCLOCK_CC2_IRQHandler();
+    }
+#endif
 })
 
 
