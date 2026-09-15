@@ -41,6 +41,7 @@ typedef enum {
 #include <Arduino.h>
 #include <pico/multicore.h>
 #include <hardware/watchdog.h>
+#include <hardware/clocks.h>
 
 // undefine MIN/MAX from Pico SDK to prevent redefinition
 #undef MIN
@@ -66,6 +67,8 @@ static void core1_entry(void)
 
 void setup()
 {
+    // boot clock change moved clk_peri to the 48 MHz USB PLL, put it back on PLL_SYS
+    clock_configure_undivided(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, clock_get_hz(clk_sys));
     multicore_launch_core1(core1_entry);
 }
 
