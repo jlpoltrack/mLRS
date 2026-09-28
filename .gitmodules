@@ -46,3 +46,6 @@
 [submodule "mLRS/modules/dronecan/DSDL"]
 	path = mLRS/modules/dronecan/DSDL
 	url = https://github.com/dronecan/DSDL.git
+[submodule "tools/elrs/targets"]
+	path = tools/elrs/targets
+	url = https://github.com/ExpressLRS/targets.git

@@ -9,6 +9,7 @@
  run_make_esp_firmwares.py
  generate esp fimrware files
  renames and copies files into tools/esp-build/firmware
+ -t <target> builds only the envs whose name contains target, e.g. -t elrs
  version 21.03.2026
 ********************************************************
 '''
@@ -17,12 +18,25 @@ import pathlib
 import shutil
 import re
 import sys
+import subprocess
 
 
 #-- installation dependent
-# TODO: effort at finding this automatically
 
-PIO_DIR = os.path.join("C:/",'Users','Olli','.platformio','penv','Scripts')
+def find_pio():
+    # PlatformIO CLI from the PATH, else from its default install location
+    for name in ('pio', 'platformio'):
+        pio = shutil.which(name)
+        if pio:
+            return pio
+    core_dir = os.environ.get('PLATFORMIO_CORE_DIR', os.path.join(os.path.expanduser('~'),'.platformio'))
+    scripts_dir = os.path.join(core_dir,'penv','Scripts' if os.name == 'nt' else 'bin')
+    for name in ('pio', 'platformio'):
+        pio = os.path.join(scripts_dir, name + ('.exe' if os.name == 'nt' else ''))
+        if os.path.exists(pio):
+            return pio
+    print('ERROR: PlatformIO not found, install it or add it to the PATH')
+    exit(1)
 
 
 
@@ -129,13 +143,37 @@ def printError(txt):
 # build system
 #--------------------------------------------------
 
-def mlrs_esp_compile_all():
-    pio_run = os.path.join(PIO_DIR,'platformio.exe') + ' run --project-dir ' + MLRS_PROJECT_DIR
-    
+def mlrs_esp_update_elrs_targets():
+    # regenerate the ELRS receiver envs, so they match the tools/elrs/targets submodule
+    sys.path.insert(0, os.path.join(MLRS_TOOLS_DIR,'elrs'))
+    import elrs_targets
+    ini = elrs_targets.PIO_INI
+    old = open(ini).read() if os.path.exists(ini) else ''
+    elrs_targets.write_pio_ini(elrs_targets.load_products())
+    if open(ini).read() != old:
+        printWarning('platformio_elrs.ini has changed, needs to be committed')
+
+
+def mlrs_esp_get_envs(target):
+    # envs whose name contains target, all envs if target is empty
+    envs = []
+    for ini in ('platformio.ini', 'platformio_elrs.ini'):
+        F = open(os.path.join(MLRS_PROJECT_DIR,ini), mode='r')
+        envs += re.findall(r'^\[env:([^\]]+)\]', F.read(), re.MULTILINE)
+        F.close()
+    return [e for e in envs if target in e.lower()]
+
+
+def mlrs_esp_compile_all(envs):
+    # argument list, not a shell string, so paths with spaces work on all OSes
+    pio_run = [find_pio(), 'run', '--project-dir', MLRS_PROJECT_DIR]
+    for e in envs:
+        pio_run += ['-e', e]
+
     print('Full Clean All')
-    os.system(pio_run+' --target fullclean')
+    subprocess.call(pio_run + ['--target', 'fullclean'])
     print('Build All')
-    os.system(pio_run)
+    subprocess.call(pio_run)
 
 
 
@@ -143,11 +181,13 @@ def mlrs_esp_compile_all():
 # application
 #--------------------------------------------------
 
-def mlrs_esp_copy_all_bin():
+def mlrs_esp_copy_all_bin(envs):
     print('copying .bin files')
     firmwarepath = os.path.join(MLRS_ESP_BUILD_DIR,'firmware')
     create_clean_dir(firmwarepath)
     for subdir in os.listdir(MLRS_PIO_BUILD_DIR):
+        if envs and subdir not in envs: # only copy what was built
+            continue
         if os.path.isdir(os.path.join(MLRS_PIO_BUILD_DIR,subdir)): # needs to use full path for the check to work
             print(subdir)
             file = os.path.join(MLRS_PIO_BUILD_DIR,subdir,'firmware.bin')
@@ -182,8 +222,18 @@ if __name__ == "__main__":
     else:
         VERSIONONLYSTR = cmdline_version
 
-    mlrs_esp_compile_all()
-    mlrs_esp_copy_all_bin()
+    mlrs_esp_update_elrs_targets()
+
+    envs = []
+    if cmdline_target != '':
+        envs = mlrs_esp_get_envs(cmdline_target)
+        if not envs:
+            printError('no env matches target '+cmdline_target)
+            exit(1)
+        print('building', len(envs), 'envs')
+
+    mlrs_esp_compile_all(envs)
+    mlrs_esp_copy_all_bin(envs)
 
     if not cmdline_nopause:
         os.system("pause")

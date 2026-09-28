@@ -12,6 +12,7 @@ tools/build3/*
 tools/build/*
 tools/esp-build/*
 tools/__pycache__
+tools/elrs/__pycache__
 mLRS/*/Drivers/CMSIS/Include/*
 mLRS/*/Drivers/CMSIS/Device/ST/*
 mLRS/*/Drivers/STM32??xx_HAL_Driver/*

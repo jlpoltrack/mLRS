@@ -11,6 +11,7 @@
  2. calls run_copy_st_drivers.py to populate the target ST Driver folders
  3. calls fmav_generate_c_library.py to generate MAVLink library files
  4. calls dronecan_generate_c_library.py to generate DroneCAN library files
+ 5. calls elrs_targets.py --ini to generate the ELRS receiver envs
  version 25.01.2026
 ********************************************************
 '''
@@ -97,10 +98,20 @@ def generate_dronecan_c_library():
     print('# DONE #')
 
 
+def generate_elrs_targets():
+    print('----------------------------------------')
+    print(' run elrs_targets.py --ini')
+    print('----------------------------------------')
+    os.chdir(os.path.join(mLRSProjectdirectory,'tools','elrs'))
+    os_system([python_cmd, os.path.join('.','elrs_targets.py'), '--ini'])
+    print('# DONE #')
+
+
 cmdline_submodules_update = False
 cmdline_copy_st_drivers = False
 cmdline_mavlink = False
 cmdline_dronecan = False
+cmdline_elrs = False
 hascmd = False
 
 cmd_pos = -1
@@ -120,6 +131,9 @@ for cmd in sys.argv:
     if cmd == '--dronecan' or cmd == '-d' or cmd == '-D':
         cmdline_dronecan = True
         hascmd = True
+    if cmd == '--elrs' or cmd == '-e' or cmd == '-E':
+        cmdline_elrs = True
+        hascmd = True
 
 check_python()
 if cmdline_submodules_update or not hascmd:
@@ -130,6 +144,8 @@ if cmdline_mavlink or not hascmd:
     generate_mavlink_c_library()
 if cmdline_dronecan or not hascmd:
     generate_dronecan_c_library()
+if cmdline_elrs or not hascmd:
+    generate_elrs_targets()
 
 print('Press Enter to continue')
 input()
