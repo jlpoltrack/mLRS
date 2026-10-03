@@ -429,7 +429,7 @@ void tTxCrsf::Init(bool enable_flag)
     autobaud.cycles_cnt = 20;
     autobaud.baudrate_idx = 0;
     autobaud.channels_received_cnt = 0;
-#if defined STM32G4 || defined ESP32
+#if defined STM32G4 || defined ESP32 || defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
     autobaud.is_running = true; // start with doing autobaud
 #endif
 

@@ -16,6 +16,7 @@
 // modified 17.8.2024, to do page cmds for ESP, makes it work for SSD1306 and NFP1115
 // modified 13.2.2026, remove ESP8266 paths, page mode only for ESP32 to handle NFP1115
 // modified 13.2.2026, consolidate ifdef pattern in init stream
+// modified 27.3.2026, RP: non-blocking cmdhome via DMA preamble
 
 
 #include <string.h>
@@ -219,10 +220,20 @@ HAL_StatusTypeDef ssd1306_put(uint8_t* buf, uint16_t len)
 } */
 
 
+#if defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+HAL_StatusTypeDef i2c_put_with_cmdhome(uint8_t reg_adr, uint8_t* buf, uint16_t len);
+#endif
+
+
 HAL_StatusTypeDef ssd1306_put_noblock(uint8_t* const buf, uint16_t len)
 {
+#if defined ARDUINO_ARCH_RP2040 || defined ARDUINO_ARCH_RP2350
+    // single DMA transaction: cmdhome commands + framebuffer data
+    return i2c_put_with_cmdhome(SSD1306_DATA, buf, len);
+#else
     ssd1306_cmdhome();  // could skip since we always do full buffer
     return i2c_put(SSD1306_DATA, buf, len);
+#endif
 }
 
 
