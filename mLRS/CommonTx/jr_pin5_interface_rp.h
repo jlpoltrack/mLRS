@@ -93,7 +93,7 @@ class tPin5BridgeBase
 
     // interface to the uart hardware peripheral used for the bridge, called in isr context
     void pin5_putbuf(uint8_t* const buf, uint16_t len);
-    void pin5_set_protocol(uint32_t baudrate);
+    void pin5_set_protocol(uint32_t baudrate, bool inverted);
 
     // callbacks used by the other platforms, not needed here
     void pin5_rx_callback(uint8_t c) {}
@@ -253,7 +253,7 @@ void tPin5BridgeBase::pin5_tx_start(void)
 
 
 // called from the main loop, on the same core as the IRQ, so masking interrupts keeps it out
-void tPin5BridgeBase::pin5_set_protocol(uint32_t baudrate)
+void tPin5BridgeBase::pin5_set_protocol(uint32_t baudrate, bool inverted)
 {
     uint32_t irq_status = save_and_disable_interrupts();
 
@@ -268,6 +268,11 @@ void tPin5BridgeBase::pin5_set_protocol(uint32_t baudrate)
     pio_sm_restart(pin5_pio, pin5_sm_tx);
     pio_sm_exec(pin5_pio, pin5_sm_tx, pio_encode_jmp(pin5_tx_offset));
     pio_interrupt_clear(pin5_pio, pin5_sm_tx);
+
+    // CRSF is normally inverted, but some radios use normal polarity
+    gpio_set_inover(UART_TX_PIN, (inverted) ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    gpio_set_outover(UART_TX_PIN, (inverted) ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    gpio_set_pulls(UART_TX_PIN, !inverted, inverted); // pull to idle level
 
     float div = (float)clock_get_hz(clk_sys) / (8.0f * baudrate);
     pio_sm_set_clkdiv(pin5_pio, pin5_sm_rx, div);
