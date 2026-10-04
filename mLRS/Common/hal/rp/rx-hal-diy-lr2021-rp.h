@@ -5,11 +5,10 @@
 //*******************************************************
 
 //-------------------------------------------------------
-// RP2040, DIY LR2021 RX
+// RP2040, DIY LR2021 RX, Raspberry Pi Pico
 //-------------------------------------------------------
 
 #define DEVICE_HAS_SINGLE_LED
-//efine DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_OUT
 
 
@@ -108,40 +107,18 @@ void out_set_inverted(void) { gpio_set_outover(UART_TX_PIN, GPIO_OVERRIDE_INVERT
 
 //-- Button
 
-#ifdef DEVICE_HAS_SINGLE_LED_RGB
-
-#define BUTTON                    IO_P24  // usr button on YD-RP2040 clone board
-
-void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
-bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
-
-#else
-
-void button_init(void) { };
+void button_init(void) {}
 bool button_pressed(void) { return false; }
-
-#endif
 
 
 //-- LEDs
-#ifdef DEVICE_HAS_SINGLE_LED
 
-//#define LED_RED                   IO_P25  // internal LED on Pico / Pico 2 (non-W)
-#define LED_RED                   IO_P16  // use this on W variants, since the LED is controlled by the WiFi chip...
-
+#define LED_RED                   IO_P25  // internal LED on Pico / Pico 2 (non-W)
 
 void leds_init(void) { gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW); }
 void led_red_off(void) { gpio_low(LED_RED); }
 void led_red_on(void) { gpio_high(LED_RED); }
 void led_red_toggle(void) { gpio_toggle(LED_RED); }
-
-#elif defined DEVICE_HAS_SINGLE_LED_RGB
-
-#define LED_RGB                   IO_P23  // RGB LED on YD-RP2040 clone board
-#define LED_RGB_PIXEL_NUM         1
-#include "rp-hal-led-rgb.h"
-
-#endif
 
 
 //-- POWER

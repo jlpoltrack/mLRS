@@ -8,24 +8,19 @@
 // RP2350, DIY LR2021 TX, Raspberry Pi Pico 2 W
 //-------------------------------------------------------
 
-#ifndef DEVICE_HAS_CYW_WIFI
-  #error DEVICE_HAS_CYW_WIFI must be defined, this target is for the Pico 2 W only
-#endif
-
-// single external LED, com shares the serial (USB) port
+// single external LED, com on USB, no serial port
 #define DEVICE_HAS_SINGLE_LED
 #define DEVICE_HAS_JRPIN5
-#define DEVICE_HAS_COM_ON_SERIAL
+#define DEVICE_HAS_NO_SERIAL
 
 
 //-- UARTS
-// UARTB = serial port
+// UARTC = COM (CLI)
 // UART = JR pin5
 // UARTF = debug port
 
-#define UARTB_USE_SERIAL          // serial via USB
+#define UARTC_USE_SERIAL          // com via USB
 
-// #define UARTC_USE_SERIAL       // com is on serial (USB), UARTC must be a dummy port
 // no UARTD, the CYW wifi bridge is on-chip and does not use the serial2 port
 
 #define UART_USE_PIO_HALF_DUPLEX  // JR Pin5 UART
@@ -86,23 +81,8 @@ void sx_dio_exti_isr_clearflag(void) {}
 
 //-- Button
 
-#define BUTTON                    IO_P20
-
-void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
-bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
-
-
-//-- Serial or Com Switch
-// use com if BUTTON is pressed during power up, else use serial
-
-bool ser_or_com_init(void) // return true if is_serial
-{
-    uint8_t cnt = 0;
-    for (uint8_t i = 0; i < 16; i++) {
-        if (button_pressed()) cnt++;
-    }
-    return !(cnt > 8);
-}
+void button_init(void) {}
+bool button_pressed(void) { return false; }
 
 
 //-- LEDs
