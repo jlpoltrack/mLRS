@@ -93,7 +93,7 @@ class tPin5BridgeBase
 
     // interface to the uart hardware peripheral used for the bridge, called in isr context
     void pin5_putbuf(uint8_t* const buf, uint16_t len);
-    void pin5_set_protocol(uint32_t baudrate, bool inverted);
+    bool pin5_set_protocol(uint32_t baudrate, bool inverted);
 
     // callbacks used by the other platforms, not needed here
     void pin5_rx_callback(uint8_t c) {}
@@ -253,7 +253,7 @@ void tPin5BridgeBase::pin5_tx_start(void)
 
 
 // called from the main loop, on the same core as the IRQ, so masking interrupts keeps it out
-void tPin5BridgeBase::pin5_set_protocol(uint32_t baudrate, bool inverted)
+bool tPin5BridgeBase::pin5_set_protocol(uint32_t baudrate, bool inverted)
 {
     uint32_t irq_status = save_and_disable_interrupts();
 
@@ -287,6 +287,7 @@ void tPin5BridgeBase::pin5_set_protocol(uint32_t baudrate, bool inverted)
     pio_sm_set_enabled(pin5_pio, pin5_sm_tx, true);
 
     restore_interrupts(irq_status);
+    return true;
 }
 
 
