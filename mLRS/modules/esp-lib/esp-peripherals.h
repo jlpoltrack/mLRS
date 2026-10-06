@@ -173,27 +173,61 @@ GPIO_INLINE_FORCED void gpio_high(uint8_t GPIO_Pin)
 }
 
 
+#ifdef ESP32
+// enables the output driver of a pin, gpio_set_direction() sits in flash
+GPIO_INLINE_FORCED void gpio_enable_output(uint8_t GPIO_Pin)
+{
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+    GPIO.enable_w1ts.enable_w1ts = (1 << GPIO_Pin);
+#else
+    if (GPIO_Pin < 32) {
+        GPIO.enable_w1ts = ((uint32_t)1 << GPIO_Pin);
+    } else {
+        GPIO.enable1_w1ts.data = ((uint32_t)1 << (GPIO_Pin - 32));
+    }
+#endif
+}
+#endif
+
+
+// reads the input register directly, digitalRead() sits in flash on ESP32
+GPIO_INLINE_FORCED uint16_t gpio_read(uint8_t GPIO_Pin)
+{
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+    return (GPIO.in.val >> GPIO_Pin) & 1;
+#elif defined CONFIG_IDF_TARGET_ESP32 || defined CONFIG_IDF_TARGET_ESP32S3
+    if (GPIO_Pin < 32) {
+        return (GPIO.in >> GPIO_Pin) & 1;
+    } else {
+        return (GPIO.in1.val >> (GPIO_Pin - 32)) & 1;
+    }
+#else
+    return (digitalRead(GPIO_Pin) == HIGH) ? 1 : 0;
+#endif
+}
+
+
 GPIO_INLINE_FORCED void gpio_toggle(uint8_t GPIO_Pin)
 {
-    digitalWrite(GPIO_Pin, !digitalRead(GPIO_Pin));
+    if (gpio_read(GPIO_Pin)) { gpio_low(GPIO_Pin); } else { gpio_high(GPIO_Pin); }
 }
 
 
 GPIO_INLINE_FORCED uint16_t gpio_read_activehigh(uint8_t GPIO_Pin)
 {
-    return (digitalRead(GPIO_Pin) == HIGH) ? 1 : 0;
+    return gpio_read(GPIO_Pin);
 }
 
 
 GPIO_INLINE_FORCED uint16_t gpio_read_activelow(uint8_t GPIO_Pin)
 {
-    return (digitalRead(GPIO_Pin) != HIGH) ? 1 : 0;
+    return !gpio_read(GPIO_Pin);
 }
 
 
 GPIO_INLINE_FORCED uint16_t gpio_readoutput(uint8_t GPIO_Pin)
 {
-    return (digitalRead(GPIO_Pin) == HIGH) ? 1 : 0;
+    return gpio_read(GPIO_Pin);
 }
 
 

@@ -210,8 +210,8 @@ IRAM_ATTR void tPin5BridgeBase::pin5_tx_enable(void)
 #ifndef JR_PIN5_FULL_DUPLEX
     // GPIO_MATRIX_CONST_ZERO_INPUT routes constant 0 to the matrix slot, per-chip value (ESP32 0x30, C3 0x1F, S3 0x3C)
     gpio_matrix_in(GPIO_MATRIX_CONST_ZERO_INPUT, U1RXD_IN_IDX, true); // disconnect RX from all pads, true here important
-    gpio_set_level((gpio_num_t)UART_USE_TX_IO, (pin5_inverted) ? 0 : 1); // set idle level
-    gpio_set_direction((gpio_num_t)UART_USE_TX_IO, GPIO_MODE_OUTPUT);
+    if (pin5_inverted) { gpio_low(UART_USE_TX_IO); } else { gpio_high(UART_USE_TX_IO); } // set idle level
+    gpio_enable_output(UART_USE_TX_IO); // input stays enabled, but rx is disconnected
     gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, pin5_inverted, false);
 #endif
 }
