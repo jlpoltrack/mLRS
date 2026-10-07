@@ -130,6 +130,9 @@ tRxMsp msp;
 tRxSxSerial sx_serial;
 
 #include "dronecan_interface_rx.h"
+#ifdef DEVICE_HAS_OTA_LOADER
+#include "ota_rx.h"
+#endif
 
 tRxDroneCan dronecan;
 
@@ -221,6 +224,7 @@ uint8_t link_rx2_status;
 uint8_t link_task;
 uint8_t transmit_frame_type;
 bool doParamsStore;
+bool doOtaEnter;
 
 
 void link_task_init(void)
@@ -229,6 +233,7 @@ void link_task_init(void)
     transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
 
     doParamsStore = false;
+    doOtaEnter = false;
 }
 
 
@@ -271,6 +276,11 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
         setup_reload();
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
+#ifdef DEVICE_HAS_OTA_LOADER
+    case FRAME_CMD_RX_OTA_ENTER:
+        doOtaEnter = true;
+        break;
+#endif
     }
 }
 
@@ -973,5 +983,13 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         setup_store_to_EEPROM();
         GOTO_RESTARTCONTROLLER;
     }
+
+    //-- Enter OTA loader
+
+#ifdef DEVICE_HAS_OTA_LOADER
+    if (doOtaEnter) {
+        ota_enter_loader(fhss.GetBindFreq(), Config.FrameSyncWord); // does not return
+    }
+#endif
 
 }//end of main_loop

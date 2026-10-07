@@ -495,6 +495,11 @@ class tFhssBase
         return curr_i;
     }
 
+    uint32_t GetBindFreq(void)
+    {
+        return fhss_config[config_i].freq_list[fhss_config[config_i].bind_channel];
+    }
+
     uint32_t GetCurrFreq(void)
     {
         if (is_in_binding) {
@@ -689,6 +694,7 @@ class tFhss
     uint8_t GetCurrI(void) { return fhss1stBand.GetCurrI(); }
     uint8_t GetCurrI2(void) { return fhss2ndBand.GetCurrI(); }
 
+    uint32_t GetBindFreq(void) { return fhss1stBand.GetBindFreq(); }
     uint32_t GetCurrFreq(void) { return fhss1stBand.GetCurrFreq(); }
     uint32_t GetCurrFreq2(void) { return fhss2ndBand.GetCurrFreq(); }
 

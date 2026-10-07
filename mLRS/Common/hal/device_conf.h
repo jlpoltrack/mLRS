@@ -380,6 +380,11 @@ The default selection of frequency bands can be overruled by feature defines.
 #endif
 
 
+#if defined DEVICE_IS_TRANSMITTER && (defined DEVICE_HAS_SX126x || defined DEVICE_HAS_SX128x || defined DEVICE_HAS_LR11xx)
+  #define USE_RX_OTA // tx can update receivers which have an OTA loader
+#endif
+
+
 //-------------------------------------------------------
 // MLRS Feature Defines
 //-------------------------------------------------------

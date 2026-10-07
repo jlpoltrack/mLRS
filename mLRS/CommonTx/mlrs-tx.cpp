@@ -298,10 +298,18 @@ void init_hw(void)
 volatile uint32_t irq_status;
 volatile uint32_t irq2_status;
 
+#ifdef USE_RX_OTA
+#include "ota_relay_tx.h"
+tTxOtaRelay ota_relay;
+#endif
+
 IRQHANDLER(
 void SX_DIO_EXTI_IRQHandler(void)
 {
     sx_dio_exti_isr_clearflag();
+#ifdef USE_RX_OTA
+    if (ota_relay.active) { ota_relay.DioIsr(); return; }
+#endif
     irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
     if (irq_status & SX_IRQ_RX_DONE) {
         if (bind.IsInBind()) {
@@ -346,6 +354,8 @@ uint8_t link_task;
 uint8_t transmit_frame_type;
 uint16_t link_task_delay_ms;
 bool doParamsStore;
+uint16_t rx_ota_delay_ms; // time for the rx to get the cmd and reboot, relay starts when it expires
+bool doRxOta;
 
 
 void link_task_init(void)
@@ -355,6 +365,8 @@ void link_task_init(void)
     transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
 
     doParamsStore = false;
+    rx_ota_delay_ms = 0;
+    doRxOta = false;
 }
 
 
@@ -399,6 +411,11 @@ void link_task_reset(void)
 
 void link_task_tick_ms(void)
 {
+    if (rx_ota_delay_ms) {
+        rx_ota_delay_ms--;
+        if (!rx_ota_delay_ms) doRxOta = true;
+    }
+
     // if a delay has been set, count it down
     if (link_task_delay_ms) {
         link_task_delay_ms--;
@@ -448,6 +465,9 @@ void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats, tRcD
     case LINK_TASK_TX_STORE_RX_PARAMS:
         pack_txcmdframe_cmd(frame, frame_stats, rc, FRAME_CMD_STORE_RX_PARAMS);
         transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
+        break;
+    case LINK_TASK_TX_RX_OTA_ENTER:
+        pack_txcmdframe_cmd(frame, frame_stats, rc, FRAME_CMD_RX_OTA_ENTER); // is repeated until the relay starts
         break;
     }
 }
@@ -1086,6 +1106,16 @@ IF_SX2(
             GOTO_RESTARTCONTROLLER;
         }
 
+#ifdef USE_RX_OTA
+        // relay for the receiver's OTA loader
+        if (doRxOta) {
+            sx.SetToIdle();
+            sx2.SetToIdle();
+            ota_relay.Run(Serials.com, fhss.GetBindFreq(), Config.FrameSyncWord);
+            GOTO_RESTARTCONTROLLER;
+        }
+#endif
+
 //dbg.puts((valid_frame_received) ? "\nvalid" : "\ninval");
 
         return; // link state might have changed, process immediately
@@ -1208,6 +1238,14 @@ IF_IN(
     case TASK_BIND_START: bind.StartBind(); break;
     case TASK_BIND_STOP: bind.StopBind(); break;
     case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
+    case TASK_RX_OTA:
+        // a receiver which already sits in its loader isn't connected, so go ahead in any case
+        if (connected()) {
+            link_task_reset();
+            link_task_set(LINK_TASK_TX_RX_OTA_ENTER);
+        }
+        rx_ota_delay_ms = 1000;
+        break;
     case TASK_CHANGE_CONFIG_ID: config_id.Change(tasks.GetConfigIdValue()); break;
     }
     espbridge.HandleTask(tx_task, tasks.GetEspBridgeStr());
