@@ -440,6 +440,7 @@ MLRS_SOURCES_COMMON = [
     os.path.join('Common','crypto.cpp'),
     os.path.join('Common','thirdparty','monocypher','src','monocypher.c'),
     os.path.join('Common','thirdparty','monocypher','src','optional','monocypher-ed25519.c'),
+    os.path.join('Common','ota','ota_loader.cpp'),
     ]
 
 # add all Common/dronecan/out/src/*.c (auto-generated dronecan message sources), if present

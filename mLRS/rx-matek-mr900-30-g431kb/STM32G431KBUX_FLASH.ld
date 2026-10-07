@@ -45,17 +45,27 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 32K
-  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 128K
+  LOADER   (rx)    : ORIGIN = 0x8000000,   LENGTH = 4K    /* OTA loader, see Common/ota/ota_loader.h */
+  FLASH    (rx)    : ORIGIN = 0x8001000,   LENGTH = 116K  /* app, ends where the EE pages start */
 }
 
 /* Sections */
 SECTIONS
 {
+  /* The OTA loader, must be self-contained, owns the reset vector */
+  .ota_loader :
+  {
+    KEEP(*(.ota_loader_vectors))
+    *ota_loader.o(.text .text* .rodata .rodata*)
+  } >LOADER
+
   /* The startup code into "FLASH" Rom type memory */
   .isr_vector :
   {
     . = ALIGN(4);
     KEEP(*(.isr_vector)) /* Startup code */
+    . = 0x200; /* = OTA_APP_INFO_OFFSET */
+    KEEP(*(.ota_app_info))
     . = ALIGN(4);
   } >FLASH
 
