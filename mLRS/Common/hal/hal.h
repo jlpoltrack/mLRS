@@ -369,8 +369,12 @@ extern "C" { void delay_ms(uint16_t ms); }
 #endif
 
 
-#if defined DEVICE_IS_TRANSMITTER && !defined TX_R9M_868_F103C8 // R9M has not enough RAM
+#ifdef DEVICE_IS_TRANSMITTER
   #define USE_RX_OTA // tx can update receivers which have an OTA loader
+#endif
+
+#if defined USE_RX_OTA && defined DEVICE_HAS_JRPIN5
+  #define USE_RX_OTA_STREAM // tx can get a receiver image from the radio, which has it on its SD card
 #endif
 
 // all ESP receivers can be updated over the air, they need no loader, see ota_rx.h

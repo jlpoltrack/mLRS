@@ -77,6 +77,7 @@ typedef enum {
     MBRIDGE_CMD_SYSTEM_BOOTLOADER     = 17, // len = 0
     MBRIDGE_CMD_FLASH_ESPBRIDGE       = 18, // len = 0
     MBRIDGE_CMD_RX_OTA                = 19, // len = 0, the host then talks to the ota relay on the JR pin5 uart
+    MBRIDGE_CMD_RX_OTA_STATUS         = 20, // tx tells the radio how the update goes, for which the radio sends the image
     MBRIDGE_CMD_MAX                   = 99, // to enforce that mbridge cmds are smaller than TXCRSF_CMD_xxx
 } MBRIDGE_CMD_ENUM;
 
@@ -88,6 +89,7 @@ typedef enum {
 #define MBRIDGE_CMD_INFO_LEN                  24
 #define MBRIDGE_CMD_PARAM_SET_LEN             7
 #define MBRIDGE_CMD_MODELID_SET_LEN           3
+#define MBRIDGE_CMD_RX_OTA_STATUS_LEN         12
 
 
 uint8_t mbridge_cmd_payload_len(uint8_t cmd)
@@ -110,6 +112,7 @@ uint8_t mbridge_cmd_payload_len(uint8_t cmd)
     case MBRIDGE_CMD_SYSTEM_BOOTLOADER: return 0;
     case MBRIDGE_CMD_FLASH_ESPBRIDGE: return 0;
     case MBRIDGE_CMD_RX_OTA: return 0;
+    case MBRIDGE_CMD_RX_OTA_STATUS: return MBRIDGE_CMD_RX_OTA_STATUS_LEN;
     }
     return 0;
 }
@@ -256,6 +259,19 @@ typedef struct
 }) tMBridgeInfo; // 24 bytes
 
 
+MBRIDGE_PACKED(
+typedef struct
+{
+    uint8_t state; // OTA_STREAM_STATE_ENUM
+    uint8_t result; // if state is done, 1 = ok, else 1 + OTA_HOST_RESULT_ENUM
+    uint8_t nack_seq; // counts up when data got lost, the radio then goes back to rx_offset
+    uint8_t crc_errors; // frames with a bad crc
+    uint32_t rx_offset; // what the tx has got of the data
+    uint16_t room; // what the tx can take beyond rx_offset
+    uint16_t rejected; // frames which were not the next one, or for which there was no room
+}) tMBridgeRxOtaStatus; // 12 bytes
+
+
 //-- MBridge DeviceItem Commands
 
 MBRIDGE_PACKED(
@@ -338,6 +354,7 @@ STATIC_ASSERT(sizeof(tMBridgeChannelBuffer) == MBRIDGE_CHANNELPACKET_SIZE, "tMBr
 STATIC_ASSERT(sizeof(tMBridgeLinkStats) == MBRIDGE_CMD_TX_LINK_STATS_LEN, "tMBridgeLinkStats len missmatch")
 STATIC_ASSERT(sizeof(tMBridgeRequestCmd) == MBRIDGE_CMD_REQUEST_CMD_LEN, "tMBridgeRequestCmd len missmatch")
 STATIC_ASSERT(sizeof(tMBridgeInfo) == MBRIDGE_CMD_INFO_LEN, "tMBridgeInfo len missmatch")
+STATIC_ASSERT(sizeof(tMBridgeRxOtaStatus) == MBRIDGE_CMD_RX_OTA_STATUS_LEN, "tMBridgeRxOtaStatus len missmatch")
 STATIC_ASSERT(sizeof(tMBridgeDeviceItem) == MBRIDGE_CMD_DEVICE_ITEM_LEN, "tMBridgeDeviceItem len missmatch")
 STATIC_ASSERT(sizeof(tMBridgeParamItem) == MBRIDGE_CMD_PARAM_ITEM_LEN, "tMBridgeParamItem len missmatch")
 STATIC_ASSERT(sizeof(tMBridgeParamItem2) == MBRIDGE_CMD_PARAM_ITEM_LEN, "tMBridgeParamItem2 len missmatch")
