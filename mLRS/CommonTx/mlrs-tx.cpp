@@ -303,6 +303,19 @@ volatile uint32_t irq2_status;
 tTxOtaRelay ota_relay;
 #endif
 
+#ifdef USE_RX_OTA_STREAM
+// called in isr context
+void rx_ota_stream_frame(uint8_t* const payload, uint8_t len)
+{
+    ota_relay.StreamFrame(payload, len);
+}
+
+bool rx_ota_stream_active(void)
+{
+    return ota_relay.StreamActive();
+}
+#endif
+
 IRQHANDLER(
 void SX_DIO_EXTI_IRQHandler(void)
 {
@@ -357,6 +370,7 @@ bool doParamsStore;
 uint16_t rx_ota_delay_ms; // time for the rx to get the cmd and reboot, relay starts when it expires
 bool doRxOta;
 bool rx_ota_via_jrpin5; // host is on the JR pin5 uart, not on com
+bool rx_ota_stream; // no host, the tx sends the image it gets from the radio
 
 
 void link_task_init(void)
@@ -369,6 +383,7 @@ void link_task_init(void)
     rx_ota_delay_ms = 0;
     doRxOta = false;
     rx_ota_via_jrpin5 = false;
+    rx_ota_stream = false;
 }
 
 
@@ -1120,6 +1135,12 @@ IF_SX2(
                 GOTO_RESTARTCONTROLLER;
             }
 #endif
+#ifdef USE_RX_OTA_STREAM
+            if (rx_ota_stream) {
+                ota_relay.RunStream(fhss.GetBindFreq(), Config.FrameSyncWord);
+                GOTO_RESTARTCONTROLLER;
+            }
+#endif
             ota_relay.Run(Serials.com, fhss.GetBindFreq(), Config.FrameSyncWord);
             GOTO_RESTARTCONTROLLER;
         }
@@ -1200,6 +1221,9 @@ IF_CRSF(
         }
     }
 );
+#ifdef USE_RX_OTA_STREAM
+    if (ota_relay.StreamStartRequested()) tasks.SetCrsfTask(TASK_RX_OTA_STREAM); // the radio has sent the header
+#endif
 IF_IN(
     if (in.ChannelsUpdated(&rcData)) {
         rc_data_updated = true;
@@ -1252,7 +1276,9 @@ IF_IN(
     case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
     case TASK_RX_OTA:
     case TASK_RX_OTA_JRPIN5:
+    case TASK_RX_OTA_STREAM:
         rx_ota_via_jrpin5 = (tx_task == TASK_RX_OTA_JRPIN5);
+        rx_ota_stream = (tx_task == TASK_RX_OTA_STREAM);
         // a receiver which already sits in its loader isn't connected, so go ahead in any case
         if (connected()) {
             link_task_reset();

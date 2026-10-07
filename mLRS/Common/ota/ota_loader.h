@@ -160,6 +160,35 @@ typedef enum {
 
 
 //-------------------------------------------------------
+// Image file
+//-------------------------------------------------------
+// A receiver image as file on the SD card of the radio, a lua script sends it to the tx, which then updates
+// the receiver by itself: header, data.
+// The data is the image as it is, or its raw deflate stream. The tx makes the latter into the zlib or
+// gzip stream the receiver wants, the header has what the trailers of these need.
+
+#define OTA_FILE_MAGIC            0x53544F4D // 'MOTS'
+
+typedef enum {
+    OTA_FILE_FLAG_DEFLATE = 0x01, // data is a raw deflate stream
+} OTA_FILE_FLAG_ENUM;
+
+typedef struct
+{
+    uint32_t magic;
+    uint32_t target_id;
+    uint32_t version;
+    uint32_t flags;
+    uint32_t data_length; // of the data which follows the header
+    uint32_t data_crc32; // crc32 (zlib) of the data
+    uint32_t image_length; // what it becomes in the receiver's flash
+    uint32_t image_adler32; // of the image, only with deflate
+    uint32_t image_crc32; // crc32 (zlib) of the image, only with deflate
+    uint32_t check; // crc32 (zlib) of the header before
+} tOtaFileHeader;
+
+
+//-------------------------------------------------------
 // GFSK link
 //-------------------------------------------------------
 // Radio settings as in the 50 Hz mode: 100 kbps, fixed length, no radio crc, whitening.

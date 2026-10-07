@@ -376,6 +376,10 @@ extern "C" { void delay_ms(uint16_t ms); }
   #endif
 #endif
 
+#if defined USE_RX_OTA && defined DEVICE_HAS_JRPIN5
+  #define USE_RX_OTA_STREAM // tx can get a receiver image from the radio, which has it on its SD card
+#endif
+
 // all ESP receivers can be updated over the air, they need no loader, see ota_rx.h
 // a SX127x needs DIO1 for it
 #if defined DEVICE_IS_RECEIVER && (defined ESP32 || defined ESP8266) && \

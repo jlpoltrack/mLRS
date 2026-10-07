@@ -71,6 +71,11 @@ static const uint32_t crsf_baud[CRSF_AUTOBAUD_PROTOCOLS_LEN] = { 400000, 921600,
 static const uint32_t crsf_inverted[CRSF_AUTOBAUD_PROTOCOLS_LEN] = { true, true, true, false};
 
 
+#ifdef USE_RX_OTA_STREAM
+extern void rx_ota_stream_frame(uint8_t* const payload, uint8_t len); // is called in isr context
+#endif
+
+
 class tTxCrsf : public tPin5BridgeBase, public tSerialBase
 {
   public:
@@ -116,6 +121,13 @@ class tTxCrsf : public tPin5BridgeBase, public tSerialBase
     // for in-isr processing, used in half-duplex mode
     void parse_nextchar(uint8_t c) override;
     bool transmit_start(void) override; // returns true if transmission should be started
+#if defined ESP32 && defined USE_RX_OTA_STREAM
+    bool transmit_pending(void) override { return (tx_available > 0); }
+    bool parse_stream(const uint8_t* buf, uint16_t len) override;
+    uint8_t stream_buf[2 * CRSF_FRAME_LEN_MAX + 32]; // what was received and is not parsed yet
+    uint16_t stream_len;
+    uint32_t stream_tlast_ms;
+#endif
 
     bool enabled;
     bool crsfbridge_enabled;
@@ -345,12 +357,77 @@ void tTxCrsf::parse_nextchar(uint8_t c)
         break;
     case STATE_RECEIVE_CRSF_CRC:
         rx_frame[rx_cnt++] = c;
+#ifdef USE_RX_OTA_STREAM
+        // 0xEE, len, 0x81, 0x67, receiver image from the radio
+        // is taken here, as none must get lost when the main loop is late
+        if (rx_frame[0] == CRSF_ADDRESS_TRANSMITTER_MODULE && rx_frame[2] == CRSF_FRAME_ID_MBRIDGE_TO_MODULE &&
+            rx_frame[3] == CRSF_MB_ENVELOPE_OTA) {
+            if (rx_len >= 3 && crc8(rx_frame) == rx_frame[rx_len + 1]) {
+                rx_ota_stream_frame(&rx_frame[4], rx_len - 3);
+            } else {
+                rx_ota_stream_frame(nullptr, 0); // is counted
+            }
+            state = STATE_TRANSMIT_START;
+            break;
+        }
+#endif
         memcpy(&frame, rx_frame, rx_cnt);
         rx_frame_received = true;
         state = STATE_TRANSMIT_START;
         break;
     }
 }
+
+
+#if defined ESP32 && defined USE_RX_OTA_STREAM
+// Parser for when the radio sends a receiver image. Goes for the crc, not for the timing, so it finds the
+// messages also when a part is missing, or when the data looks like the begin of a message.
+// is called in isr context
+bool tTxCrsf::parse_stream(const uint8_t* buf, uint16_t len)
+{
+    bool received = false;
+
+    uint32_t tnow_ms = millis32();
+    if (tnow_ms - stream_tlast_ms > 20) stream_len = 0; // what is left is too old to belong to this
+    stream_tlast_ms = tnow_ms;
+
+    while (len) {
+        uint16_t n = MIN(len, (uint16_t)(sizeof(stream_buf) - stream_len));
+        memcpy(stream_buf + stream_len, buf, n);
+        stream_len += n;
+        buf += n;
+        len -= n;
+
+        uint16_t pos = 0;
+        while (pos < stream_len) {
+            uint8_t* f = stream_buf + pos;
+            if (f[0] != CRSF_ADDRESS_TRANSMITTER_MODULE && f[0] != CRSF_OPENTX_SYNC) { pos++; continue; }
+            if (pos + 2 > stream_len) break; // wait for the len
+            uint8_t flen = f[1];
+            if (flen < 2 || flen > CRSF_FRAME_LEN_MAX - 2) { pos++; continue; }
+            if (pos + flen + 2 > stream_len) break; // wait for the rest
+            if (crc8(f) != f[flen + 1]) { pos++; continue; } // was not the begin of a message
+
+            if (f[0] == CRSF_ADDRESS_TRANSMITTER_MODULE && f[2] == CRSF_FRAME_ID_MBRIDGE_TO_MODULE &&
+                f[3] == CRSF_MB_ENVELOPE_OTA && flen >= 3) {
+                rx_ota_stream_frame(&f[4], flen - 3);
+            } else {
+                memcpy(&frame, f, flen + 2);
+                rx_frame_received = true;
+            }
+            received = true;
+            pos += flen + 2;
+        }
+
+        // keep what could be the begin of a message, if it is too much it can't be one
+        if (pos == 0 && stream_len == sizeof(stream_buf)) pos = 1;
+        stream_len -= pos;
+        memmove(stream_buf, stream_buf + pos, stream_len);
+    }
+
+    return received;
+}
+#endif
 
 
 //-------------------------------------------------------

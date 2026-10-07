@@ -600,6 +600,7 @@ typedef struct
 }) tCrsfMbEnvelope;
 
 #define CRSF_MB_ENVELOPE_CMD  0x66
+#define CRSF_MB_ENVELOPE_OTA  0x67 // receiver image from the radio, see ota_relay_tx.h
 #define CRSF_MB_ENVELOPE_LEN_MAX  60
 #define CRSF_MB_ENVELOPE_DATA_LEN_MAX  57
 

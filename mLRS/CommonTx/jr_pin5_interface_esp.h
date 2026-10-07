@@ -77,6 +77,11 @@ tJrPin5SerialPort jrpin5serial;
 //-------------------------------------------------------
 // Pin5BridgeBase class
 
+#ifdef USE_RX_OTA_STREAM
+extern bool rx_ota_stream_active(void); // true while the radio sends a receiver image
+#endif
+
+
 class tPin5BridgeBase
 {
   public:
@@ -103,6 +108,8 @@ class tPin5BridgeBase
     // for callback processing
     virtual void parse_nextchar(uint8_t c) = 0;
     virtual bool transmit_start(void) = 0; // returns true if transmission should be started
+    virtual bool transmit_pending(void) { return true; } // true if transmit_start() would send something
+    virtual bool parse_stream(const uint8_t* buf, uint16_t len) { return false; } // true if a message was received
 
     // callback functions
     IRAM_ATTR void pin5_rx_callback(uint8_t c);
@@ -245,6 +252,38 @@ IRAM_ATTR void tPin5BridgeBase::pin5_rx_enable(void)
 
 IRAM_ATTR void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
 {
+#ifdef USE_RX_OTA_STREAM
+    // The frames with a receiver image are long and come fast, and the data in them looks like the begin of
+    // a frame every now and then. The normal parser gets out of sync by that, and loses frames. So take all
+    // there is, and let a parser look at it which takes only what has a good crc.
+    if (rx_ota_stream_active()) {
+        char sbuf[CRSF_FRAME_LEN_MAX];
+        bool received = false;
+        pin5_fifo.Flush();
+        state = STATE_IDLE;
+        uint16_t n;
+        while ((n = pin5_bytes_available()) > 0) {
+            n = MIN(n, sizeof(sbuf));
+            pin5_getbuf(sbuf, n);
+            if (parse_stream((uint8_t*)sbuf, n)) received = true;
+        }
+        if (received) {
+            // the turn to tx and back costs the begin of the next frame if it is late, so do it only if needed
+            if (transmit_pending()) {
+                pin5_tx_enable();
+                transmit_start();
+#ifndef JR_PIN5_FULL_DUPLEX
+                xTaskNotifyGive(tx_done_task_handle);
+#endif
+            } else {
+                transmit_start(); // tells that the next one can be prepared
+            }
+        }
+        state = STATE_IDLE;
+        return;
+    }
+#endif
+
     // read out the buffer, put bytes in fifo
     char buf[CRSF_FRAME_LEN_MAX + 16];
     uint16_t available = pin5_bytes_available();
