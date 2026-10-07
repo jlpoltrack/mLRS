@@ -7,11 +7,13 @@
 *******************************************************
  run_rx_ota.py
  updates a receiver which has an OTA loader over the air, via the CLI of the tx module
- usage: run_rx_ota.py <port> <firmware> [--baud 115200] [--window 2] [--timeout 60] [--no-cli] [--no-compress]
+ usage: run_rx_ota.py <port> <firmware> [--baud 115200] [--window 2] [--timeout 60] [--no-cli] [--no-compress] [--radio]
  firmware: the .bin of the build
  --window: number of data blocks sent ahead, 1 = each block waits for the response to the one before
  --timeout: seconds the transfer may take
  --no-cli: don't send the rxota CLI command, the tx is in relay mode already
+ --radio: the tx module is an internal one, port is the usb serial (VCP) of the EdgeTX radio
+   with --no-cli the radio is in serial passthrough to the module already
  --no-compress: don't compress the image, even if the receiver can handle that
 ********************************************************
 '''
@@ -35,6 +37,9 @@ OTA_LOADER_VERSION = 1
 OTA_FLAG_DEFLATE = 0x01
 OTA_FLAG_GZIP = 0x02
 OTA_RELAY_STX = 0xA5
+MBRIDGE_CMD_RX_OTA = 19
+JRPIN5_BAUDS = [400000, 921600, 1870000] # of the uart between radio and internal tx module, = txcrsf_bauds[]
+OTA_RELAY_JRPIN5_BAUDRATE = 230400 # the module goes to it when its relay starts
 ESP_IMAGE_MAGIC = 0xE9
 
 RETRIES = 10
@@ -48,6 +53,65 @@ def crc16(data): # = fmav_crc_calculate()
         tmp = (tmp ^ (tmp << 4)) & 0xFF
         crc = ((crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)) & 0xFFFF
     return crc
+
+
+def crc8_crsf(data): # poly 0xD5
+    crc = 0
+    for b in data:
+        crc ^= b
+        for i in range(8): crc = ((crc << 1) ^ 0xD5) & 0xFF if (crc & 0x80) else (crc << 1) & 0xFF
+    return crc
+
+
+# mBridge command in a CRSF frame, as the lua script sends it: 0xEE, len, 0x81, 'O', 'W', 0xA0 + cmd, crc8
+def crsf_mbridge_cmd(cmd):
+    body = bytes([0x81, 0x4F, 0x57, 0xA0 + cmd])
+    return bytes([0xEE, len(body) + 1]) + body + bytes([crc8_crsf(body)])
+
+
+# makes the radio pass its usb serial through to the internal tx module
+# stopping the pulses powers the module off, so it is powered on again, and boots into its firmware
+def edgetx_passthrough(ser):
+    for cmd in (b'set pulses 0', b'set rfmod 0 bootpin 0', b'set rfmod 0 power on', b'serialpassthrough rfmod 0 %d' % JRPIN5_BAUDS[0]):
+        ser.write(cmd + b'\n')
+        time.sleep(0.5)
+        print('radio:', cmd.decode(), '->', ser.read(500).decode(errors='replace').strip().replace('\r\n', ' | '))
+
+
+# plays the radio: sends channel frames, and looks at the link statistics the module answers with
+# the module autobauds at startup, and stays at one of its rates, so we have to find it, the radio follows our rate
+# returns true when the module reports a link to the receiver
+def crsf_wait_connected(ser, timeout=25.0):
+    body = bytes([0x16]) + bytes([0xE0, 0x03, 0x1F, 0xF8, 0xC0, 0x07, 0x3E, 0xF0, 0x81, 0x0F, 0x7C] * 2) # all channels mid
+    rc = bytes([0xC8, len(body) + 1]) + body + bytes([crc8_crsf(body)])
+    buf = b''
+    found = False # the baudrate of the module
+    baud_i = 0
+    tbaud = 0
+    tend = time.time() + timeout
+    ser.timeout = 0.02
+    while time.time() < tend:
+        if not found and time.time() - tbaud > 0.5:
+            ser.baudrate = JRPIN5_BAUDS[baud_i]
+            baud_i = (baud_i + 1) % len(JRPIN5_BAUDS)
+            tbaud = time.time()
+            ser.reset_input_buffer()
+            buf = b''
+        ser.write(rc)
+        buf = (buf + ser.read(200))[-600:]
+        pos = 0
+        while pos + 2 < len(buf):
+            n = buf[pos + 1]
+            if buf[pos] not in (0xEA, 0xC8) or n < 2 or n > 62: pos += 1; continue
+            if pos + 2 + n > len(buf): break
+            frame = buf[pos:pos + 2 + n]
+            if crc8_crsf(frame[2:-1]) != frame[-1]: pos += 1; continue
+            if not found: print('module is talking CRSF at %d baud' % ser.baudrate); found = True
+            if frame[2] == 0x14 and n >= 12 and frame[5] > 0: return True # link statistics, uplink lq
+            pos += 2 + n
+        buf = buf[pos:]
+    if not found: print('WARNING: nothing heard from the module')
+    return False
 
 
 class cRelay:
@@ -119,6 +183,7 @@ def main():
         del args[i:i+2]
     no_cli = '--no-cli' in args
     no_compress = '--no-compress' in args
+    radio = '--radio' in args
     args = [a for a in args if not a.startswith('--')]
     if len(args) != 2:
         print(__doc__)
@@ -150,7 +215,16 @@ def main():
     ser.open()
     relay = cRelay(ser)
 
-    if not no_cli:
+    if radio:
+        if not no_cli: edgetx_passthrough(ser)
+        # the module tells the receiver to go into ota only if it is connected
+        print('waiting for the receiver to be connected...')
+        if not crsf_wait_connected(ser): print('WARNING: receiver is not connected, trying anyway')
+        ser.timeout = 0.5
+        ser.write(crsf_mbridge_cmd(MBRIDGE_CMD_RX_OTA)) # the module is still listening for CRSF
+        time.sleep(2.0) # relay starts after 1 s
+        ser.baudrate = OTA_RELAY_JRPIN5_BAUDRATE
+    elif not no_cli:
         # opening the port may have reset the tx, and the receiver must be connected to get told to go into ota
         # a receiver which sits in its loader doesn't connect, so go on in any case
         print('waiting for the receiver to be connected...')

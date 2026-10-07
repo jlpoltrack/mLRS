@@ -356,6 +356,7 @@ uint16_t link_task_delay_ms;
 bool doParamsStore;
 uint16_t rx_ota_delay_ms; // time for the rx to get the cmd and reboot, relay starts when it expires
 bool doRxOta;
+bool rx_ota_via_jrpin5; // host is on the JR pin5 uart, not on com
 
 
 void link_task_init(void)
@@ -367,6 +368,7 @@ void link_task_init(void)
     doParamsStore = false;
     rx_ota_delay_ms = 0;
     doRxOta = false;
+    rx_ota_via_jrpin5 = false;
 }
 
 
@@ -1111,6 +1113,13 @@ IF_SX2(
         if (doRxOta) {
             sx.SetToIdle();
             sx2.SetToIdle();
+#ifdef USE_RX_OTA_VIA_JRPIN5
+            if (rx_ota_via_jrpin5) {
+                crsf.pin5_release(OTA_RELAY_JRPIN5_BAUDRATE); // the restart gives it back
+                ota_relay.Run(&jrpin5serial, fhss.GetBindFreq(), Config.FrameSyncWord);
+                GOTO_RESTARTCONTROLLER;
+            }
+#endif
             ota_relay.Run(Serials.com, fhss.GetBindFreq(), Config.FrameSyncWord);
             GOTO_RESTARTCONTROLLER;
         }
@@ -1181,6 +1190,9 @@ IF_CRSF(
         case MBRIDGE_CMD_BIND_STOP: tasks.SetCrsfTask(TASK_BIND_STOP); break;
         case MBRIDGE_CMD_SYSTEM_BOOTLOADER: tasks.SetCrsfTask(TASK_SYSTEM_BOOT); break;
         case MBRIDGE_CMD_FLASH_ESPBRIDGE: tasks.SetCrsfTask(TASK_ESPBRIDGE_FLASH); break;
+#ifdef USE_RX_OTA_VIA_JRPIN5
+        case MBRIDGE_CMD_RX_OTA: tasks.SetCrsfTask(TASK_RX_OTA_JRPIN5); break;
+#endif
         case MBRIDGE_CMD_MODELID_SET:
 //dbg.puts("\nmbridge model id "); dbg.puts(u8toBCD_s(mbridge.GetModelId()));
             config_id.Change(mbridge.GetModelId());
@@ -1239,6 +1251,8 @@ IF_IN(
     case TASK_BIND_STOP: bind.StopBind(); break;
     case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
     case TASK_RX_OTA:
+    case TASK_RX_OTA_JRPIN5:
+        rx_ota_via_jrpin5 = (tx_task == TASK_RX_OTA_JRPIN5);
         // a receiver which already sits in its loader isn't connected, so go ahead in any case
         if (connected()) {
             link_task_reset();

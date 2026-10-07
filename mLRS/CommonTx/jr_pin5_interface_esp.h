@@ -94,6 +94,7 @@ class tPin5BridgeBase
     void pin5_getbuf(char* const buf, uint16_t len) { uart_getbuf(buf, len); }
     uint16_t pin5_bytes_available(void) { return uart_rx_bytesavailable(); }
     bool pin5_set_protocol(uint32_t baudrate, bool inverted);
+    void pin5_release(uint32_t baudrate); // gives the uart away, until the controller restarts
 
     // only for half-duplex
     IRAM_ATTR void pin5_tx_enable(void);
@@ -186,6 +187,21 @@ void tPin5BridgeBase::pin5_init(void)
 
     pin5_clock_initialized = true;
 #endif
+}
+
+
+void tPin5BridgeBase::pin5_release(uint32_t baudrate)
+{
+    UART_SERIAL_NO.onReceive(nullptr); // stops the callback, which else takes all bytes
+
+    // makes it a plain uart, as _uart_initit() does, but with a rx buffer which holds more than a CRSF frame
+    UART_SERIAL_NO.end();
+    UART_SERIAL_NO.setTxBufferSize(UART_TXBUFSIZE);
+    UART_SERIAL_NO.setRxBufferSize(512);
+    UART_SERIAL_NO.begin(baudrate, SERIAL_8N1, UART_USE_RX_IO, UART_USE_TX_IO);
+    UART_SERIAL_NO.setRxFIFOFull(8);
+    UART_SERIAL_NO.setRxTimeout(1);
+    uart_rx_flush();
 }
 
 

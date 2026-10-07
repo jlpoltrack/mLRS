@@ -11,6 +11,8 @@
 // tx -> host: STX, len, response[len], crc16   len = 0 if the receiver did not respond
 // crc16 is fmav_crc_calculate() over len and data
 // The host may send the next packet while the tx is busy with the current one, it waits in the com rx buffer.
+// Internal tx modules have no com port. The host comes in via the radio, which passes its usb through to the
+// JR pin5 uart, starts the relay with a mBridge command in a CRSF frame, and the relay then uses that uart.
 //*******************************************************
 #ifndef OTA_RELAY_TX_H
 #define OTA_RELAY_TX_H
@@ -24,6 +26,12 @@
 #define OTA_RELAY_HOST_TMO_MS       10000 // leave if the host goes silent
 #define OTA_RELAY_TRANSMIT_TMO_MS   250
 #define OTA_RELAY_RESPONSE_TMO_MS   400 // must cover a page erase on the receiver
+
+#if defined ESP32 && defined JR_PIN5_FULL_DUPLEX
+  #define USE_RX_OTA_VIA_JRPIN5
+  // the uart is at one of the fast CRSF rates, at which the long relay frames get lost, the radio follows the host
+  #define OTA_RELAY_JRPIN5_BAUDRATE 230400
+#endif
 
 
 class tTxOtaRelay
