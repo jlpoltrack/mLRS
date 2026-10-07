@@ -369,8 +369,17 @@ extern "C" { void delay_ms(uint16_t ms); }
 #endif
 
 
+#if defined DEVICE_HAS_SX127x && defined SX_DIO1
+  #define DEVICE_HAS_SX127x_FSK // FSK needs the DIO1 FifoLevel irq to stream frames larger than the FIFO
+  #if defined DEVICE_IS_TRANSMITTER && !defined ESP8266
+    #define USE_RX_OTA // as in device_conf.h, the ota link is FSK
+  #endif
+#endif
+
 // all ESP receivers can be updated over the air, they need no loader, see ota_rx.h
-#if defined DEVICE_IS_RECEIVER && (defined ESP32 || defined ESP8266) && (defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_SX128x)
+// a SX127x needs DIO1 for it
+#if defined DEVICE_IS_RECEIVER && (defined ESP32 || defined ESP8266) && \
+    (defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_SX128x || defined DEVICE_HAS_SX127x_FSK)
   #define DEVICE_HAS_OTA_LOADER
 #endif
 

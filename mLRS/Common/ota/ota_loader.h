@@ -60,6 +60,7 @@ typedef struct
 // 2.4 GHz: LoRa, the fastest the chip does in mLRS, explicit header, radio crc on
 // else: GFSK, as in the 50 Hz mode, see OTA_FSK further below
 // a LR11xx does both, and uses the one of the band it is connected on
+// a SX127x needs DIO1 for GFSK, as the frames are longer than its FIFO
 // OTA_SX(NAME) gives the SX126X_NAME, SX1280_NAME or LR11XX_NAME constant of the chip
 #if defined DEVICE_HAS_SX128x
   #define OTA_SX(name)            SX1280_##name
@@ -70,6 +71,8 @@ typedef struct
   #define OTA_USE_FSK
   #if defined DEVICE_HAS_LR11xx
     #define OTA_SX(name)          LR11XX_##name
+  #elif defined DEVICE_HAS_SX127x
+    #define OTA_SX(name)          SX1276_##name
   #else
     #define OTA_SX(name)          SX126X_##name
   #endif

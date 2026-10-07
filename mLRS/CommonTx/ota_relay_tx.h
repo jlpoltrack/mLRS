@@ -193,7 +193,9 @@ void tTxOtaRelay::Run(tSerialBase* const _com, uint32_t sx_freq_reg, uint16_t _s
 
     lock();
     ota_link_start(sx_freq_reg);
+#ifndef DEVICE_HAS_SX127x
     ota_link_set_packet_len(255);
+#endif
     sx.SetToIdle();
     unlock();
 

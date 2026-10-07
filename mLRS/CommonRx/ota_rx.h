@@ -325,7 +325,12 @@ uint8_t ota_handle(tOtaState* ota, uint8_t* buf, uint8_t len)
 //-------------------------------------------------------
 // isrs are off, DIO is polled and spi done only when it is set, buf must have room for a frame
 
-#define OTA_RESPONSE_DELAY_US     1000 // short preamble, the tx must be in receive when we start
+// short preamble, the tx must be in receive when we start
+#ifdef DEVICE_HAS_SX127x
+  #define OTA_RESPONSE_DELAY_US   2000
+#else
+  #define OTA_RESPONSE_DELAY_US   1000
+#endif
 
 
 void ota_radio_start(uint32_t sx_freq_reg)
@@ -334,7 +339,7 @@ void ota_radio_start(uint32_t sx_freq_reg)
     // also the errors, else a bad packet leaves us waiting
 #ifdef DEVICE_HAS_LR11xx
     sx.SetDioIrqParams(LR11XX_IRQ_TX_DONE | LR11XX_IRQ_RX_DONE | LR11XX_IRQ_TIMEOUT | OTA_SX_IRQ_RX_ERROR, 0);
-#else
+#elif defined DEVICE_HAS_SX128x
     sx.SetDioIrqParams(SX1280_IRQ_ALL, SX1280_IRQ_RX_DONE | SX1280_IRQ_TX_DONE | SX1280_IRQ_RX_TX_TIMEOUT | OTA_SX_IRQ_RX_ERROR,
                        SX1280_IRQ_NONE, SX1280_IRQ_NONE);
 #endif
@@ -351,6 +356,9 @@ void ota_set_rx(void)
 // returns the packet length, 0 if what came in is of no use, -1 if nothing came in yet
 int16_t ota_receive(uint8_t* buf)
 {
+#ifdef DEVICE_HAS_SX127x_FSK
+    if (gpio_read_activehigh(SX_DIO1)) sx.HandleDio1Irq(); // FifoLevel, fetches what has come in
+#endif
     if (!gpio_read_activehigh(SX_DIO)) return -1;
     return ota_link_read(sx.GetAndClearIrqStatus(OTA_SX(IRQ_ALL)), buf, OTA_FSK_FRAME_LEN_TX);
 }
@@ -385,10 +393,19 @@ uint8_t buf[OTA_FSK_FRAME_LEN_TX + 8];
     // the isrs do spi, and we poll anyway
 #ifdef ESP8266 // sx_dio_init_exti_isroff() is empty on these, and they have no sx2
     detachInterrupt(SX_DIO);
+  #ifdef DEVICE_HAS_SX127x_FSK
+    detachInterrupt(SX_DIO1);
+  #endif
 #else
     sx_dio_init_exti_isroff();
+  #ifdef DEVICE_HAS_SX127x_FSK
+    sx_dio1_init_exti_isroff();
+  #endif
   #ifdef USE_SX2
     sx2_dio_init_exti_isroff();
+  #endif
+  #if defined USE_SX2 && defined DEVICE_HAS_SX127x_FSK
+    sx2_dio1_init_exti_isroff();
   #endif
 #endif
     sx.SetToIdle(); // only after the isrs are off, they do spi
@@ -442,6 +459,8 @@ uint8_t buf[OTA_FSK_FRAME_LEN_TX + 8];
     // the chip is left in reset, the startup releases it
 #if defined SX_RESET
     gpio_low(SX_RESET);
+#elif defined DEVICE_HAS_SX127x
+    sx.SetStandby();
 #else
     sx.SetStandby(OTA_SX(STDBY_CONFIG_STDBY_RC));
 #endif
