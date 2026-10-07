@@ -3,8 +3,8 @@
 // GPL3
 // https://www.gnu.org/licenses/gpl-3.0.de.html
 //*******************************************************
-// OTA, shared definitions
-// image info, radio protocol
+// OTA Loader, shared definitions
+// flash layout, parameter page, image info, radio protocol
 //*******************************************************
 #ifndef OTA_LOADER_H
 #define OTA_LOADER_H
@@ -14,6 +14,27 @@
 
 
 #define OTA_LOADER_VERSION        1 // protocol is frozen per version
+
+
+//-------------------------------------------------------
+// Flash layout
+//-------------------------------------------------------
+// loader sits in low flash, app follows, EE and params page sit at the top
+// only for mcus which can have a loader, the tx side just needs the protocol
+
+#if defined STM32G431xx
+  #define OTA_FLASH_PAGE_SIZE     0x0800
+  #define OTA_LOADER_BASE         0x08000000
+  #define OTA_LOADER_SIZE         0x1000 // 4 kB, 2 pages
+  #define OTA_APP_END             0x0801E000 // = EE_START_PAGE 60
+  #define OTA_PARAMS_BASE         0x0801F000 // page 62, behind the two EE pages
+  #define OTA_RAM_END             0x20008000
+#endif
+
+#ifdef OTA_LOADER_BASE
+  #define OTA_APP_BASE            (OTA_LOADER_BASE + OTA_LOADER_SIZE)
+  #define OTA_APP_SIZE_MAX        (OTA_APP_END - OTA_APP_BASE)
+#endif
 
 
 //-------------------------------------------------------
@@ -35,17 +56,42 @@ enum : uint32_t { OTA_TARGET_ID = ota_fnv1a(DEVICE_NAME) };
 //-------------------------------------------------------
 // App image info
 //-------------------------------------------------------
-// sits somewhere in the image, for the host tool, to find out which target the image is for
+// STM32: located at fixed offset behind the app's vector table
+// crc32 (zlib) over [0, length - 4) is stored in the last 4 bytes of the image
+// the build leaves length 0 and no crc, they are filled in by the tool which sends the image over the air
+// ESP32, ESP8266: located somewhere in the image, length is 0, the image has its own checksum
 
+#define OTA_APP_INFO_OFFSET       0x0200
 #define OTA_APP_INFO_MAGIC        0x4F4C524D // 'MRLO'
 
 typedef struct
 {
     uint32_t magic;
     uint32_t target_id;
-    uint32_t length; // 0, the image has its own checksum
+    uint32_t length; // total image length including crc, multiple of 8
     uint32_t version;
 } tOtaAppInfo;
+
+
+//-------------------------------------------------------
+// Params page
+//-------------------------------------------------------
+// written by the app to request an update, erased by the loader when done
+
+#define OTA_PARAMS_MAGIC          0x5041544F // 'OTAP'
+
+typedef struct
+{
+    uint32_t magic;
+    uint32_t sx_freq_reg; // radio chip specific codes
+    uint8_t sx_sf;
+    uint8_t sx_bw;
+    uint8_t sx_cr;
+    int8_t sx_power;
+    uint16_t session_id; // must match in each packet
+    uint16_t spare;
+    uint32_t check; // = ~(xor of the three words before)
+} tOtaParams;
 
 
 //-------------------------------------------------------

@@ -11,6 +11,7 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_OUT
+#define DEVICE_HAS_OTA_LOADER
 #define DEVICE_HAS_FAN_ONOFF
 
 #include "hal-matek-mr-g431kb-common.h"

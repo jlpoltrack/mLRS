@@ -437,6 +437,7 @@ MLRS_SOURCES_COMMON = [
     os.path.join('Common','link_types.cpp'),
     os.path.join('Common','lq_counter.cpp'),
     os.path.join('Common','while.cpp'),
+    os.path.join('Common','ota','ota_loader.cpp'),
     ]
 
 # add all Common/dronecan/out/src/*.c (auto-generated dronecan message sources), if present

@@ -4,6 +4,7 @@
 // https://www.gnu.org/licenses/gpl-3.0.de.html
 //*******************************************************
 // OTA, Rx side
+// STM32: hands over to the OTA loader in low flash
 // ESP32, ESP8266: no loader, the app receives the new image itself
 //*******************************************************
 #ifndef OTA_RX_H
@@ -13,6 +14,8 @@
 
 #include "../Common/ota/ota_link.h"
 
+
+#if defined ESP32 || defined ESP8266
 
 #define OTA_IDLE_TIMEOUT_MS       30000 // leave if no tx shows up
 #define OTA_END_LINGER_MS         1500 // stay for repeats, the end response may get lost
@@ -469,6 +472,53 @@ uint8_t buf[OTA_FSK_FRAME_LEN_TX + 8];
     ESP.restart();
     while (1) {}
 }
+
+
+#else
+//-------------------------------------------------------
+// STM32
+//-------------------------------------------------------
+
+#ifndef OTA_LOADER_BASE
+  #error OTA loader: mcu not supported!
+#endif
+
+// writes the params page, which is the update request for the loader, and reboots
+// does not return
+void ota_enter_loader(uint32_t sx_freq_reg, uint16_t session_id)
+{
+union {
+    tOtaParams params;
+    uint32_t w[6]; // 3 double words
+} u;
+
+    sx.SetToIdle();
+    sx2.SetToIdle();
+
+    for (uint8_t i = 0; i < 6; i++) u.w[i] = 0xFFFFFFFF;
+
+    u.params.magic = OTA_PARAMS_MAGIC;
+    u.params.sx_freq_reg = sx_freq_reg;
+    u.params.sx_sf = OTA_SX_SF;
+    u.params.sx_bw = OTA_SX_BW;
+    u.params.sx_cr = OTA_SX_CR;
+    u.params.sx_power = OTA_SX(POWER_MIN); // receiver and transmitter sit next to each other
+    u.params.session_id = session_id;
+    u.params.spare = 0;
+    u.params.check = ~(u.w[1] ^ u.w[2] ^ u.w[3]);
+
+    HAL_FLASH_Unlock();
+    FLASH_ErasePage(OTA_PARAMS_BASE, (OTA_PARAMS_BASE - 0x08000000) / OTA_FLASH_PAGE_SIZE);
+    for (uint8_t i = 0; i < 6; i += 2) {
+        FLASH_ProgramDoubleWord(OTA_PARAMS_BASE + 4 * i, ((uint64_t)u.w[i + 1] << 32) | u.w[i]);
+    }
+    HAL_FLASH_Lock();
+
+    NVIC_SystemReset();
+    while (1) {}
+}
+
+#endif // ESP32, ESP8266
 
 
 #endif // OTA_RX_H

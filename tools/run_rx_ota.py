@@ -8,7 +8,7 @@
  run_rx_ota.py
  updates a receiver which has an OTA loader over the air, via the CLI of the tx module
  usage: run_rx_ota.py <port> <firmware> [--baud 115200] [--window 2] [--timeout 60] [--no-cli] [--no-compress] [--radio]
- firmware: the .bin of the build
+ firmware: the .hex or .bin of the build, for STM32 and ESP receivers
  --window: number of data blocks sent ahead, 1 = each block waits for the response to the one before
  --timeout: seconds the transfer may take
  --no-cli: don't send the rxota CLI command, the tx is in relay mode already
@@ -35,6 +35,7 @@ OTA_CMD_RESPONSE = 0x80
 OTA_STATUS = ['ok', 'wrong target', 'bad length', 'bad state', 'flash error', 'image check failed', 'not supported', 'bad data']
 OTA_LOADER_VERSION = 1
 OTA_FLAG_DEFLATE = 0x01
+FLASH_PAGE_SIZE = 0x0800 # the app starts on a page boundary behind the loader
 OTA_FLAG_GZIP = 0x02
 OTA_RELAY_STX = 0xA5
 MBRIDGE_CMD_RX_OTA = 19
@@ -160,6 +161,42 @@ def fail(relay, txt):
     sys.exit(1)
 
 
+# intel hex to a flat image, gaps are 0xFF
+def hex_to_bin(text):
+    blocks, base = [], 0
+    for line in text.decode().splitlines():
+        if not line.startswith(':'): continue
+        rec = bytes.fromhex(line[1:])
+        n, addr, typ, data = rec[0], (rec[1] << 8) | rec[2], rec[3], rec[4:-1]
+        if typ == 0: blocks.append((base + addr, data[:n]))
+        elif typ == 2: base = ((data[0] << 8) | data[1]) << 4
+        elif typ == 4: base = ((data[0] << 8) | data[1]) << 16
+    if not blocks: return b''
+    start = min(a for a, d in blocks)
+    image = bytearray(b'\xFF' * (max(a + len(d) for a, d in blocks) - start))
+    for a, d in blocks: image[a - start:a - start + len(d)] = d
+    return bytes(image)
+
+
+# finds the app in a STM32 firmware, which is the app alone or loader + app, as it comes out of the build
+# the build leaves length and crc open, as the loader accepts that by wire, so they are filled in here
+def stm32_app(image):
+    for base in range(0, len(image) - OTA_APP_INFO_OFFSET - 16, FLASH_PAGE_SIZE):
+        magic, target_id, length, version = struct.unpack_from('<IIII', image, base + OTA_APP_INFO_OFFSET)
+        if magic != OTA_APP_INFO_MAGIC: continue
+        if length == 0:
+            app = bytearray(image[base:])
+            length = (len(app) + 4 + 7) & ~7 # crc goes into the last 4 bytes, multiple of 8
+            app += b'\xFF' * (length - 4 - len(app))
+            struct.pack_into('<I', app, OTA_APP_INFO_OFFSET + 8, length)
+            return bytes(app) + struct.pack('<I', zlib.crc32(app))
+        app = image[base:base + length]
+        if length < OTA_APP_INFO_OFFSET + 20 or (length & 7) or len(app) != length: continue
+        if zlib.crc32(app[:-4]) != struct.unpack('<I', app[-4:])[0]: continue
+        return app
+    return None
+
+
 def status_str(status):
     return OTA_STATUS[status] if status < len(OTA_STATUS) else str(status)
 
@@ -193,6 +230,7 @@ def main():
     F = open(filename, mode='rb')
     image = F.read()
     F.close()
+    if filename.lower().endswith('.hex'): image = hex_to_bin(image)
 
     if len(image) < OTA_APP_INFO_OFFSET + 16: fail(None, 'not an OTA image')
     if image[0] == ESP_IMAGE_MAGIC:
@@ -204,7 +242,9 @@ def main():
         if length != 0: fail(None, 'not an OTA image')
         length = len(image)
     else:
-        fail(None, 'not an OTA image')
+        image = stm32_app(image)
+        if image is None: fail(None, 'not an OTA image')
+        magic, target_id, length, version = struct.unpack_from('<IIII', image, OTA_APP_INFO_OFFSET)
     print('image: target %08X' % target_id, 'version', version, 'length', length)
 
     # the usb-uart adapter of an ESP32 tx may reset it or hold it in boot with DTR/RTS set, a usb com port may need them
