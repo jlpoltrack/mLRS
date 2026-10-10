@@ -141,7 +141,7 @@ void setup_configure_metadata(void)
 #endif
 
     //-- Privacy: "off,lvl1,lvl2,lvl3"
-#if defined DEVICE_IS_TRANSMITTER && !(defined STM32G4 || defined ESP32) // || defined STM32WL
+#if defined DEVICE_IS_TRANSMITTER && !(defined STM32G4 || defined ESP32 || defined ARDUINO_ARCH_RP2350) // || defined STM32WL
     SetupMetaData.Privacy_allowed_mask = 0; // not available, do not display
 #else
     SetupMetaData.Privacy_allowed_mask = 0b1111; // all
@@ -1084,7 +1084,7 @@ void setup_configure_config_crypto(void)
 
     mcu_uid(Config.Uid);
 #if defined DEVICE_IS_TRANSMITTER && \
-    (defined STM32G4 || defined STM32WL || defined ESP32) // trng is available, note, must match Privacy_allowed_mask
+    (defined STM32G4 || defined STM32WL || defined ESP32 || defined ARDUINO_ARCH_RP2350) // trng is available, note, must match Privacy_allowed_mask
     // trng_get32() can return UINT32_MAX, so give it few chances, but terminate
     // if either is invalid and Privacy > 0, then we have a serious issue, system should fail to connect
     for (uint8_t i = 0; i < 4; i++) {
