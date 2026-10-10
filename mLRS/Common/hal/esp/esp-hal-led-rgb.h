@@ -14,6 +14,7 @@
 #define LED_RGB_GREEN 2
 #define LED_RGB_BLUE 3
 #define LED_RGB_PURPLE 4
+#define LED_RGB_CYAN 5
 
 bool leds_initialized = false; // Begin() aborts if called again, since the rmt driver is installed already
 uint8_t ledCurrentColorState;;
@@ -55,3 +56,7 @@ IRAM_ATTR void led_blue_toggle(void) { (ledCurrentColorState == LED_RGB_BLUE) ? 
 IRAM_ATTR void led_purple_off(void) { set_led_color_and_state(LED_RGB_OFF, RgbColor(0)); }
 IRAM_ATTR void led_purple_on(void) { set_led_color_and_state(LED_RGB_PURPLE, RgbColor(255, 0, 255)); }
 IRAM_ATTR void led_purple_toggle(void) { (ledCurrentColorState == LED_RGB_PURPLE) ? led_purple_off() : led_purple_on(); }
+
+IRAM_ATTR void led_cyan_off(void) { set_led_color_and_state(LED_RGB_OFF, RgbColor(0)); }
+IRAM_ATTR void led_cyan_on(void) { set_led_color_and_state(LED_RGB_CYAN, RgbColor(0, 255, 255)); }
+IRAM_ATTR void led_cyan_toggle(void) { (ledCurrentColorState == LED_RGB_CYAN) ? led_cyan_off() : led_cyan_on(); }
