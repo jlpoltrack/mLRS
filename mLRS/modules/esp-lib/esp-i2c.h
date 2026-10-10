@@ -89,34 +89,57 @@ IRAM_ATTR HAL_StatusTypeDef i2c_device_ready(void)
 // page-by-page display transfer on Core 0
 // uses page addressing mode (compatible with SSD1306 and CH1115/NFP1115)
 // all Wire access stays on Core 0, no cross-core contention
+// only the changed column span of each page is sent, a shadow copy tracks the display content
+#define I2C_SHADOW_SIZE  1024
+
 void i2c_task(void* param)
 {
+    static uint8_t shadow[I2C_SHADOW_SIZE];
+    bool shadow_valid = false; // display content is unknown at start
+
     while (true) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         const uint8_t* buf = i2c_async.buf;
         uint16_t remaining = i2c_async.len;
+        uint8_t* sh = shadow;
+        bool use_shadow = shadow_valid && (remaining <= I2C_SHADOW_SIZE);
+        bool ok = (remaining <= I2C_SHADOW_SIZE);
 
         for (uint8_t page = 0; remaining > 0; page++) {
             uint16_t chunk = (remaining < 128) ? remaining : 128;
 
-            // set page address and column start
-            Wire.beginTransmission(i2c_dev_adr);
-            Wire.write((uint8_t)0x00); // command register
-            Wire.write((uint8_t)0x00); // lower column address
-            Wire.write((uint8_t)0x10); // upper column address
-            Wire.write((uint8_t)(0xB0 + page)); // page address
-            Wire.endTransmission(true);
+            uint16_t first = 0;
+            uint16_t last = chunk;
+            if (use_shadow) {
+                while (first < chunk && buf[first] == sh[first]) first++;
+                while (last > first && buf[last - 1] == sh[last - 1]) last--;
+            }
 
-            // write page data
-            Wire.beginTransmission(i2c_dev_adr);
-            Wire.write(i2c_async.reg_adr);
-            Wire.write(buf, chunk);
-            Wire.endTransmission(true);
+            if (last > first) {
+                // set page address and column start
+                Wire.beginTransmission(i2c_dev_adr);
+                Wire.write((uint8_t)0x00); // command register
+                Wire.write((uint8_t)(0x00 + (first & 0x0F))); // lower column address
+                Wire.write((uint8_t)(0x10 + (first >> 4))); // upper column address
+                Wire.write((uint8_t)(0xB0 + page)); // page address
+                if (Wire.endTransmission(true) != 0) ok = false;
+
+                // write page data
+                Wire.beginTransmission(i2c_dev_adr);
+                Wire.write(i2c_async.reg_adr);
+                Wire.write(buf + first, last - first);
+                if (Wire.endTransmission(true) != 0) ok = false;
+
+                if (ok) memcpy(sh + first, buf + first, last - first);
+            }
 
             buf += chunk;
+            sh += chunk;
             remaining -= chunk;
         }
+
+        shadow_valid = ok; // on error do a full transfer next time
 
         i2c_async.busy = false;
     }

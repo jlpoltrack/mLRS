@@ -406,6 +406,14 @@ void gdisp_setpixelfuncptr_(uint16_t rotation)
 }
 
 
+static inline uint8_t gdisp_bitreverse_(uint8_t b)
+{
+    b = (b >> 4) | (b << 4);
+    b = ((b & 0xCC) >> 2) | ((b & 0x33) << 2);
+    return ((b & 0xAA) >> 1) | ((b & 0x55) << 1);
+}
+
+
 //-------------------------------------------------------
 // High-level API
 // Draw primitives
@@ -460,21 +468,13 @@ void gdisp_writeline(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t co
 
 void gdisp_drawline_H(int16_t x0, int16_t y0, int16_t w, uint16_t color)
 {
-    if (w < 0) {
-        for (int16_t i = 0; i < -w; i++) gdisp_drawpixel(x0 - i, y0, color);
-    } else {
-        for (int16_t i = 0; i < w; i++) gdisp_drawpixel(x0 + i, y0, color);
-    }
+    gdisp_fillrect_WH(x0, y0, w, 1, color);
 }
 
 
 void gdisp_drawline_V(int16_t x0, int16_t y0, int16_t h, uint16_t color)
 {
-    if (h < 0) {
-        for (int16_t i = 0; i < -h; i++) gdisp_drawpixel(x0, y0 - i, color);
-    } else {
-        for (int16_t i = 0; i < h; i++) gdisp_drawpixel(x0, y0 + i, color);
-    }
+    gdisp_fillrect_WH(x0, y0, 1, h, color);
 }
 
 
@@ -512,10 +512,47 @@ void gdisp_drawrect(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t col
 
 void gdisp_fillrect_WH(int16_t x0, int16_t y0, int16_t w, int16_t h, uint16_t color)
 {
-    if (h < 0) {
-        for (int16_t y = y0; y > y0 + h; y--) gdisp_drawline_H(x0, y, w, color);
-    } else {
-        for (int16_t y = y0; y < y0 + h; y++) gdisp_drawline_H(x0, y, w, color);
+    int x = x0;
+    int y = y0;
+    int nx = w;
+    int ny = h;
+    uint16_t rotation = gdisp.rotation;
+
+    if (nx < 0) { x += nx + 1; nx = -nx; }
+    if (ny < 0) { y += ny + 1; ny = -ny; }
+
+    if (rotation == GDISPLAY_ROTATION_180) {
+        x = (GDISPLAY_COLUMNS-1) - (x + nx - 1);
+        y = (GDISPLAY_ROWS-1) - (y + ny - 1);
+    } else
+    if (rotation != GDISPLAY_ROTATION_NORMAL) {
+        for (int j = 0; j < ny; j++) {
+            for (int i = 0; i < nx; i++) gdisp_drawpixel(x + i, y + j, color);
+        }
+        return;
+    }
+
+    // x,y are now buffer coordinates, clip and write bytewise per page
+    if (x < 0) { nx += x; x = 0; }
+    if (y < 0) { ny += y; y = 0; }
+    if (x + nx > GDISPLAY_COLUMNS) nx = GDISPLAY_COLUMNS - x;
+    if (y + ny > GDISPLAY_ROWS) ny = GDISPLAY_ROWS - y;
+    if ((nx <= 0) || (ny <= 0)) return;
+
+    gdisp.needsupdate = 1;
+
+    int y_last = y + ny - 1;
+    for (int page = (y >> 3); page <= (y_last >> 3); page++) {
+        uint8_t mask = 0xFF;
+        if (page == (y >> 3)) mask &= (0xFF << (y & 7));
+        if (page == (y_last >> 3)) mask &= (0xFF >> (7 - (y_last & 7)));
+
+        uint8_t* p = &(gdisp.buf[x + page * GDISPLAY_COLUMNS]);
+        if (color & 0x01) {
+            for (int i = 0; i < nx; i++) p[i] |= mask;
+        } else {
+            for (int i = 0; i < nx; i++) p[i] &= ~mask;
+        }
     }
 }
 
@@ -562,6 +599,38 @@ void gdisp_w(char c)
     int16_t y = gdisp.curY - 6; // * (8 + gdisp.spacing);
 
     gdisp.curX += 6;
+
+    // fast path, glyph is completely on the screen and rotation is normal or 180
+    // a glyph column is 8 pixels, which are written bytewise into one or two pages
+    uint16_t rotation = gdisp.rotation;
+    int px = x;
+    int py = y;
+    if (rotation == GDISPLAY_ROTATION_180) {
+        px = (GDISPLAY_COLUMNS-1) - 5 - px;
+        py = (GDISPLAY_ROWS-1) - 7 - py;
+    }
+    if (((rotation == GDISPLAY_ROTATION_NORMAL) || (rotation == GDISPLAY_ROTATION_180)) &&
+        (px >= 0) && (px + 6 <= GDISPLAY_COLUMNS) && (py >= 0) && (py + 8 <= GDISPLAY_ROWS)) {
+        uint8_t inverted = (gdisp.inverted) ? 0xFF : 0x00;
+        uint8_t shift = py & 7;
+        // pixels not in keep are overwritten, without background only set pixels are drawn
+        uint16_t keep = (gdisp.font_background == GDISPLAY_FONT_BG_NONE) ? 0xFFFF : ~(0xFF << shift);
+        uint8_t* p = &(gdisp.buf[px + (py >> 3) * GDISPLAY_COLUMNS]);
+        uint16_t drawn = 0;
+
+        for (uint16_t i = 0; i < 6; i++) {
+            uint8_t b = font6x8[c * 6 + i] ^ inverted;
+            uint8_t* pp = p + i;
+            if (rotation == GDISPLAY_ROTATION_180) { b = gdisp_bitreverse_(b); pp = p + (5 - i); }
+            uint16_t bits = (uint16_t)b << shift;
+            pp[0] = (pp[0] & keep) | bits;
+            if (shift) pp[GDISPLAY_COLUMNS] = (pp[GDISPLAY_COLUMNS] & (keep >> 8)) | (bits >> 8);
+            drawn |= bits | ~keep;
+        }
+
+        if (drawn) gdisp.needsupdate = 1;
+        return;
+    }
 
     if (gdisp.font_background == GDISPLAY_FONT_BG_NONE) {
         for (uint16_t i = 0; i < 6; i++) {
@@ -621,6 +690,39 @@ void gdisp_wf(char c)
     uint16_t bits = 0;
     uint16_t bo = glyph->bitmapOffset;
     uint16_t col = (gdisp.inverted) ? 0 : 1;
+
+    // fast path, glyph is completely on the screen and rotation is normal or 180
+    // pixels are written directly into the buffer, a glyph row is in one page
+    uint16_t rotation = gdisp.rotation;
+    int px0 = x + xo;
+    int py = y + yo;
+    if (((rotation == GDISPLAY_ROTATION_NORMAL) || (rotation == GDISPLAY_ROTATION_180)) &&
+        (px0 >= 0) && (px0 + w <= GDISPLAY_COLUMNS) && (py >= 0) && (py + h <= GDISPLAY_ROWS)) {
+        int d = 1;
+        if (rotation == GDISPLAY_ROTATION_180) {
+            px0 = (GDISPLAY_COLUMNS-1) - px0;
+            py = (GDISPLAY_ROWS-1) - py;
+            d = -1;
+        }
+        uint16_t drawn = 0;
+
+        for (uint16_t yy = 0; yy < h; yy++, py += d) {
+            uint8_t* p = &(gdisp.buf[px0 + (py >> 3) * GDISPLAY_COLUMNS]);
+            uint8_t mask = (1 << (py & 7));
+            for (uint16_t xx = 0; xx < w; xx++, p += d) {
+                if (!(bit++ & 7)) bits = bitmap[bo++];
+                if (bits & 0x80) {
+                    if (col) *p |= mask; else *p &= ~mask;
+                    drawn = 1;
+                }
+                bits <<= 1;
+            }
+        }
+
+        if (drawn) gdisp.needsupdate = 1;
+        return;
+    }
+
     for (uint16_t yy = 0; yy < h; yy++) {
         for (uint16_t xx = 0; xx < w; xx++) {
             if (!(bit++ & 7)) bits = bitmap[bo++];
