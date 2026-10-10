@@ -19,6 +19,11 @@
 #pragma once
 
 
+// firmware image, from https://github.com/Lora-net/radio_firmware_images, LR1121 only, drone image as used by ELRS
+#include "../thirdparty/lr1121_transceiver_F30104.h"
+#define LR1121_BOOTLOADER_VERSION  0x2100
+
+
 //-------------------------------------------------------
 // SX Driver
 //-------------------------------------------------------
@@ -147,9 +152,11 @@ class Lr11xxDriverCommon : public Lr11xxDriverBase
         uint8_t fwMajor;
         uint8_t fwMinor;
         
+        _firmware_update(); // is called after both sx are initialized, matters for single spi
+
         GetVersion(&hwVersion, &useCase, &fwMajor, &fwMinor);
 
-        return (useCase != 0);
+        return (useCase != 0 && useCase != LR11XX_USE_CASE_BOOTLOADER); // in bootloader means update failed
     }
 
     void SetLoraConfiguration(const tSxLoraConfiguration* const config)
@@ -342,6 +349,31 @@ class Lr11xxDriverCommon : public Lr11xxDriverBase
     }
 
     void HandleAFC(void) {}
+
+    //-- firmware update
+
+    // only touches a LR1121 with a different image, or one left in the bootloader by an interrupted update
+    // any different version is replaced, also a newer one, so swapping with ELRS can reflash each time
+    void _firmware_update(void)
+    {
+        uint8_t hwVersion, useCase, fwMajor, fwMinor;
+
+        GetVersion(&hwVersion, &useCase, &fwMajor, &fwMinor);
+        uint16_t version = ((uint16_t)fwMajor << 8) + fwMinor;
+
+        if (useCase == LR11XX_USE_CASE_LR1121 || useCase == LR11XX_USE_CASE_LR1121_DRONE) {
+            if (useCase == LR11XX_USE_CASE_LR1121_DRONE && version == LR11XX_FIRMWARE_VERSION) return; // is up to date
+        } else
+        if (useCase == LR11XX_USE_CASE_BOOTLOADER) {
+            if (version != LR1121_BOOTLOADER_VERSION) return; // is not a LR1121
+        } else {
+            return;
+        }
+
+        led_red_on(); // an update takes ca 4 s per sx
+        UpdateFirmware(lr11xx_firmware_image, LR11XX_FIRMWARE_IMAGE_SIZE);
+        led_red_off();
+    }
 
     //-- RF power interface
 
