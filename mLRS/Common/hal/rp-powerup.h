@@ -68,8 +68,10 @@ class tPowerupCounter
     void flash_read_slot(uint16_t slot, uint32_t* v0, uint32_t* v1)
     {
         const uint32_t* p = (const uint32_t*)(XIP_BASE + POWERUPCNT_FLASH_OFFSET + slot * 8);
+        qspi_cs_button_disable(); // XIP reads need QSPI_CS
         *v0 = p[0];
         *v1 = p[1];
+        qspi_cs_button_enable();
     }
 
     void flash_program_slot(uint16_t slot, uint32_t val0, uint32_t val1);
@@ -185,21 +187,25 @@ void tPowerupCounter::flash_program_slot(uint16_t slot, uint32_t val0, uint32_t 
     memcpy(&buf[offset_in_page], &val0, 4);
     memcpy(&buf[offset_in_page + 4], &val1, 4);
 
+    qspi_cs_button_disable();
     rp2040.idleOtherCore();
     noInterrupts();
     flash_range_program(POWERUPCNT_FLASH_OFFSET + page_offset, buf, FLASH_PAGE_SIZE);
     interrupts();
     rp2040.resumeOtherCore();
+    qspi_cs_button_enable();
 }
 
 
 void tPowerupCounter::flash_erase_sector(void)
 {
+    qspi_cs_button_disable();
     rp2040.idleOtherCore();
     noInterrupts();
     flash_range_erase(POWERUPCNT_FLASH_OFFSET, FLASH_SECTOR_SIZE);
     interrupts();
     rp2040.resumeOtherCore();
+    qspi_cs_button_enable();
 }
 
 

@@ -131,6 +131,8 @@ inline EE_STATUS_ENUM ee_init(void)
     ee_active_sequence = 0;
     bool found = false;
 
+    qspi_cs_button_disable(); // XIP reads need QSPI_CS
+
     // scan all sectors, find the one with valid header and highest sequence
     for (uint8_t i = 0; i < EE_NUM_SECTORS; i++) {
         const ee_header_t* hdr = (const ee_header_t*)ee_sector_xip_ptr(i);
@@ -147,24 +149,34 @@ inline EE_STATUS_ENUM ee_init(void)
         }
     }
 
-    if (found) return EE_STATUS_OK;
-
     // no valid sector found, check if flash is erased or corrupt
     const uint32_t* p = (const uint32_t*)ee_sector_xip_ptr(0);
-    return (p[0] == 0xFFFFFFFF) ? EE_STATUS_PAGE_EMPTY : EE_STATUS_PAGE_UNDEF;
+    bool erased = (p[0] == 0xFFFFFFFF);
+
+    qspi_cs_button_enable();
+
+    if (found) return EE_STATUS_OK;
+    return (erased) ? EE_STATUS_PAGE_EMPTY : EE_STATUS_PAGE_UNDEF;
 }
 
 
 inline EE_STATUS_ENUM ee_readdata(void* data, uint16_t datalen)
 {
+    EE_STATUS_ENUM status = EE_STATUS_PAGE_EMPTY;
+
+    qspi_cs_button_disable(); // XIP reads need QSPI_CS
+
     const ee_header_t* hdr = (const ee_header_t*)ee_sector_xip_ptr(ee_active_sector);
-    if (hdr->magic != EE_HEADER_MAGIC) return EE_STATUS_PAGE_EMPTY;
+    if (hdr->magic == EE_HEADER_MAGIC) {
+        const uint8_t* src = ee_sector_xip_ptr(ee_active_sector) + EE_HEADER_SIZE;
+        uint16_t copylen = (datalen < hdr->datalen) ? datalen : hdr->datalen;
+        memcpy(data, src, copylen);
+        status = EE_STATUS_OK;
+    }
 
-    const uint8_t* src = ee_sector_xip_ptr(ee_active_sector) + EE_HEADER_SIZE;
-    uint16_t copylen = (datalen < hdr->datalen) ? datalen : hdr->datalen;
-    memcpy(data, src, copylen);
+    qspi_cs_button_enable();
 
-    return EE_STATUS_OK;
+    return status;
 }
 
 
@@ -186,13 +198,17 @@ inline EE_STATUS_ENUM ee_writedata(void* data, uint16_t datalen)
     memcpy(ee_sector_buf, &hdr, sizeof(hdr));
     memcpy(&ee_sector_buf[EE_HEADER_SIZE], data, datalen);
 
+    qspi_cs_button_disable();
+
     ee_flash_erase_and_program(next);
 
     // verify via XIP readback (the SDK flash functions flush the XIP cache);
     // on failure keep the previous sector active, its data is still intact
-    if (memcmp(ee_sector_xip_ptr(next), ee_sector_buf, EE_HEADER_SIZE + datalen) != 0) {
-        return EE_STATUS_FLASH_FAIL;
-    }
+    bool ok = (memcmp(ee_sector_xip_ptr(next), ee_sector_buf, EE_HEADER_SIZE + datalen) == 0);
+
+    qspi_cs_button_enable();
+
+    if (!ok) return EE_STATUS_FLASH_FAIL;
 
     ee_active_sector = next;
     ee_active_sequence = next_seq;
@@ -203,9 +219,11 @@ inline EE_STATUS_ENUM ee_writedata(void* data, uint16_t datalen)
 
 inline EE_STATUS_ENUM ee_format(void)
 {
+    qspi_cs_button_disable();
     for (uint8_t i = 0; i < EE_NUM_SECTORS; i++) {
         ee_flash_erase(i);
     }
+    qspi_cs_button_enable();
     ee_active_sector = 0;
     ee_active_sequence = 0;
     return EE_STATUS_OK;

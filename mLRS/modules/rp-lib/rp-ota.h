@@ -146,12 +146,14 @@ class tRpOta
             return false; // would overwrite powerup counter or EEPROM area
         }
 
+        qspi_cs_button_disable();
         rp2040.idleOtherCore();
         noInterrupts();
         flash_range_erase(_write_offset, FLASH_SECTOR_SIZE);
         flash_range_program(_write_offset, _sector_buf, FLASH_SECTOR_SIZE);
         interrupts();
         rp2040.resumeOtherCore();
+        qspi_cs_button_enable();
 
         _write_offset += FLASH_SECTOR_SIZE;
         return true;

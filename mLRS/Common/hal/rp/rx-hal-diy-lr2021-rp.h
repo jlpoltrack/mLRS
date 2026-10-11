@@ -107,8 +107,9 @@ void out_set_inverted(void) { gpio_set_outover(UART_TX_PIN, GPIO_OVERRIDE_INVERT
 
 //-- Button
 
-void button_init(void) {}
-bool button_pressed(void) { return false; }
+// BOOTSEL button on QSPI_CS
+void button_init(void) { qspi_cs_button_init(); }
+bool button_pressed(void) { return qspi_cs_button_pressed(); }
 
 
 //-- LEDs

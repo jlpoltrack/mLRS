@@ -106,4 +106,64 @@ inline void gpio_init(uint8_t pin, IOMODEENUM mode) {
     }
 }
 
+
+//-------------------------------------------------------
+// QSPI_CS (BOOTSEL) button
+//-------------------------------------------------------
+// App runs from RAM, so QSPI_CS can float with its pull-up to read the BOOTSEL button. ANY flash
+// access (erase, program, XIP read) must be bracketed by qspi_cs_button_disable()/_enable()!
+
+#include <hardware/structs/ioqspi.h>
+#include <hardware/structs/pads_qspi.h>
+#include <hardware/structs/sio.h>
+
+#define QSPI_CS_IO_INDEX          1 // SS index in ioqspi_hw->io[]
+#define QSPI_CS_PAD_INDEX         5 // SS index in pads_qspi_hw->io[]
+#ifdef SIO_GPIO_HI_IN_QSPI_CSN_BITS
+#define QSPI_CS_IN_BIT            SIO_GPIO_HI_IN_QSPI_CSN_BITS // RP2350
+#else
+#define QSPI_CS_IN_BIT            (1u << 1) // RP2040
+#endif
+
+static bool qspi_cs_button_used = false;
+static bool qspi_cs_button_enabled = false;
+
+// hand QSPI_CS back to the flash controller, button reads as not pressed
+inline void qspi_cs_button_disable(void)
+{
+    if (!qspi_cs_button_used) return;
+    qspi_cs_button_enabled = false;
+    hw_write_masked(&ioqspi_hw->io[QSPI_CS_IO_INDEX].ctrl,
+                    GPIO_OVERRIDE_NORMAL << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+}
+
+// float QSPI_CS, the flash is not accessible until qspi_cs_button_disable()
+inline void qspi_cs_button_enable(void)
+{
+    if (!qspi_cs_button_used) return;
+    // the SDK flash functions restore the pad defaults, so set the pull-up each time
+    hw_write_masked(&pads_qspi_hw->io[QSPI_CS_PAD_INDEX],
+                    PADS_QSPI_GPIO_QSPI_SS_PUE_BITS | PADS_QSPI_GPIO_QSPI_SS_IE_BITS,
+                    PADS_QSPI_GPIO_QSPI_SS_PUE_BITS | PADS_QSPI_GPIO_QSPI_SS_PDE_BITS | PADS_QSPI_GPIO_QSPI_SS_IE_BITS);
+    hw_write_masked(&ioqspi_hw->io[QSPI_CS_IO_INDEX].ctrl,
+                    GPIO_OVERRIDE_LOW << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+    qspi_cs_button_enabled = true;
+}
+
+// receivers only: not safe where flash is read at runtime or from both cores (cyw43 tx)
+inline void qspi_cs_button_init(void)
+{
+    qspi_cs_button_used = true;
+    qspi_cs_button_enable();
+}
+
+// button pulls QSPI_CS low when pressed
+inline bool qspi_cs_button_pressed(void)
+{
+    if (!qspi_cs_button_enabled) return false;
+    return !(sio_hw->gpio_hi_in & QSPI_CS_IN_BIT);
+}
+
 #endif // RP_PERIPHERALS_H
