@@ -79,30 +79,6 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_ANALOG);
-}
-
-IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx_amp_transmit(void) {}
-IRAM_ATTR void sx_amp_receive(void) {}
-
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
-
-//-- Button
-
-void button_init(void) {}
-bool button_pressed(void) { return false; }
-
 
 //-- LEDs
 
@@ -116,24 +92,6 @@ bool button_pressed(void) { return false; }
 #define ESP_RESET                 IO_P19 // backpack_en
 #define ESP_GPIO0                 IO_P23 // backpack_boot inverted?
 #define ESP_BOOTPIN               IO_P0  // will always be IO_P0
-
-uint8_t esp_bootpin()
-{
-    return gpio_read_activelow(ESP_BOOTPIN);
-}
-
-void esp_init(void)
-{
-    // no need to configure ESP_BOOTPIN which will always be IO_P0 and is pull-up by default
-    gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
-    gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
-}
-
-void esp_reset_high(void) { gpio_high(ESP_RESET); }
-void esp_reset_low(void) { gpio_low(ESP_RESET); }
-
-void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
-void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 
 
 //-- POWER

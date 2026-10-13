@@ -8,7 +8,7 @@
 
 /*
   Info on DIP switches
-   
+
   1,2 on:   update firmware on main ESP32, USB is connected to UARTO 
   3,4 on:   normal operation mode, USB isn't used, UARTO connected to ESP8285
   5,6,7 on: update firmware on ESP8285, USB is connected to ESP8285's UART
@@ -86,50 +86,6 @@
 #define SX_TX_EN                  IO_P26
 #define SX_RX_EN                  IO_P27
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_PU);
-    gpio_init(SX_TX_EN, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_RX_EN, IO_MODE_OUTPUT_PP_LOW);
-}
-
-IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx_amp_transmit(void)
-{
-    gpio_low(SX_RX_EN);
-    gpio_high(SX_TX_EN);
-}
-
-IRAM_ATTR void sx_amp_receive(void)
-{
-    gpio_low(SX_TX_EN);
-    gpio_high(SX_RX_EN);
-}
-
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
-
-//-- In port
-
-void in_init_gpio(void) {}
-
-void in_set_normal(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, false); }
-
-void in_set_inverted(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, true); }
-
-
-//-- Button
-
-void button_init(void) {}
-bool button_pressed(void) { return false; }
-
 
 //-- LEDs
 
@@ -154,30 +110,6 @@ bool button_pressed(void) { return false; }
 #define KEY_LEFT_THRESH           1616 // 1650 // tom = ELRS: 1616, ow: 1685
 #define KEY_CENTER_THRESH         0
 
-#if defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180 || defined DEVICE_HAS_FIVEWAY
-
-void fiveway_init(void) {} // no init needed to read an analog pin in Arduino
-
-uint16_t fiveway_adc_read(void)
-{
-    return analogRead(FIVEWAY_ADC_IO);
-}
-
-uint8_t fiveway_read(void)
-{
-    int16_t adc = analogRead(FIVEWAY_ADC_IO);
-    // BetaFPV 1W Micro seems to have pretty widely varying resistor values, 
-    // so we do a less strict method here
-    // Attention: this needs to be ordered!
-    if (adc < (( 0 + KEY_LEFT_THRESH) / 2)) return (1 << KEY_CENTER);
-    if (adc < ((KEY_LEFT_THRESH + KEY_DOWN_THRESH) / 2)) return (1 << KEY_LEFT); 
-    if (adc < ((KEY_DOWN_THRESH + KEY_UP_THRESH) / 2)) return (1 << KEY_DOWN);
-    if (adc < ((KEY_UP_THRESH + KEY_RIGHT_THRESH) / 2)) return (1 << KEY_UP);
-    if (adc < ((KEY_RIGHT_THRESH + 4095) / 2)) return (1 << KEY_RIGHT);
-    return 0;
-}
-#endif
-
 
 //-- Serial or Com Switch
 // use com if FIVEWAY is DOWN during power up, else use serial
@@ -200,21 +132,6 @@ bool ser_or_com_init(void) // return true if is_serial
 
 #define FAN_IO                    IO_P17
 
-void fan_init(void)
-{
-    gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW);
-    gpio_low(FAN_IO);
-}
-
-void fan_set_power(int8_t power_dbm)
-{
-    if (power_dbm >= POWER_23_DBM) {
-        gpio_high(FAN_IO);
-    } else {
-        gpio_low(FAN_IO);
-    }
-}
-
 
 //-- POWER
 
@@ -232,4 +149,3 @@ const rfpower_t rfpower_list[] = {
     { .dbm = POWER_27_DBM, .mW = 500 },
     { .dbm = POWER_30_DBM, .mW = 1000 },
 };
-

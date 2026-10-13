@@ -55,35 +55,6 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_TX_EN, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_RX_EN, IO_MODE_OUTPUT_PP_LOW);
-}
-
-IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx_amp_transmit(void)
-{
-    gpio_low(SX_RX_EN);
-    gpio_high(SX_TX_EN);
-}
-
-IRAM_ATTR void sx_amp_receive(void)
-{
-    gpio_low(SX_TX_EN);
-    gpio_high(SX_RX_EN);
-}
-
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
 
 //-- SX2: SX128x & SPI
 
@@ -96,54 +67,10 @@ IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
 
 #define SX2_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX2_DIO_EXTI_IRQHandler(void);)
-
-void sx2_init_gpio(void)
-{
-    gpio_init(SX2_CS_IO, IO_MODE_OUTPUT_PP_HIGH);
-    gpio_init(SX2_RESET, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX2_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX2_BUSY, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX2_TX_EN, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX2_RX_EN, IO_MODE_OUTPUT_PP_LOW);
-}
-
-IRAM_ATTR void spib_select(void) { gpio_low(SX2_CS_IO); }
-IRAM_ATTR void spib_deselect(void) { gpio_high(SX2_CS_IO); }
-
-IRAM_ATTR bool sx2_busy_read(void) { return (gpio_read_activehigh(SX2_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx2_amp_transmit(void)
-{
-    gpio_low(SX2_RX_EN);
-    gpio_high(SX2_TX_EN);
-}
-
-IRAM_ATTR void sx2_amp_receive(void)
-{
-    gpio_low(SX2_TX_EN);
-    gpio_high(SX2_RX_EN);
-}
-
-void sx2_dio_init_exti_isroff(void) { detachInterrupt(SX2_DIO); }
-void sx2_dio_enable_exti_isr(void) { attachInterrupt(SX2_DIO, SX2_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx2_dio_exti_isr_clearflag(void) {}
-
-
-//-- Out port
-
-void out_init_gpio(void) {}
-void out_set_normal(void) { gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, false, false); }
-void out_set_inverted(void) { gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, true, false); }
-
 
 //-- Button
 
 #define BUTTON                    IO_P0
-
-void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
-
-bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
 
 
 //-- LEDs
