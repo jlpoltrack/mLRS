@@ -113,7 +113,7 @@ IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
 //-- Button
 
 void button_init(void) {}
-IRAM_ATTR bool button_pressed(void) { return false; }
+bool button_pressed(void) { return false; }
 
 
 //-- LEDs
@@ -124,9 +124,9 @@ void leds_init(void)
     gpio_init(LED_RED, IO_MODE_OUTPUT_PP_HIGH);
 }
 
-IRAM_ATTR void led_red_off(void) { gpio_low(LED_RED); }
-IRAM_ATTR void led_red_on(void) { gpio_high(LED_RED); }
-IRAM_ATTR void led_red_toggle(void) { gpio_toggle(LED_RED); }
+void led_red_off(void) { gpio_low(LED_RED); }
+void led_red_on(void) { gpio_high(LED_RED); }
+void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 //-- Cooling Fan
 
@@ -137,7 +137,7 @@ void fan_init(void)
     analogWriteFrequency(25000);
 }
 
-IRAM_ATTR void fan_set_power(int8_t power_dbm)
+void fan_set_power(int8_t power_dbm)
 {
   //"misc_fan_speeds": [90,95,110,125,140,160]
     switch (power_dbm)
@@ -171,11 +171,11 @@ void esp_init(void)
     gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
 }
 
-IRAM_ATTR void esp_reset_high(void) { gpio_high(ESP_RESET); }
-IRAM_ATTR void esp_reset_low(void) { gpio_low(ESP_RESET); }
+void esp_reset_high(void) { gpio_high(ESP_RESET); }
+void esp_reset_low(void) { gpio_low(ESP_RESET); }
 
-IRAM_ATTR void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
-IRAM_ATTR void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
+void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
+void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 
 //-- POWER
 #define POWER_GAIN_DBM            24 // gain of a PA stage if present

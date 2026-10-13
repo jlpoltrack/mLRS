@@ -68,16 +68,16 @@ IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
 #define BUTTON                    IO_P0
 
 void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
-IRAM_ATTR bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
+bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
 
 
 //-- LEDs
 #define LED_RED                   IO_P16
 
 void leds_init(void) { gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW); }
-IRAM_ATTR void led_red_off(void) { gpio_low(LED_RED); }
-IRAM_ATTR void led_red_on(void) { gpio_high(LED_RED); }
-IRAM_ATTR void led_red_toggle(void) { gpio_toggle(LED_RED); }
+void led_red_off(void) { gpio_low(LED_RED); }
+void led_red_on(void) { gpio_high(LED_RED); }
+void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 
 //-- POWER

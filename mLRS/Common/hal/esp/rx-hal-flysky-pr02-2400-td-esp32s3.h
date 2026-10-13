@@ -143,7 +143,7 @@ void out_set_inverted(void) { gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_
 
 void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
 
-IRAM_ATTR bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
+bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
 
 
 //-- LEDs

@@ -69,19 +69,19 @@ typedef enum {
 // TX routines
 //-------------------------------------------------------
 
-IRAM_ATTR void uartb_putbuf(uint8_t* buf, uint16_t len)
+void uartb_putbuf(uint8_t* buf, uint16_t len)
 {
     UARTB_SERIAL_NO.write((uint8_t*)buf, len);
 }
 
 
-IRAM_ATTR uint16_t uartb_tx_notfull(void)
+uint16_t uartb_tx_notfull(void)
 {
     return 1; // fifo not full
 }
 
 
-IRAM_ATTR void uartb_tx_flush(void)
+void uartb_tx_flush(void)
 {
 #ifdef ESP32
     // flush of tx buffer not available
@@ -95,31 +95,31 @@ IRAM_ATTR void uartb_tx_flush(void)
 // RX routines
 //-------------------------------------------------------
 
-IRAM_ATTR char uartb_getc(void)
+char uartb_getc(void)
 {
     return (char)UARTB_SERIAL_NO.read();
 }
 
-IRAM_ATTR void uartb_getbuf(char* buf, uint16_t len)
+void uartb_getbuf(char* buf, uint16_t len)
 {
     UARTB_SERIAL_NO.readBytes(buf, len);
 }
 
 
-IRAM_ATTR void uartb_rx_flush(void)
+void uartb_rx_flush(void)
 {
     while (UARTB_SERIAL_NO.available() > 0) UARTB_SERIAL_NO.read();
 }
 
 
-IRAM_ATTR uint16_t uartb_rx_bytesavailable(void)
+uint16_t uartb_rx_bytesavailable(void)
 {
     int available = UARTB_SERIAL_NO.available();
     return (available > 0) ? available : 0;
 }
 
 
-IRAM_ATTR uint16_t uartb_rx_available(void)
+uint16_t uartb_rx_available(void)
 {
     return (UARTB_SERIAL_NO.available() > 0) ? 1 : 0;
 }
@@ -213,7 +213,7 @@ void uartb_rx_enableisr(FunctionalState flag)
 //-------------------------------------------------------
 // ESP8266, ESP32 can't reboot into system bootloader
 
-IRAM_ATTR uint8_t uartb_has_systemboot(void)
+uint8_t uartb_has_systemboot(void)
 {
     return 0;
 }

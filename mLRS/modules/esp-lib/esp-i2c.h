@@ -41,13 +41,13 @@ struct {
 
 
 // call this before transaction
-IRAM_ATTR void i2c_setdeviceadr(uint8_t dev_adr)
+void i2c_setdeviceadr(uint8_t dev_adr)
 {
     i2c_dev_adr = dev_adr;
 }
 
 
-IRAM_ATTR uint8_t i2c_getdeviceadr(void)
+uint8_t i2c_getdeviceadr(void)
 {
     return i2c_dev_adr;
 }
@@ -55,7 +55,7 @@ IRAM_ATTR uint8_t i2c_getdeviceadr(void)
 
 // blocking Wire call, used for init and small cmd writes (cmdhome)
 // must only be called before i2c_task starts, or from Core 0
-IRAM_ATTR HAL_StatusTypeDef i2c_put_blocked(uint8_t reg_adr, uint8_t* buf, uint16_t len)
+HAL_StatusTypeDef i2c_put_blocked(uint8_t reg_adr, uint8_t* buf, uint16_t len)
 {
     Wire.beginTransmission(i2c_dev_adr);
     Wire.write(reg_adr);
@@ -67,7 +67,7 @@ IRAM_ATTR HAL_StatusTypeDef i2c_put_blocked(uint8_t reg_adr, uint8_t* buf, uint1
 
 // async transfer via Core 0 task, passes pointer (no copy)
 // caller must ensure buf stays valid until transfer completes
-IRAM_ATTR HAL_StatusTypeDef i2c_put(uint8_t reg_adr, uint8_t* buf, uint16_t len)
+HAL_StatusTypeDef i2c_put(uint8_t reg_adr, uint8_t* buf, uint16_t len)
 {
     if (i2c_async.busy) return HAL_ERROR;
 
@@ -80,7 +80,7 @@ IRAM_ATTR HAL_StatusTypeDef i2c_put(uint8_t reg_adr, uint8_t* buf, uint16_t len)
 }
 
 
-IRAM_ATTR HAL_StatusTypeDef i2c_device_ready(void)
+HAL_StatusTypeDef i2c_device_ready(void)
 {
     return (i2c_async.busy) ? HAL_BUSY : HAL_OK;
 }

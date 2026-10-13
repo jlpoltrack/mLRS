@@ -158,8 +158,8 @@ void button_init(void)
     gpio_init(BUTTON2, IO_MODE_INPUT_PU);
 }
 
-IRAM_ATTR bool button_pressed(void) { return (gpio_read_activelow(BUTTON)) ? true : false; }
-IRAM_ATTR bool button2_pressed(void) { return (gpio_read_activelow(BUTTON2)) ? true : false; }
+bool button_pressed(void) { return (gpio_read_activelow(BUTTON)) ? true : false; }
+bool button2_pressed(void) { return (gpio_read_activelow(BUTTON2)) ? true : false; }
 
 
 //-- LEDs
@@ -191,7 +191,7 @@ bool ser_or_com_init(void) // return true if is_serial
 
 void fan_init(void) { gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW); }
 
-IRAM_ATTR void fan_set_power(int8_t power_dbm)
+void fan_set_power(int8_t power_dbm)
 {
     if (power_dbm >= POWER_23_DBM) { gpio_high(FAN_IO); } else { gpio_low(FAN_IO); }
 }
@@ -210,11 +210,11 @@ void esp_init(void)
     gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
 }
 
-IRAM_ATTR void esp_reset_high(void) { gpio_high(ESP_RESET); }
-IRAM_ATTR void esp_reset_low(void) { gpio_low(ESP_RESET); }
+void esp_reset_high(void) { gpio_high(ESP_RESET); }
+void esp_reset_low(void) { gpio_low(ESP_RESET); }
 
-IRAM_ATTR void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
-IRAM_ATTR void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
+void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
+void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 
 #endif // DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
 
