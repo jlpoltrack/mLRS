@@ -20,7 +20,7 @@ IRAM_ATTR void delay_us(uint32_t us)
     delayMicroseconds(us);
 }
 
-IRAM_ATTR void delay_ms(uint32_t ms)
+void delay_ms(uint32_t ms)
 {
     delay(ms);
 }

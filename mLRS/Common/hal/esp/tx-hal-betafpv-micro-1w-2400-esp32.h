@@ -128,7 +128,7 @@ void in_set_inverted(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_I
 //-- Button
 
 void button_init(void) {}
-IRAM_ATTR bool button_pressed(void) { return false; }
+bool button_pressed(void) { return false; }
 
 
 //-- LEDs
@@ -158,12 +158,12 @@ IRAM_ATTR bool button_pressed(void) { return false; }
 
 void fiveway_init(void) {} // no init needed to read an analog pin in Arduino
 
-IRAM_ATTR uint16_t fiveway_adc_read(void)
+uint16_t fiveway_adc_read(void)
 {
     return analogRead(FIVEWAY_ADC_IO);
 }
 
-IRAM_ATTR uint8_t fiveway_read(void)
+uint8_t fiveway_read(void)
 {
     int16_t adc = analogRead(FIVEWAY_ADC_IO);
     // BetaFPV 1W Micro seems to have pretty widely varying resistor values, 
@@ -206,7 +206,7 @@ void fan_init(void)
     gpio_low(FAN_IO);
 }
 
-IRAM_ATTR void fan_set_power(int8_t power_dbm)
+void fan_set_power(int8_t power_dbm)
 {
     if (power_dbm >= POWER_23_DBM) {
         gpio_high(FAN_IO);
