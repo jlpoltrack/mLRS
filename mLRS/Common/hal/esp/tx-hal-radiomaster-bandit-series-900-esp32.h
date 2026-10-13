@@ -135,7 +135,7 @@ void in_set_inverted(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_I
 //-- Button
 
 void button_init(void) {}
-IRAM_ATTR bool button_pressed(void) { return false; }
+bool button_pressed(void) { return false; }
 
 
 //-- LEDs
@@ -154,9 +154,9 @@ void leds_init(void)
     gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW);
 }
 
-IRAM_ATTR void led_red_off(void) { gpio_low(LED_RED); }
-IRAM_ATTR void led_red_on(void) { gpio_high(LED_RED); }
-IRAM_ATTR void led_red_toggle(void) { gpio_toggle(LED_RED); }
+void led_red_off(void) { gpio_low(LED_RED); }
+void led_red_on(void) { gpio_high(LED_RED); }
+void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 #endif // TX_ELRS_RADIOMASTER_BANDIT_900_ESP32
 
@@ -181,12 +181,12 @@ IRAM_ATTR void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 void fiveway_init(void) {} // no init needed to read an analog pin in Arduino
 
-IRAM_ATTR uint16_t fiveway_adc_read(void)
+uint16_t fiveway_adc_read(void)
 {
     return analogRead(FIVEWAY_ADC_IO);
 }
 
-IRAM_ATTR uint8_t fiveway_read(void)
+uint8_t fiveway_read(void)
 {
     int16_t adc = analogRead(FIVEWAY_ADC_IO);
     if (adc > (KEY_CENTER_THRESH-250) && adc < (KEY_CENTER_THRESH+250)) return (1 << KEY_CENTER);
@@ -225,7 +225,7 @@ void fan_init(void)
     gpio_low(FAN_IO);
 }
 
-IRAM_ATTR void fan_set_power(int8_t power_dbm)
+void fan_set_power(int8_t power_dbm)
 {
     if (power_dbm >= POWER_23_DBM) {
         gpio_high(FAN_IO);
@@ -248,11 +248,11 @@ void esp_init(void)
     gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
 }
 
-IRAM_ATTR void esp_reset_high(void) { gpio_high(ESP_RESET); }
-IRAM_ATTR void esp_reset_low(void) { gpio_low(ESP_RESET); }
+void esp_reset_high(void) { gpio_high(ESP_RESET); }
+void esp_reset_low(void) { gpio_low(ESP_RESET); }
 
-IRAM_ATTR void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
-IRAM_ATTR void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
+void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
+void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 
 #endif // DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
 
