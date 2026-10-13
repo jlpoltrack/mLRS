@@ -39,45 +39,13 @@
 
 #define SX_USE_RFO
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_TX_EN, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_ANT, IO_MODE_OUTPUT_PP_HIGH);      // force to Antenna 2, in-line with button
-}
-
-IRAM_ATTR void sx_amp_transmit(void)
-{
-    gpio_high(SX_TX_EN);
-}
-
-IRAM_ATTR void sx_amp_receive(void)
-{
-    gpio_low(SX_TX_EN);
-}
-
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-void sx_dio_init_exti_isroff(void) {}
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
 
 //-- Button
 #define BUTTON                    IO_P0
 
-void button_init(void) { gpio_init(BUTTON, IO_MODE_INPUT_PU); }
-bool button_pressed(void) { return gpio_read_activelow(BUTTON) ? true : false; }
-
 
 //-- LEDs
 #define LED_RED                   IO_P16
-
-void leds_init(void) { gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW); }
-void led_red_off(void) { gpio_low(LED_RED); }
-void led_red_on(void) { gpio_high(LED_RED); }
-void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 
 //-- POWER

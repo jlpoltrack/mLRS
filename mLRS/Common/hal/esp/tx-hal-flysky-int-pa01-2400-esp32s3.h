@@ -77,81 +77,14 @@
 #define SX_RX_EN                  IO_P7
 #define SX_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_PU);
-    gpio_init(SX_TX_EN, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_RX_EN, IO_MODE_OUTPUT_PP_LOW);
-#ifdef PWR_EN
-    gpio_init(PWR_EN, IO_MODE_OUTPUT_PP_HIGH);  // front-end enable
-#endif
-}
-
-IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx_amp_transmit(void)
-{
-    gpio_low(SX_RX_EN);
-    gpio_high(SX_TX_EN);
-}
-
-IRAM_ATTR void sx_amp_receive(void)
-{
-    gpio_low(SX_TX_EN);
-    gpio_high(SX_RX_EN);
-}
-
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
-
-//-- Button
-
-void button_init(void) {}
-bool button_pressed(void) { return false; }
-
 
 //-- LEDs
 #define LED_RED                   IO_P3
 
-void leds_init(void)
-{
-    gpio_init(LED_RED, IO_MODE_OUTPUT_PP_HIGH);
-}
-
-void led_red_off(void) { gpio_low(LED_RED); }
-void led_red_on(void) { gpio_high(LED_RED); }
-void led_red_toggle(void) { gpio_toggle(LED_RED); }
 
 //-- Cooling Fan
 
 #define FAN_IO                    IO_P1
-
-void fan_init(void)
-{
-    analogWriteFrequency(25000);
-}
-
-void fan_set_power(int8_t power_dbm)
-{
-  //"misc_fan_speeds": [90,95,110,125,140,160]
-    switch (power_dbm)
-    {
-        case POWER_10_DBM: analogWrite(FAN_IO, 0); break;  // no fan needed at 10 mW
-        case POWER_14_DBM: analogWrite(FAN_IO, 95); break; 
-        case POWER_17_DBM: analogWrite(FAN_IO, 110); break;
-        case POWER_20_DBM: analogWrite(FAN_IO, 125); break;
-        case POWER_24_DBM: analogWrite(FAN_IO, 140); break;
-        case POWER_27_DBM: analogWrite(FAN_IO, 160); break;
-        default:
-        case POWER_30_DBM: analogWrite(FAN_IO, 255); break;
-    }
-}
 
 
 //-- ESP32C3 Wifi Bridge
@@ -159,23 +92,6 @@ void fan_set_power(int8_t power_dbm)
 #define ESP_GPIO0                 IO_P15 // backpack_boot inverted?
 #define ESP_BOOTPIN               IO_P0  // will always be IO_P0
 
-uint8_t esp_bootpin()
-{
-    return gpio_read_activelow(ESP_BOOTPIN);
-}
-
-void esp_init(void)
-{
-    // no need to configure ESP_BOOTPIN which will always be IO_P0 and is pull-up by default
-    gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
-    gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
-}
-
-void esp_reset_high(void) { gpio_high(ESP_RESET); }
-void esp_reset_low(void) { gpio_low(ESP_RESET); }
-
-void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
-void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 
 //-- POWER
 #define POWER_GAIN_DBM            24 // gain of a PA stage if present
@@ -192,4 +108,3 @@ const rfpower_t rfpower_list[] = {
     { .dbm = POWER_24_DBM, .mW = 250 },
     { .dbm = POWER_27_DBM, .mW = 500 }
 };
-

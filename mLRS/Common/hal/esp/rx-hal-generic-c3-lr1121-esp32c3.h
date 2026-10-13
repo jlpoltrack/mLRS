@@ -44,38 +44,10 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_ANALOG);
-}
-
-IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx_amp_transmit(void) {}
-IRAM_ATTR void sx_amp_receive(void) {}
-
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
 
 //-- Button
 
 #define BUTTON                    IO_P9
-
-void button_init(void)
-{
-    gpio_init(BUTTON, IO_MODE_INPUT_PU);
-}
-
-bool button_pressed(void)
-{
-    return gpio_read_activelow(BUTTON) ? true : false;
-}
 
 
 //-- LEDs

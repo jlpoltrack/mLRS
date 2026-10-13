@@ -89,24 +89,6 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_ANALOG);
-}
-
-IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx_amp_transmit(void) {}
-IRAM_ATTR void sx_amp_receive(void) {}
-
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
 
 //-- SX2: LR11xx & SPI
 
@@ -117,49 +99,11 @@ IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
 
 #define SX2_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX2_DIO_EXTI_IRQHandler(void);)
-
-void sx2_init_gpio(void)
-{
-    gpio_init(SX2_CS_IO, IO_MODE_OUTPUT_PP_HIGH);
-    gpio_init(SX2_RESET, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX2_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX2_BUSY, IO_MODE_INPUT_ANALOG);
-}
-
-IRAM_ATTR void spib_select(void) { gpio_low(SX2_CS_IO); }
-IRAM_ATTR void spib_deselect(void) { gpio_high(SX2_CS_IO); }
-
-IRAM_ATTR bool sx2_busy_read(void) { return (gpio_read_activehigh(SX2_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx2_amp_transmit(void) {}
-IRAM_ATTR void sx2_amp_receive(void) {}
-
-void sx2_dio_init_exti_isroff(void) { detachInterrupt(SX2_DIO); }
-void sx2_dio_enable_exti_isr(void) { attachInterrupt(SX2_DIO, SX2_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx2_dio_exti_isr_clearflag(void) {}
-
-
-//-- In port
-
-void in_init_gpio(void) {}
-void in_set_normal(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, false); }
-void in_set_inverted(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, true); }
-
 
 //-- Button
 
 #define BUTTON                    IO_P14
 #define BUTTON2                   IO_P12
-
-void button_init(void)
-{ 
-    gpio_init(BUTTON, IO_MODE_INPUT_PU);
-    gpio_init(BUTTON2, IO_MODE_INPUT_PU);
-}
-
-bool button_pressed(void) { return (gpio_read_activelow(BUTTON)) ? true : false; }
-bool button2_pressed(void) { return (gpio_read_activelow(BUTTON2)) ? true : false; }
 
 
 //-- LEDs
@@ -189,34 +133,11 @@ bool ser_or_com_init(void) // return true if is_serial
 
 #define FAN_IO                    IO_P2
 
-void fan_init(void) { gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW); }
-
-void fan_set_power(int8_t power_dbm)
-{
-    if (power_dbm >= POWER_23_DBM) { gpio_high(FAN_IO); } else { gpio_low(FAN_IO); }
-}
-
 
 //-- ESP32 Wifi Bridge
 
 #define ESP_RESET                 IO_P19 // backpack_en
 #define ESP_GPIO0                 IO_P23 // backpack_boot
-
-#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
-
-void esp_init(void)
-{
-    gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
-    gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
-}
-
-void esp_reset_high(void) { gpio_high(ESP_RESET); }
-void esp_reset_low(void) { gpio_low(ESP_RESET); }
-
-void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
-void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
-
-#endif // DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
 
 
 //-- POWER

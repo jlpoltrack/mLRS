@@ -78,24 +78,6 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_ANALOG);
-}
-
-IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx_amp_transmit(void) {}
-IRAM_ATTR void sx_amp_receive(void) {}
-
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
 
 //-- SX2: LR11xx & SPI
 
@@ -107,34 +89,6 @@ IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
 #define SX_USE_RFSW_CTRL  {15, 1, 4, 12, 12, 2, 0, 1} // radio_rfsw_ctrl array
 
 #define SX2_USE_REGULATOR_MODE_DCDC
-
-IRQHANDLER(void SX2_DIO_EXTI_IRQHandler(void);)
-
-void sx2_init_gpio(void)
-{
-    gpio_init(SX2_CS_IO, IO_MODE_OUTPUT_PP_HIGH);
-    gpio_init(SX2_RESET, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX2_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX2_BUSY, IO_MODE_INPUT_ANALOG);
-}
-
-IRAM_ATTR void spib_select(void) { gpio_low(SX2_CS_IO); }
-IRAM_ATTR void spib_deselect(void) { gpio_high(SX2_CS_IO); }
-
-IRAM_ATTR bool sx2_busy_read(void) { return (gpio_read_activehigh(SX2_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx2_amp_transmit(void) {}
-IRAM_ATTR void sx2_amp_receive(void) {}
-
-void sx2_dio_init_exti_isroff(void) { detachInterrupt(SX2_DIO); }
-void sx2_dio_enable_exti_isr(void) { attachInterrupt(SX2_DIO, SX2_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx2_dio_exti_isr_clearflag(void) {}
-
-
-//-- Button
-
-void button_init(void) {}
-bool button_pressed(void) { return false; }
 
 
 //-- LEDs
@@ -148,43 +102,12 @@ bool button_pressed(void) { return false; }
 
 #define FAN_IO                    IO_P2
 
-void fan_init(void) { analogWriteFrequency(25000); }
-
-void fan_set_power(int8_t power_dbm)
-{
-    if (power_dbm >= POWER_27_DBM) {
-        analogWrite(FAN_IO, 255);
-    } else if (power_dbm >= POWER_23_DBM) {
-        analogWrite(FAN_IO, 127);
-    } else {
-        analogWrite(FAN_IO, 0);
-    }
-}
-
 
 //-- ESP32 Wifi Bridge
 
 #define ESP_RESET                 IO_P19 // backpack_en
 #define ESP_GPIO0                 IO_P23 // backpack_boot inverted?
 #define ESP_BOOTPIN               IO_P0  // will always be IO_P0
-
-uint8_t esp_bootpin()
-{
-    return gpio_read_activelow(ESP_BOOTPIN);
-}
-
-void esp_init(void)
-{
-    // no need to configure ESP_BOOTPIN which will always be IO_P0 and is pull-up by default
-    gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
-    gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
-}
-
-void esp_reset_high(void) { gpio_high(ESP_RESET); }
-void esp_reset_low(void) { gpio_low(ESP_RESET); }
-
-void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
-void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
 
 
 //-- POWER

@@ -103,48 +103,6 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
-void sx_init_gpio(void)
-{
-    gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
-    gpio_init(SX_DIO, IO_MODE_INPUT_ANALOG);
-    gpio_init(SX_BUSY, IO_MODE_INPUT_PU);
-    gpio_init(SX_TX_EN, IO_MODE_OUTPUT_PP_LOW);
-    gpio_init(SX_RX_EN, IO_MODE_OUTPUT_PP_LOW);
-}
-
-IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
-
-IRAM_ATTR void sx_amp_transmit(void)
-{
-    gpio_low(SX_RX_EN);
-    gpio_high(SX_TX_EN);
-}
-
-IRAM_ATTR void sx_amp_receive(void)
-{
-    gpio_low(SX_TX_EN);
-    gpio_high(SX_RX_EN);
-}
-
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
-
-//-- In port
-
-void in_init_gpio(void) {}
-void in_set_normal(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, false); }
-void in_set_inverted(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, true); }
-
-
-//-- Button
-
-void button_init(void) {}
-bool button_pressed(void) { return false; }
-
 
 //-- LEDs
 
@@ -169,27 +127,6 @@ bool button_pressed(void) { return false; }
 #define KEY_RIGHT_THRESH          2623
 #define KEY_CENTER_THRESH         1205
 
-#if defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180 || defined DEVICE_HAS_FIVEWAY
-
-void fiveway_init(void) {} // no init needed to read an analog pin in Arduino
-
-uint16_t fiveway_adc_read(void)
-{
-    return analogRead(FIVEWAY_ADC_IO);
-}
-
-uint8_t fiveway_read(void)
-{
-    int16_t adc = analogRead(FIVEWAY_ADC_IO);
-    if (adc > (KEY_CENTER_THRESH-250) && adc < (KEY_CENTER_THRESH+250)) return (1 << KEY_CENTER);
-    if (adc > (KEY_LEFT_THRESH-250) && adc < (KEY_LEFT_THRESH+250)) return (1 << KEY_LEFT); 
-    if (adc > (KEY_DOWN_THRESH-250) && adc < (KEY_DOWN_THRESH+250)) return (1 << KEY_DOWN);
-    if (adc > (KEY_UP_THRESH-250) && adc < (KEY_UP_THRESH+250)) return (1 << KEY_UP);
-    if (adc > (KEY_RIGHT_THRESH-250) && adc < (KEY_RIGHT_THRESH+250)) return (1 << KEY_RIGHT);
-    return 0;
-}
-#endif
-
 
 //-- Serial or Com Switch
 // use com if FIVEWAY is DOWN during power up, else use serial
@@ -212,44 +149,11 @@ bool ser_or_com_init(void) // return true if is_serial
 
 #define FAN_IO                    IO_P2
 
-void fan_init(void)
-{
-    analogWriteFrequency(25000);
-}
-
-void fan_set_power(int8_t power_dbm)
-{
-
-    if (power_dbm >= POWER_27_DBM) {
-        analogWrite(FAN_IO, 255);
-    } else if (power_dbm >= POWER_23_DBM) {
-        analogWrite(FAN_IO, 127);
-    } else {
-        analogWrite(FAN_IO, 0);
-    }
-}
-
 
 //-- ESP8285 Wifi Bridge
 
 #define ESP_RESET                 IO_P25 // backpack_en
 #define ESP_GPIO0                 IO_P26 // backpack_boot, seems to be inverted
-
-#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
-
-void esp_init(void)
-{
-    gpio_init(ESP_GPIO0, IO_MODE_OUTPUT_PP_LOW); // high -> esp will start in bootloader mode
-    gpio_init(ESP_RESET, IO_MODE_OUTPUT_PP_LOW); // low -> esp is in reset
-}
-
-void esp_reset_high(void) { gpio_high(ESP_RESET); }
-void esp_reset_low(void) { gpio_low(ESP_RESET); }
-
-void esp_gpio0_high(void) { gpio_low(ESP_GPIO0); }
-void esp_gpio0_low(void) { gpio_high(ESP_GPIO0); }
-
-#endif // DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
 
 
 //-- POWER
@@ -268,4 +172,3 @@ const rfpower_t rfpower_list[] = {
     { .dbm = POWER_27_DBM, .mW = 500 },
     { .dbm = POWER_30_DBM, .mW = 1000 },
 };
-
