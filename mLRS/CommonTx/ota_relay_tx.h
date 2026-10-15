@@ -4,13 +4,16 @@
 // https://www.gnu.org/licenses/gpl-3.0.de.html
 //*******************************************************
 // OTA, Tx side
-// bridges between the receiver and a host on the com port, see ota_protocol.h
+// bridges between the receiver and a host, see ota_protocol.h
 //*******************************************************
 // The tx knows nothing about the protocol besides the session id. What the receiver sends goes to the
 // host, what the host sends goes to the receiver. The receiver repeats if something gets lost.
 // tx -> host: STX, len, packet[len], crc16
 // host -> tx: STX, len, packet[len], crc16     len = 0 ends the relay
 // crc16 is fmav_crc_calculate() over len and packet
+// The host is a PC on the com port (tools/run_rx_ota.py), or the radio (lua/mLRS-RxUpdate.lua). With the radio
+// the frames go as a byte stream in crsfbridge envelopes, 0xEE/0xEA, len, 0x81/0x82, 0x66, seq, n, data[n], crc8,
+// a long packet takes several envelopes.
 //*******************************************************
 #ifndef OTA_RELAY_TX_H
 #define OTA_RELAY_TX_H
@@ -23,9 +26,9 @@ class tTxOtaRelay
 {
   public:
     void Tick_ms(void) {}
-    void Start(void) {}
+    void Start(tSerialBase* const _com) {}
     bool Ready(void) { return false; }
-    void Run(tSerialBase* const com, uint32_t sx_freq_reg, uint16_t session_id) {}
+    void Run(uint32_t sx_freq_reg, uint16_t session_id) {}
 };
 
 #else
@@ -43,9 +46,9 @@ class tTxOtaRelay
 {
   public:
     void Tick_ms(void);
-    void Start(void) { start_delay_ms = OTA_RELAY_START_DELAY_MS; }
+    void Start(tSerialBase* const _com) { com = _com; start_delay_ms = OTA_RELAY_START_DELAY_MS; }
     bool Ready(void) { return ready; }
-    void Run(tSerialBase* const _com, uint32_t sx_freq_reg, uint16_t _session_id); // the caller has to restart the controller afterwards
+    void Run(uint32_t sx_freq_reg, uint16_t _session_id); // the caller has to restart the controller afterwards
 
   private:
     bool host_receive(void);
@@ -53,7 +56,8 @@ class tTxOtaRelay
     uint16_t host_crc(uint8_t* const data, uint8_t data_len);
     bool dio_is_set(void);
     void radio_receive(void);
-    void radio_transmit(void);
+    void radio_transmit(uint8_t* const data, uint8_t data_len);
+    void crsf_do(void);
 
     uint16_t start_delay_ms;
     bool ready;
@@ -104,7 +108,8 @@ bool tTxOtaRelay::host_receive(void)
             break;
         case 2:
             buf[pos++] = c;
-            if (pos >= len) state = 3;
+            if (pos < len) break;
+            state = 3;
             break;
         case 3:
             crc = c;
@@ -150,15 +155,16 @@ void tTxOtaRelay::radio_receive(void)
 }
 
 
-// sends the packet in buf to the receiver, and goes back to receive
-void tTxOtaRelay::radio_transmit(void)
+// sends the packet to the receiver, and goes back to receive
+void tTxOtaRelay::radio_transmit(uint8_t* const data, uint8_t data_len)
 {
-    ota_set_session_id(buf, session_id);
-    ota_link_set_packet_len(len);
-    sx.SendFrame(buf, len, OTA_RELAY_TRANSMIT_TMO_MS);
+    ota_set_session_id(data, session_id);
+    ota_link_set_packet_len(data_len);
+    sx.SendFrame(data, data_len, OTA_RELAY_TRANSMIT_TMO_MS);
 
     uint32_t tstart_ms = millis32();
     while (!dio_is_set()) {
+        if (com == &crsf) crsf_do(); // the radio sends on, and waits for what is in the bridge
         if (millis32() - tstart_ms > OTA_RELAY_TRANSMIT_TMO_MS) break;
     }
     sx.GetAndClearIrqStatus(OTA_SX(IRQ_ALL));
@@ -168,14 +174,23 @@ void tTxOtaRelay::radio_transmit(void)
 }
 
 
+// the radio as host, the crsf main loop handling is not running, so do what it does
+void tTxOtaRelay::crsf_do(void)
+{
+    crsf.Do();
+    uint8_t task;
+    if (crsf.TelemetryUpdate(&task, Config.frame_rate_ms)) crsf.SendTelemetryFrame(); // sends what is in the bridge
+}
+
+
 // blocks until the host ends it or goes silent
 // the dio isr is off, dio is polled, the restart turns the isr on again
-void tTxOtaRelay::Run(tSerialBase* const _com, uint32_t sx_freq_reg, uint16_t _session_id)
+void tTxOtaRelay::Run(uint32_t sx_freq_reg, uint16_t _session_id)
 {
     ready = false;
-    com = _com;
     session_id = _session_id;
     if (!com) return;
+    if (com == &crsf) crsf.BridgeEnable();
 
 #ifdef ESP32
     sx_dio_init_exti_isroff();
@@ -191,6 +206,8 @@ void tTxOtaRelay::Run(tSerialBase* const _com, uint32_t sx_freq_reg, uint16_t _s
     uint32_t tlast_ms = millis32();
 
     while (1) {
+        if (com == &crsf) crsf_do();
+
         if (dio_is_set()) {
             uint8_t rx_len = ota_link_read(sx.GetAndClearIrqStatus(OTA_SX(IRQ_ALL)), rx_buf);
             sx_dio_exti_isr_clearflag();
@@ -207,7 +224,7 @@ void tTxOtaRelay::Run(tSerialBase* const _com, uint32_t sx_freq_reg, uint16_t _s
         }
         tlast_ms = millis32();
         if (!len) break; // host says we are done
-        if (len >= OTA_PACKET_HEADER_LEN) radio_transmit();
+        if (len >= OTA_PACKET_HEADER_LEN) radio_transmit(buf, len);
     }
 }
 

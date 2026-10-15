@@ -1133,7 +1133,7 @@ IF_SX2(
         if (ota_relay.Ready()) {
             sx.SetToIdle();
             sx2.SetToIdle();
-            ota_relay.Run(Serials.com, fhss.GetBindFreq(), Config.FrameSyncWord);
+            ota_relay.Run(fhss.GetBindFreq(), Config.FrameSyncWord);
             GOTO_RESTARTCONTROLLER;
         }
 
@@ -1202,6 +1202,7 @@ IF_CRSF(
         case MBRIDGE_CMD_BIND_STOP: tasks.SetCrsfTask(TASK_BIND_STOP); break;
         case MBRIDGE_CMD_SYSTEM_BOOTLOADER: tasks.SetCrsfTask(TASK_SYSTEM_BOOT); break;
         case MBRIDGE_CMD_FLASH_ESPBRIDGE: tasks.SetCrsfTask(TASK_ESPBRIDGE_FLASH); break;
+        case MBRIDGE_CMD_RX_OTA: tasks.SetCrsfTask(TASK_RX_OTA_RADIO); break;
         case MBRIDGE_CMD_MODELID_SET:
 //dbg.puts("\nmbridge model id "); dbg.puts(u8toBCD_s(mbridge.GetModelId()));
             config_id.Change(mbridge.GetModelId());
@@ -1260,12 +1261,13 @@ IF_IN(
     case TASK_BIND_STOP: bind.StopBind(); break;
     case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
     case TASK_RX_OTA:
+    case TASK_RX_OTA_RADIO:
         // a receiver which is in its ota update already isn't connected, so go ahead in any case
         if (connected()) {
             link_task_reset();
             link_task_set(LINK_TASK_TX_RX_OTA_ENTER);
         }
-        ota_relay.Start();
+        ota_relay.Start((tx_task == TASK_RX_OTA_RADIO) ? &crsf : Serials.com);
         break;
     case TASK_CHANGE_CONFIG_ID: config_id.Change(tasks.GetConfigIdValue()); break;
     }
