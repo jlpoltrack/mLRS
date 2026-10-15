@@ -98,6 +98,8 @@ class tTxCrsf : public tPin5BridgeBase, public tSerialBase
 
     void PassthroughSetBattery0Capacity(uint32_t capacity); // wrapper since not available to all targets
 
+    void BridgeEnable(void) { crsfbridge_enabled = enabled; } // until the next Init()
+
     // CRSF envelope handling
     // provides serial interface to the main code
     void putbuf(uint8_t* const buf, uint16_t len) override { if (crsfbridge_enabled) put_fifo.PutBuf(buf, len); }
@@ -1564,6 +1566,7 @@ class tTxCrsf : public tSerialBase
     void TelemetryHandleMspMsg(msp_message_t* const msg) {}
 
     void PassthroughSetBattery0Capacity(uint32_t capacity) {}
+    void BridgeEnable(void) {}
 };
 
 tTxCrsf crsf;
