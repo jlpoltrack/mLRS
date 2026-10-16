@@ -86,8 +86,9 @@ void sx_dio_exti_isr_clearflag(void) {}
 #define CAN_SPI_MOSI              IO_P19
 #define CAN_SPI_MISO              IO_P20
 #define CAN_SPI_CS_IO             IO_P21
-#define CAN_SPI_FREQUENCY         16000000L  // 17 MHz max with the 40 MHz crystal
+#define CAN_SPI_FREQUENCY         16000000L  // 17 MHz max with the 40 MHz clock
 #define CAN_INT                   IO_P22  // INT pin (main interrupt), not INT0/GPIO0 or INT1/GPIO1
+#define CAN_CLK_OUT_PIN           IO_P17  // 40 MHz to OSC1, board has no crystal
 
 #else
 //-- CAN bus (DroneCAN via can2040 PIO)

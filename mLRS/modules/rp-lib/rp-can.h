@@ -9,6 +9,7 @@
 #define RP_CAN_H
 
 #include <hardware/clocks.h>
+#include <hardware/pwm.h>
 #include "rp-dronecan-driver.h"
 
 
@@ -16,6 +17,17 @@
 
 void can_init(bool canfd)
 {
+#ifdef CAN_CLK_OUT_PIN
+    // 40 MHz chip clock from pwm, sys clock must be a multiple of 80 MHz for 50% duty
+    gpio_set_function(CAN_CLK_OUT_PIN, GPIO_FUNC_PWM);
+    uint slice = pwm_gpio_to_slice_num(CAN_CLK_OUT_PIN);
+    uint16_t period = clock_get_hz(clk_sys) / 40000000;
+    pwm_set_clkdiv_int_frac(slice, 1, 0);
+    pwm_set_wrap(slice, period - 1);
+    pwm_set_gpio_level(CAN_CLK_OUT_PIN, period / 2);
+    pwm_set_enabled(slice, true);
+#endif
+
     // MCP2518FD/MCP251863 on its own spi bus, bit timings are fixed in the driver
     tDcHalMcpConfig config = {
         .spi_num = CAN_SPI_NUM,
