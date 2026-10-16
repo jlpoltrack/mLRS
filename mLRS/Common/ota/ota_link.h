@@ -78,6 +78,29 @@ const tSxLoraConfiguration* ota_link_lora_configuration(void)
 }
 
 
+// dio is set for done, timeout and errors, the irq status is read only then
+// the WL radio has no dio pin, the pending bit of its disabled irq is the dio
+static inline bool ota_link_dio_is_set(void)
+{
+#ifdef SX_DIO
+    return gpio_read_activehigh(SX_DIO);
+#else
+    return NVIC_GetPendingIRQ(SX_DIO_EXTI_IRQn);
+#endif
+}
+
+
+// on the WL the pending bit is cleared only after the irq status, else it pends again
+uint32_t ota_link_get_and_clear_irq_status(void)
+{
+    uint32_t irq = sx.GetAndClearIrqStatus(OTA_SX(IRQ_ALL));
+#ifndef SX_DIO
+    NVIC_ClearPendingIRQ(SX_DIO_EXTI_IRQn);
+#endif
+    return irq;
+}
+
+
 void ota_link_set_packet_len(uint8_t len)
 {
     const tSxLoraConfiguration* config = ota_link_lora_configuration();
@@ -120,7 +143,7 @@ void ota_link_start(uint32_t sx_freq_reg)
     sx.SetDioIrqParams(SX126X_IRQ_ALL, SX126X_IRQ_RX_DONE | SX126X_IRQ_TX_DONE | SX126X_IRQ_RX_TX_TIMEOUT | OTA_SX_IRQ_RX_ERROR,
                        SX126X_IRQ_NONE, SX126X_IRQ_NONE);
 #endif
-    sx.GetAndClearIrqStatus(OTA_SX(IRQ_ALL));
+    ota_link_get_and_clear_irq_status();
 }
 
 

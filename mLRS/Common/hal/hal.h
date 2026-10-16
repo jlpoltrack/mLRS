@@ -370,7 +370,7 @@ extern "C" { void delay_ms(uint16_t ms); }
 
 
 // tx: relays the update to the receiver, rx: can be updated over the air, see Common/ota/ota_protocol.h
-#if defined DEVICE_IS_TRANSMITTER && !defined TX_R9M_868_F103C8 && !defined STM32WL // R9M has not enough RAM, WL has no dio pin
+#if defined DEVICE_IS_TRANSMITTER
   #define USE_RX_OTA
 #endif
 #if defined DEVICE_IS_RECEIVER && (defined ESP32 || defined ESP8266) && \
