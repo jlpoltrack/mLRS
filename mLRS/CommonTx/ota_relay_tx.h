@@ -14,10 +14,21 @@
 // The host is a PC on the com port (tools/run_rx_ota.py), or the radio (lua/mLRS-RxUpdate.lua). With the radio
 // the frames go as a byte stream in crsfbridge envelopes, 0xEE/0xEA, len, 0x81/0x82, 0x66, seq, n, data[n], crc8,
 // a long packet takes several envelopes.
+// Internal tx modules have no com port. There the PC comes in via the radio's serial passthrough, starts the relay
+// with a mBridge command in a CRSF frame, and the relay then has the JR pin5 uart as a plain serial, as ESP passthrough.
 //*******************************************************
 #ifndef OTA_RELAY_TX_H
 #define OTA_RELAY_TX_H
 #pragma once
+
+
+#if defined USE_RX_OTA && defined ESP32 && defined JR_PIN5_FULL_DUPLEX
+  #define USE_RX_OTA_VIA_JRPIN5
+  #define OTA_RELAY_JRPIN5_BAUDRATE   115200 // the radio follows the host
+  #define OTA_RELAY_JRPIN5_SERIAL     &jrpin5serial
+#else
+  #define OTA_RELAY_JRPIN5_SERIAL     nullptr
+#endif
 
 
 #ifndef USE_RX_OTA
@@ -191,6 +202,9 @@ void tTxOtaRelay::Run(uint32_t sx_freq_reg, uint16_t _session_id)
     session_id = _session_id;
     if (!com) return;
     if (com == &crsf) crsf.BridgeEnable();
+#ifdef USE_RX_OTA_VIA_JRPIN5
+    if (com == &jrpin5serial) { com->SetBaudRate(OTA_RELAY_JRPIN5_BAUDRATE); com->flush(); } // ends crsf on it, the restart gives it back
+#endif
 
 #ifdef ESP32
     sx_dio_init_exti_isroff();
