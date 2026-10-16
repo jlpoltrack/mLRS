@@ -173,45 +173,7 @@ void init_hw(void)
 // SX12xx
 //-------------------------------------------------------
 
-volatile uint32_t irq_status;
-volatile uint32_t irq2_status;
-
-IRQHANDLER(
-void SX_DIO_EXTI_IRQHandler(void)
-{
-    sx_dio_exti_isr_clearflag();
-    irq_status = sx.GetAndClearIrqStatus(SX_IRQ_ALL);
-    if (irq_status & SX_IRQ_RX_DONE) {
-        if (bind.IsInBind()) {
-            uint64_t bind_signature;
-            sx.ReadBuffer(0, (uint8_t*)&bind_signature, 8);
-            if (bind_signature != bind.TxSignature) irq_status = 0; // not binding frame, so ignore it
-        } else {
-            uint16_t sync_word;
-            sx.ReadBuffer(0, (uint8_t*)&sync_word, 2); // rxStartBufferPointer is always 0, so no need for sx.GetRxBufferStatus()
-            if (sync_word != Config.FrameSyncWord) irq_status = 0; // not for us, so ignore it
-        }
-    }
-})
-#ifdef USE_SX2
-IRQHANDLER(
-void SX2_DIO_EXTI_IRQHandler(void)
-{
-    sx2_dio_exti_isr_clearflag();
-    irq2_status = sx2.GetAndClearIrqStatus(SX2_IRQ_ALL);
-    if (irq2_status & SX2_IRQ_RX_DONE) {
-        if (bind.IsInBind()) {
-            uint64_t bind_signature;
-            sx2.ReadBuffer(0, (uint8_t*)&bind_signature, 8);
-            if (bind_signature != bind.TxSignature) irq2_status = 0;
-        } else {
-            uint16_t sync_word;
-            sx2.ReadBuffer(0, (uint8_t*)&sync_word, 2);
-            if (sync_word != Config.FrameSyncWord) irq2_status = 0;
-        }
-    }
-})
-#endif
+// DIO is polled in the main loop, irq status is read and cleared there, no isr
 
 
 uint8_t link_rx1_status;
@@ -300,8 +262,8 @@ void pack_rxcmdframe(tRxFrame* const frame, tFrameStats* const frame_stats)
 //       -> prepare_transmit_frame(antenna)
 //           -> pack_rx_frame(...) or pack_rxcmdframe(...)
 // receive
-//   isr:        -> irq_status
-//   isr loop:   -> link_rx1/2_status = do_receive(antenna, do_clock_reset)
+//   irq loop:   -> irq_status
+//               -> link_rx1/2_status = do_receive(antenna, do_clock_reset)
 //   post loop:  -> handle_receive(antenna) or handle_receive_none()
 //                  if valid -> process_received_frame(do_payload, frame)
 //                               -> decrypt_txframe(frame)
@@ -421,7 +383,7 @@ void do_transmit(uint8_t antenna) // we send a frame to transmitter
 }
 
 
-// called in isr loop
+// called in irq loop
 uint8_t do_receive(uint8_t antenna, bool do_clock_reset) // we receive a frame from receiver
 {
 uint8_t res;
@@ -432,18 +394,15 @@ uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was rec
     }
 
     // we don't need to read sx.GetRxBufferStatus(), but hey
-    // we could save 2 byte's time by not reading sync_word again, but hey
     sxReadFrame(antenna, &txFrame, &txFrame2, FRAME_TX_RX_LEN);
     res = (antenna == ANTENNA_1) ? check_txframe(&txFrame) : check_txframe(&txFrame2);
+
+    if (res == CHECK_ERROR_SYNCWORD) return RX_STATUS_NONE; // not for us, so ignore it
 
     if (res != CHECK_OK) {
         DBG_MAIN(dbg.puts("fail ");dbg.putc('\n');)
 dbg.puts("fail a");dbg.putc(antenna+'0');dbg.puts(" ");dbg.puts(u8toHEX_s(res));dbg.putc('\n');
     }
-
-    // must not happen !
-    // it can happen though, I've observed it on R9, maybe if in the ca 1 ms after receive the sx starts receiving something?
-    if (res == CHECK_ERROR_SYNCWORD) { FAIL_WMSG("do_receive() CHECK_ERROR_SYNCWORD"); return RX_STATUS_INVALID; }
 
     // can be CHECK_ERROR_HEADER, CHECK_ERROR_CRC1, CHECK_ERROR_CRC, CHECK_OK
 
@@ -577,7 +536,6 @@ RESTARTCONTROLLER
     // start up sx
     if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
     if (!sx2.isOk()) { FAILALWAYS(BLINK_GR_RD_OFF, "Sx2 not ok"); } // fail!
-    irq_status = irq2_status = 0;
     IF_SX(sx.StartUp(&Config.Sx));
     IF_SX2(sx2.StartUp(&Config.Sx2));
     bind.Init();
@@ -675,7 +633,6 @@ INITCONTROLLER_END
         IF_ANTENNA2(sx2.SetToRx());
         link_state = LINK_STATE_RECEIVE_WAIT;
         link_rx1_status = link_rx2_status = RX_STATUS_NONE;
-        irq_status = irq2_status = 0;
         DBG_MAIN_SLIM(dbg.puts("\n>");)
         break;
 
@@ -684,12 +641,12 @@ INITCONTROLLER_END
         do_transmit(tdiversity.Antenna());
         link_state = LINK_STATE_TRANSMIT_WAIT;
         link_tx_status = TX_STATUS_NONE;
-        irq_status = irq2_status = 0; // important, in low connection condition, RxDone isr could trigger
         DBG_MAIN_SLIM(dbg.puts("t");)
         break;
     }//end of switch(link_state)
 
 IF_SX(
+    uint32_t irq_status = (sx_dio_read()) ? sx.GetAndClearIrqStatus(SX_IRQ_ALL) : 0;
     if (irq_status) {
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
@@ -727,6 +684,7 @@ IF_SX(
     }//end of if(irq_status)
 );
 IF_SX2(
+    uint32_t irq2_status = (sx2_dio_read()) ? sx2.GetAndClearIrqStatus(SX2_IRQ_ALL) : 0;
     if (irq2_status) {
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {

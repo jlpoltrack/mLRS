@@ -377,30 +377,9 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
         return Lr20xxDriverBase::GetAndClearIrqStatus();
     }
 
-    // Attention. This is nasty.
-    // LR2021 uses a rx fifo, so we can't peek into the received data without advancing the fifo.
-    // We call ReadBuffer() in the ISR to read few bytes, and later call ReadFrame().
-    // So, as a temporary workaround we double buffer. At some point in time we need to find
-    // a proper solution.
-
-    void ReadBuffer(uint8_t offset, uint8_t* const data, uint8_t len)
-    {
-        ReadRadioRxFifo(data, len);
-
-        if (rx_buf_pos != 0) while(1){} // must not happen!
-        if (len >= sizeof(rx_buf)) while(1){} // to play it safe
-        memcpy(rx_buf, data, len);
-        rx_buf_pos = len;
-    }
-
     void ReadFrame(uint8_t* const data, uint8_t len)
     {
-        if (rx_buf_pos == 0) while(1){} // must not happen!
-        if (rx_buf_pos >= len) while(1){} // play it safe
-        memcpy(data, rx_buf, rx_buf_pos);
-        len -= rx_buf_pos;
-
-        ReadRadioRxFifo(data + rx_buf_pos, len);
+        ReadRadioRxFifo(data, len);
         ClearRxFifo();
     }
 
@@ -418,7 +397,6 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
         ClearRxFifo();
         ClearIrq(LR20XX_IRQ_ALL);
         SetRx(0); // 0 = no timeout
-        rx_buf_pos = 0;
     }
 
     void SetToIdle(void)
@@ -555,10 +533,6 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
         if (gconfig->modeIsLora()) return IS_LORA;
         return (gconfig->FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) ? IS_FLRC : IS_GFSK;
     }
-
-    // for temporary workaround
-    uint8_t rx_buf_pos;
-    uint8_t rx_buf[16];
 };
 
 

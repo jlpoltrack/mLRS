@@ -77,8 +77,6 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
 void sx_init_gpio(void)
 {
     gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_LOW);
@@ -91,9 +89,10 @@ IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? tru
 IRAM_ATTR void sx_amp_transmit(void) {}
 IRAM_ATTR void sx_amp_receive(void) {}
 
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
+void sx_dio_enable_exti_isr(void) {}
+IRAM_ATTR bool sx_dio_read(void) { return (gpio_read_activehigh(SX_DIO)) ? true : false; }
+void sx_dio_init_exti_isroff(void) {}
+void sx_dio_exti_isr_clearflag(void) {}
 
 
 //-- SX2: LR11xx & SPI
@@ -106,8 +105,6 @@ IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
 #define SX_USE_RFSW_CTRL  {31, 0, 20, 24, 24, 2, 0, 1} // radio_rfsw_ctrl array
 
 #define SX2_USE_REGULATOR_MODE_DCDC
-
-IRQHANDLER(void SX2_DIO_EXTI_IRQHandler(void);)
 
 void sx2_init_gpio(void)
 {
@@ -125,9 +122,10 @@ IRAM_ATTR bool sx2_busy_read(void) { return (gpio_read_activehigh(SX2_BUSY)) ? t
 IRAM_ATTR void sx2_amp_transmit(void) {}
 IRAM_ATTR void sx2_amp_receive(void) {}
 
-void sx2_dio_init_exti_isroff(void) { detachInterrupt(SX2_DIO); }
-void sx2_dio_enable_exti_isr(void) { attachInterrupt(SX2_DIO, SX2_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx2_dio_exti_isr_clearflag(void) {}
+IRAM_ATTR bool sx2_dio_read(void) { return (gpio_read_activehigh(SX2_DIO)) ? true : false; }
+void sx2_dio_init_exti_isroff(void) {}
+void sx2_dio_enable_exti_isr(void) {}
+void sx2_dio_exti_isr_clearflag(void) {}
 
 
 //-- Button

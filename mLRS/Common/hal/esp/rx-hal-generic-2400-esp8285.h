@@ -37,8 +37,6 @@
 #define SX_DIO                    IO_P4
 #define SX_BUSY                   IO_P5
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
 void sx_init_gpio(void)
 {
     gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
@@ -51,9 +49,10 @@ IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? tru
 IRAM_ATTR void sx_amp_transmit(void) {}
 IRAM_ATTR void sx_amp_receive(void) {}
 
+IRAM_ATTR bool sx_dio_read(void) { return (gpio_read_activehigh(SX_DIO)) ? true : false; }
 void sx_dio_init_exti_isroff(void) {}
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
+void sx_dio_enable_exti_isr(void) {}
+void sx_dio_exti_isr_clearflag(void) {}
 
 
 //-- Button

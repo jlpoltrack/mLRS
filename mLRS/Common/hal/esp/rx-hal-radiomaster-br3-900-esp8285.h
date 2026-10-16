@@ -39,8 +39,6 @@
 
 #define SX_USE_RFO
 
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
-
 void sx_init_gpio(void)
 {
     gpio_init(SX_RESET, IO_MODE_OUTPUT_PP_HIGH);
@@ -59,9 +57,10 @@ IRAM_ATTR void sx_amp_receive(void)
     gpio_low(SX_TX_EN);
 }
 
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
+void sx_dio_enable_exti_isr(void) {}
+IRAM_ATTR bool sx_dio_read(void) { return (gpio_read_activehigh(SX_DIO)) ? true : false; }
 void sx_dio_init_exti_isroff(void) {}
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
+void sx_dio_exti_isr_clearflag(void) {}
 
 
 //-- Button
