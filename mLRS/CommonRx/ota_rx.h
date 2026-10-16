@@ -566,10 +566,10 @@ void tRxOta::send(uint8_t len)
     sx.SendFrame(buf, len, 200);
 
     uint32_t tstart_ms = millis32();
-    while (!gpio_read_activehigh(SX_DIO)) { // tx done or timeout
+    while (!ota_link_dio_is_set()) { // tx done or timeout
         if (millis32() - tstart_ms > 250) break;
     }
-    sx.GetAndClearIrqStatus(OTA_SX(IRQ_ALL));
+    ota_link_get_and_clear_irq_status();
 }
 
 
@@ -580,10 +580,10 @@ uint8_t tRxOta::receive(uint16_t tmo_ms)
     sx.SetToRx();
 
     uint32_t tstart_ms = millis32();
-    while (!gpio_read_activehigh(SX_DIO)) {
+    while (!ota_link_dio_is_set()) {
         if (millis32() - tstart_ms > tmo_ms) { sx.SetToIdle(); return 0; }
     }
-    uint8_t len = ota_link_read(sx.GetAndClearIrqStatus(OTA_SX(IRQ_ALL)), buf);
+    uint8_t len = ota_link_read(ota_link_get_and_clear_irq_status(), buf);
     sx.SetToIdle();
     return (len && ota_session_id(buf) == session_id) ? len : 0;
 }
@@ -599,6 +599,9 @@ void tRxOta::Update(uint32_t sx_freq_reg, uint16_t _session_id)
     detachInterrupt(SX_DIO);
 #else
     sx_dio_init_exti_isroff();
+  #ifndef SX_DIO
+    NVIC_DisableIRQ(SX_DIO_EXTI_IRQn); // the WL's isroff leaves it enabled
+  #endif
   #ifdef USE_SX2
     sx2_dio_init_exti_isroff();
   #endif

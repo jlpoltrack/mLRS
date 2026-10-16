@@ -3,7 +3,7 @@
 This document describes how mLRS updates ESP32, ESP8285 and STM32 receivers over the air. The receiver pulls the image, the Tx module relays, and a host answers the receiver's requests. The host is either a tool on the PC or a Lua script on the radio. Both speak the same packets; only the transport to the Tx differs.
 
 ```
- Host                         Tx module                      Receiver (ESP32 / ESP8285)
+ Host                         Tx module                      Receiver (ESP32 / ESP8285 / STM32)
  tools/run_rx_ota.py ─USB──┐
  ...  ────────radio USB, ──┤
               JR pin5      ├─ ota_relay_tx.h ───LoRa──────── ota_rx.h
@@ -16,7 +16,7 @@ This document describes how mLRS updates ESP32, ESP8285 and STM32 receivers over
 | File | Role |
 |---|---|
 | `Common/ota/ota_protocol.h` | App info, packet structs, commands |
-| `Common/ota/ota_link.h` | LoRa link settings, shared by Tx and Rx |
+| `Common/ota/ota_link.h` | LoRa link settings and DIO polling, shared by Tx and Rx |
 | `CommonRx/ota_rx.h` | `tRxOta`: the request loop and storage for ESP32 / ESP8266 and the STM32 loader, the STM32 loader's state |
 | `CommonRx/ota_loader.cpp` | The STM32 loader, in place of `mlrs-rx.cpp` |
 | `CommonTx/ota_relay_tx.h` | `tTxOtaRelay`: the radio ↔ com bridge |
@@ -25,7 +25,7 @@ This document describes how mLRS updates ESP32, ESP8285 and STM32 receivers over
 | `tools/run_rx_ota_file.py` | Makes the image file for the SD card |
 
 When OTA isn't built, both classes compile as empty dummies, so `mlrs-tx.cpp` and `mlrs-rx.cpp` need no `#ifdef`s. `USE_RX_OTA` is defined for:
-- all transmitters except the R9M, which lacks the RAM, and STM32WL modules, which have no DIO pin;
+- all transmitters;
 - ESP32 and ESP8266 receivers with an LR11xx, SX128x or SX127x radio;
 - STM32 receivers with `DEVICE_HAS_OTA_LOADER`, for now the Matek mR900-30(C) and mR24-30(C).
 
@@ -48,9 +48,11 @@ The update uses LoRa with explicit header and the radio CRC on, at the bind freq
 | Sub-GHz | SF5, BW500, CR 4/5 |
 | Sub-GHz, 19 Hz 7x | SF7, BW500, CR 4/5. An SX127x can only be on the other side in this mode, and SF7 is its lowest SF with explicit header. |
 
+LR20xx (LR2021) uses the same settings, with BW812 at 2.4 GHz. LR2021 Tx modules can relay, but no LR2021 receiver has OTA yet: none is ESP, and the STM32 ones have no loader.
+
 The `session_id` (= `Config.FrameSyncWord`) is in every packet, so that only the paired Tx and Rx talk to each other.
 
-Both sides **poll the DIO pin** and read the IRQ status over SPI only after DIO is set. The IRQ status itself is never polled. The setup enables the CRC and header-error IRQs on all chips, so a bad packet is never taken as good.
+Both sides **poll the DIO pin** and read the IRQ status over SPI only after DIO is set. The IRQ status itself is never polled. The STM32WL radio has no DIO pin, so there the pending bit of its disabled radio interrupt takes the place of the pin. The setup enables the CRC-error IRQ on all chips, and the header-error IRQ on all but the SX127x, which has none, so a bad packet is never taken as good.
 
 ## Protocol: receiver pull
 
@@ -72,7 +74,7 @@ The payloads are packed structs in `ota_protocol.h`, little endian. The protocol
 - **Which receiver:** the receiver is identified by its device name in plain text, as in the bind and setup frames. The image has it in `tOtaAppInfo` (magic, version, `DEVICE_NAME`), which the host tools find by its magic. The receiver sends the same string in INFO, read from `tOtaAppInfo`. Before starting, `run_rx_ota.py` also checks the name of the connected receiver, which the Tx knows from the setup data (`v` in the CLI).
 - **INFO:** if the status isn't OK (wrong receiver or protocol version), the receiver leaves straight away.
 - **DATA:** `max_len` is 248, the largest payload that fits a LoRa frame. The receiver advances its offset by whatever it gets, and ignores an answer for any other offset.
-- **RESULT:** the receiver repeats it until it gets the answer, or for at most 5 tries.
+- **RESULT:** the receiver repeats it until it gets the answer, at most 5 times.
 
 ### Receiver state machine
 
@@ -87,7 +89,7 @@ INFO -> DATA (repeat until all received) -> RESULT -> DONE -> restart
 | No answer at all | 5 s, then leave |
 | Waiting for the host to appear | 10 s (the relay and tool need a moment to start) |
 
-Leaving always means a restart. If the update didn't complete, the receiver restarts on its previous firmware.
+On ESP, leaving always means a restart. If the update didn't complete, the receiver restarts on its previous firmware. On STM32 the loader decides what comes next, see below.
 
 ### Storage
 
@@ -131,7 +133,7 @@ At boot the loader starts the app, unless:
 - the app is invalid: its first double word holds the stack pointer, and is written last, after the crc check over the flash. A half-written app is never started;
 - the new app was started 3 times and never wrote OK.
 
-In these cases it waits for an update, with the link from the LINK record, until one comes. If the app asked but no update came, it writes OK and starts the app again.
+In these cases it waits for an update, with the link from the LINK record, until one comes. If the app asked but no update came, it writes OK and starts the app again. Without a LINK record it doesn't know the link; it blinks red, and only flashing by wire helps.
 
 Flashing by wire always wins: the loader compares the app with the crc in NEW, and starts it if it is a different one.
 
@@ -145,7 +147,7 @@ Matek mR900-30C (G431, SX1262) from the Nomad (115200 UART), 915 FCC 31 Hz, 77.7
 ### Open
 
 - A power loss right while a record is written can leave an ECC error in the state page, and reading it gives an NMI.
-- Other STM32 families: the state uses double words (G4, L4, WL); F1 needs the word variant and its own crc.
+- Other STM32 families: only G4 is set up. The state records have a word variant, but the app is written in double words (G4, L4, WL), and F1 needs its own crc, since its CRC unit has no initial value.
 
 ## Tx relay
 
@@ -157,6 +159,7 @@ host -> tx / tx -> host: 0xA5, len, packet[len], crc16     (len = 0 from the hos
 - **IRQ:** the DIO interrupt is off while the relay runs. The controller restart afterwards turns it back on.
 - **Ending:** the relay ends when the host sends an empty frame, or after 10 s of silence from the host.
 - **Power:** the Tx sends at its lowest power level, as Tx and receiver usually sit next to each other.
+- **RAM:** the relay's buffers are on the stack of `Run()`, so OTA costs no RAM outside of an update (R9M: 16 instead of 544 bytes).
 - **Transport:** the relay talks to a `tSerialBase`. For the PC this is the com port, or `jrpin5serial` for an internal Tx module. For the radio it is `crsf`: the frames go as a byte stream in crsfbridge envelopes, both ways, see below. The relay enables the bridge for the update and keeps the CRSF telemetry slots going itself, since the main loop is blocked.
 
 ## PC via the radio (internal Tx modules)
@@ -171,10 +174,6 @@ Internal Tx modules have no com port. Through EdgeTX's `serialpassthrough rfmod 
 - **Only ESP32 Tx modules with a full-duplex pin5** (`USE_RX_OTA_VIA_JRPIN5`).
 - **Buffer:** with `UART_RXBUFSIZE 0` (TX15) the plain UART has only the 128-byte FIFO, half of a 259-byte answer. The relay loop polls it often enough.
 - **Measured:** TX15 → Matek mR900-30C, 24.5 s, 314 requests, 0 repeated. The same receiver through a Nomad's CLI took 21.6 s.
-
-### Finding: crsfbridge envelopes lose answers in the relay
-
-The first version needed no firmware change: the PC played the radio for the whole update, as the Lua script does, with the relay on `crsf`. It lost 28% of the answers with 64-byte frames, 20% with 57-byte frames, and none with 27-byte frames, at 921600 and 250 Hz. The receiver's requests all arrived, and the radio packets were the same in all runs. Padded CRSF pings at 921600 got through with the module in its main loop (0–1 lost of 200 at 64 bytes, also with 0xEE/0xC8 in the padding), so the losses happen only while the relay runs. The cause wasn't found. The Lua script uses the same transport.
 
 ## Radio as host (SD card)
 
@@ -260,16 +259,14 @@ All runs used the compressed image (~216–224 kB for ESP32, 247 kB for ESP8285)
 | Generic 900 (ESP8285, SX1276) | Nomad | 915 19 Hz 7x → SF7 | 141.4 s | 997 |
 | Generic 900 | Bandit 900 (SX1276) | 915 19 Hz 7x → SF7 | 141.3 s | 1004 |
 | XR4 | Matek mR900-30C (G431, SX1262), native USB | 915 31 Hz → SF5 | 39.9 s | 901 |
+| Generic 900 | R9M (F103, SX1276), from the radio's SD card, CRSF 400k | 19 Hz 7x → SF7 | 157 s | – |
 
 - **Repeated requests:** 0–7 per run.
 - **Cross-chip pairs:** SX1281 ↔ LR1121 at 2.4 GHz and LR1121 ↔ SX1276 at SF7 work with explicit header.
 - **LR1121 at SF7:** with the SX127x compatibility register left on from 19 Hz 7x mode, it causes no problem.
-- **Not run on hardware** (judged low risk): SuperD (ESP32, SX1281) and Generic 2400 D PA (ESP8285, SX1280).
+- **Not run on hardware** (judged low risk): SuperD (ESP32, SX1281) and Generic 2400 D PA (ESP8285, SX1280). LR2021 Tx modules as the relay are build-checked only.
 
 ## Findings and future work
 
-- **Privacy must be off.** With Privacy on, a receiver doesn't rejoin a Tx that has been reset. The host tool opens the com port, which resets ESP32 Tx modules that have an auto-reset circuit (Nomad, Bandit, BetaFPV). After that, the enter command can't reach the receiver. Options for the future: have the tool avoid resetting the Tx, or document Privacy-off as a requirement.
-- **The serial link is a large part of the time.** Through an ESP32 Tx's 115200 USB-UART, a 259-byte answer takes ~22 ms, about as much as the 2.4 GHz airtime. With native USB (STM32 Tx) the same update takes 39.9 s instead of 61.9 s. Raising the relay's baud during the update would bring ESP32 Tx modules close to that. A first try at 921600 passed short frames but lost the 259-byte answers, so this needs further work.
-- **Internal Tx modules** are updated from a PC through the radio's USB passthrough, or through the Lua script.
-- **No rollback on ESP.** The receiver checks the CRC and ESP32's `esp_ota_end()` checks the image, so a damaged image is never booted. But a new image which boots and then doesn't work stays active: there is no app-valid marker. ESP8266 has no way back at all once eboot has started.
+- **Privacy must be off** for updates from the PC, by design. With Privacy on, a receiver doesn't rejoin a Tx that has been reset. The host tool opens the com port, which resets ESP32 Tx modules that have an auto-reset circuit (Nomad, Bandit, BetaFPV), and the enter command then can't reach the receiver.
 - **CLI on some Tx modules.** On the BetaFPV and Bandit, the CLI is only on the USB-UART when the 5-way is held down at boot, or when the serial port setting leaves that UART free (`USE_COM_ON_SERIAL`).
