@@ -377,6 +377,9 @@ extern "C" { void delay_ms(uint16_t ms); }
     (defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_SX128x || defined DEVICE_HAS_SX127x)
   #define USE_RX_OTA
 #endif
+#if defined DEVICE_IS_RECEIVER && defined DEVICE_HAS_OTA_LOADER // STM32, the app sits behind the OTA loader
+  #define USE_RX_OTA
+#endif
 
 #if defined DEVICE_HAS_SX126x || defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
   #define SX_DRIVER Sx126xDriver

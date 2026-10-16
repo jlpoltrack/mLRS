@@ -5,6 +5,7 @@
 //*******************************************************
 // OTA, Rx side
 // ESP32, ESP8266: no loader, the app receives the new image itself
+// STM32: the app hands over to the OTA loader, which receives the new image, see ota_loader.cpp
 // the rx pulls the image, see ota_protocol.h
 //*******************************************************
 #ifndef OTA_RX_H
@@ -21,6 +22,7 @@ class tRxOta
     void Enter(void) {}
     bool EnterRequested(void) { return false; }
     void Run(uint32_t sx_freq_reg, uint16_t session_id) {}
+    void Confirm(void) {}
 };
 
 #else
@@ -37,8 +39,110 @@ class tRxOta
 
 // tells the host tool which receiver the image is for
 // volatile, so that the read in request() is real, else the linker drops it
+#ifndef OTA_LOADER
 extern "C" const volatile tOtaAppInfo ota_app_info = { OTA_APP_INFO_MAGIC, VERSION, DEVICE_NAME };
+#define OTA_DEVICE_NAME           (const char*)ota_app_info.device_name
+#else
+#define OTA_DEVICE_NAME           DEVICE_NAME // the loader is not in the image
+#endif
 
+
+#if !(defined ESP32 || defined ESP8266)
+//-------------------------------------------------------
+// STM32, the loader's state
+//-------------------------------------------------------
+// The loader sits in low flash, the app behind it. The flash page in between is the loader's state, a list
+// of records which only get appended, the last one counts. The app adds LINK to ask for an update, and OK once it
+// runs fine. The loader adds the others. If a new app doesn't get to OK, the loader stays after some boots, and
+// waits for an update. The state is away from the EE pages, and the powerup counter page behind them.
+
+#if defined STM32G4
+  #define OTA_APP_BASE            (FLASH_BASE + 0x4000) // must match the .ld
+#else
+  #error OTA loader: mcu not supported!
+#endif
+
+#define OTA_STATE_ADR             (OTA_APP_BASE - EE_PAGE_SIZE)
+#define OTA_APP_END               EE_START_ADDRESS
+#define OTA_BOOT_ATTEMPTS         3 // boots of a new app until it must have said OK
+
+typedef enum : uint32_t {
+    OTA_STATE_NONE = 0,
+    OTA_STATE_LINK = 0x4F544101, // app: please update, a = sx_freq_reg, b = session_id, band, mode
+    OTA_STATE_ERASE, // loader: the app is being written
+    OTA_STATE_NEW, // loader: a new app is in, a = length, b = crc
+    OTA_STATE_BOOT, // loader: the new app was started
+    OTA_STATE_OK, // app: it runs fine
+} OTA_STATE_ENUM;
+
+typedef struct
+{
+    uint32_t a;
+    uint32_t b;
+    uint32_t spare;
+    uint32_t type; // OTA_STATE_ENUM, is written last
+} tOtaStateRecord;
+
+typedef struct
+{
+    uint32_t last; // type of the last record
+    tOtaStateRecord link; // the last LINK
+    tOtaStateRecord app; // the last NEW
+    uint8_t boots; // since the last NEW
+    uint32_t free_adr; // 0 if the page is full
+} tOtaState;
+
+
+void ota_state_read(tOtaState* const st)
+{
+    *st = {};
+    for (uint32_t adr = OTA_STATE_ADR; adr < OTA_STATE_ADR + EE_PAGE_SIZE; adr += sizeof(tOtaStateRecord)) {
+        const tOtaStateRecord* r = (const tOtaStateRecord*)adr;
+        if ((r->a & r->b & r->spare & r->type) == 0xFFFFFFFF) { st->free_adr = adr; return; } // erased, the end
+        switch (r->type) {
+        case OTA_STATE_LINK: st->link = *r; break;
+        case OTA_STATE_NEW: st->app = *r; st->boots = 0; break;
+        case OTA_STATE_BOOT: st->boots++; break;
+        case OTA_STATE_ERASE: case OTA_STATE_OK: break;
+        default: continue; // half written
+        }
+        st->last = r->type;
+    }
+}
+
+
+bool ota_state_program(uint32_t adr, uint32_t type, uint32_t a, uint32_t b)
+{
+#ifdef EE_USE_DOUBLEWORD
+    if (!ee_hal_programdoubleword(adr, ((uint64_t)b << 32) | a)) return false;
+    return ee_hal_programdoubleword(adr + 8, ((uint64_t)type << 32) | 0xFFFFFFFF);
+#else
+    return ee_hal_programword(adr, a) && ee_hal_programword(adr + 4, b) && ee_hal_programword(adr + 12, type);
+#endif
+}
+
+
+// start_over: erase the page, but keep the link
+void ota_state_write(uint32_t type, uint32_t a, uint32_t b, bool start_over = false)
+{
+    tOtaState st;
+    ota_state_read(&st);
+
+    ee_hal_unlock();
+    if (start_over || !st.free_adr) {
+        ee_hal_erasepage(OTA_STATE_ADR, (OTA_STATE_ADR - FLASH_BASE) / EE_PAGE_SIZE);
+        st.free_adr = OTA_STATE_ADR;
+        if (st.link.type == OTA_STATE_LINK && type != OTA_STATE_LINK) {
+            ota_state_program(st.free_adr, OTA_STATE_LINK, st.link.a, st.link.b);
+            st.free_adr += sizeof(tOtaStateRecord);
+        }
+    }
+    ota_state_program(st.free_adr, type, a, b);
+    ee_hal_lock();
+}
+
+
+#endif
 
 #ifdef ESP32
 //-------------------------------------------------------
@@ -60,7 +164,7 @@ extern "C" const volatile tOtaAppInfo ota_app_info = { OTA_APP_INFO_MAGIC, VERSI
 
 
 // CRC-32/MPEG-2, the rom functions take and give it inverted, see esp_rom_crc.h
-uint32_t ota_crc(uint32_t crc, const uint8_t* data, uint8_t len)
+uint32_t ota_crc(uint32_t crc, const uint8_t* data, uint32_t len)
 {
     return ~esp_rom_crc32_be(~crc, data, len);
 }
@@ -143,7 +247,7 @@ uint8_t ota_storage_write(tOtaStorage* st, const uint8_t* data, uint8_t len, boo
 }
 
 
-uint8_t ota_storage_end(tOtaStorage* st)
+uint8_t ota_storage_end(tOtaStorage* st, uint32_t crc)
 {
     if (st->written != st->image_length || (st->inflator && !st->inflate_done)) {
         esp_ota_abort(st->handle);
@@ -162,7 +266,7 @@ void ota_storage_init(tOtaStorage* st)
 }
 
 
-#else
+#elif defined ESP8266
 //-------------------------------------------------------
 // ESP8266, where the app goes
 //-------------------------------------------------------
@@ -177,7 +281,7 @@ void ota_storage_init(tOtaStorage* st)
 
 
 // CRC-32/MPEG-2, is what the core's crc32() does
-uint32_t ota_crc(uint32_t crc, const uint8_t* data, uint8_t len)
+uint32_t ota_crc(uint32_t crc, const uint8_t* data, uint32_t len)
 {
     return crc32(data, len, crc);
 }
@@ -209,7 +313,7 @@ uint8_t ota_storage_write(tOtaStorage* st, const uint8_t* data, uint8_t len, boo
 
 
 // eboot doesn't check the stream, but the crc of all was checked before
-uint8_t ota_storage_end(tOtaStorage* st)
+uint8_t ota_storage_end(tOtaStorage* st, uint32_t crc)
 {
     return (Update.end()) ? OTA_STATUS_OK : OTA_STATUS_ERR_IMAGE;
 }
@@ -221,7 +325,106 @@ void ota_storage_init(tOtaStorage* st)
 }
 
 
+#elif defined OTA_LOADER
+//-------------------------------------------------------
+// STM32 loader, where the app goes
+//-------------------------------------------------------
+// The image is sent as it is and goes to its place behind the loader, a page is erased when the writing gets to
+// it. The first double word, with the stack pointer, is written last, so the app is invalid until all is in.
+
+#define OTA_STORAGE_FLAGS         0
+
+
+// CRC-32/MPEG-2, is what the crc unit does in its default setup
+uint32_t ota_crc(uint32_t crc, const uint8_t* data, uint32_t len)
+{
+    LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_CRC);
+    LL_CRC_SetInitialData(CRC, crc);
+    LL_CRC_ResetCRCCalculationUnit(CRC);
+    while (len--) LL_CRC_FeedData8(CRC, *data++);
+    return LL_CRC_ReadData32(CRC);
+}
+
+
+typedef struct
+{
+    uint32_t space;
+    uint32_t length;
+    uint32_t adr; // where the next double word goes
+    uint8_t dw[8];
+    uint8_t dw_len;
+    uint64_t first_dw;
+} tOtaStorage;
+
+
+bool ota_program_dw(tOtaStorage* st)
+{
+    uint32_t adr = st->adr;
+    uint64_t dw;
+    memcpy(&dw, st->dw, 8);
+    st->adr += 8;
+    st->dw_len = 0;
+
+    if (!(adr % EE_PAGE_SIZE) && !ee_hal_erasepage(adr, (adr - FLASH_BASE) / EE_PAGE_SIZE)) return false;
+    if (adr == OTA_APP_BASE) { st->first_dw = dw; return true; }
+    return ee_hal_programdoubleword(adr, dw) && *(volatile uint64_t*)adr == dw;
+}
+
+
+uint8_t ota_storage_begin(tOtaStorage* st, uint32_t length, uint8_t flags, uint32_t image_length)
+{
+    if (flags || image_length != length || length < 8 || length > st->space) return OTA_STATUS_ERR_LENGTH;
+
+    ota_state_write(OTA_STATE_ERASE, 0, 0, true);
+    ee_hal_unlock();
+    st->length = length;
+    st->adr = OTA_APP_BASE;
+    st->dw_len = 0;
+    return OTA_STATUS_OK;
+}
+
+
+uint8_t ota_storage_write(tOtaStorage* st, const uint8_t* data, uint8_t len, bool more)
+{
+    led_green_toggle();
+    while (len--) {
+        st->dw[st->dw_len++] = *data++;
+        if (st->dw_len == 8 && !ota_program_dw(st)) return OTA_STATUS_ERR_FLASH;
+    }
+    return OTA_STATUS_OK;
+}
+
+
+// the crc of what was transferred was checked before, it's checked again on what is in flash
+// NEW goes before the first double word, so a power loss in between leaves an invalid app and not an unchecked one
+uint8_t ota_storage_end(tOtaStorage* st, uint32_t crc)
+{
+    if (st->dw_len) {
+        memset(st->dw + st->dw_len, 0xFF, 8 - st->dw_len);
+        if (!ota_program_dw(st)) { ee_hal_lock(); return OTA_STATUS_ERR_FLASH; }
+    }
+    ee_hal_lock();
+
+    uint32_t flash_crc = ota_crc(OTA_CRC_INIT, (const uint8_t*)&st->first_dw, 8);
+    flash_crc = ota_crc(flash_crc, (const uint8_t*)(OTA_APP_BASE + 8), st->length - 8);
+    if (flash_crc != crc) return OTA_STATUS_ERR_IMAGE;
+
+    ota_state_write(OTA_STATE_NEW, st->length, crc);
+    ee_hal_unlock();
+    bool ok = ee_hal_programdoubleword(OTA_APP_BASE, st->first_dw) && *(volatile uint64_t*)OTA_APP_BASE == st->first_dw;
+    ee_hal_lock();
+    return (ok) ? OTA_STATUS_OK : OTA_STATUS_ERR_FLASH;
+}
+
+
+void ota_storage_init(tOtaStorage* st)
+{
+    st->space = OTA_APP_END - OTA_APP_BASE;
+}
+
+
 #endif
+#if defined ESP32 || defined ESP8266 || defined OTA_LOADER
 //-------------------------------------------------------
 // The update
 //-------------------------------------------------------
@@ -233,6 +436,8 @@ class tRxOta
     void Enter(void) { enter = true; }
     bool EnterRequested(void) { return enter; }
     void Run(uint32_t sx_freq_reg, uint16_t _session_id); // does not return
+    void Confirm(void) {}
+    void Update(uint32_t sx_freq_reg, uint16_t _session_id); // returns when done or failed
 
   private:
     typedef enum {
@@ -276,7 +481,7 @@ uint8_t tRxOta::request(void)
         info->version = OTA_PROTOCOL_VERSION;
         info->space = storage.space;
         info->flags = OTA_STORAGE_FLAGS;
-        strbufstrcpy(info->device_name_20, (const char*)ota_app_info.device_name, 20); // reading it keeps it in the image
+        strbufstrcpy(info->device_name_20, OTA_DEVICE_NAME, 20); // reading it keeps it in the image
         return OTA_PACKET_HEADER_LEN + sizeof(tOtaInfoRequest); }
     case STATE_DATA: {
         tOtaDataRequest* data = (tOtaDataRequest*)payload;
@@ -331,7 +536,7 @@ bool tRxOta::handle_response(uint8_t len)
         if (result != OTA_STATUS_OK) { state = STATE_RESULT; break; }
         if (more) break;
 
-        result = (crc == crc_expected) ? ota_storage_end(&storage) : OTA_STATUS_ERR_DATA;
+        result = (crc == crc_expected) ? ota_storage_end(&storage, crc) : OTA_STATUS_ERR_DATA;
         state = STATE_RESULT;
         break; }
 
@@ -384,8 +589,8 @@ uint8_t tRxOta::receive(uint16_t tmo_ms)
 }
 
 
-// runs the update, then reboots into the new app, or the running one if it failed, does not return
-void tRxOta::Run(uint32_t sx_freq_reg, uint16_t _session_id)
+// runs the update, returns when it is done, failed, or no host showed up
+void tRxOta::Update(uint32_t sx_freq_reg, uint16_t _session_id)
 {
     session_id = _session_id;
 
@@ -438,6 +643,14 @@ void tRxOta::Run(uint32_t sx_freq_reg, uint16_t _session_id)
         retries = 0;
         tlast_ms = millis32();
     }
+}
+
+
+#if defined ESP32 || defined ESP8266
+// runs the update, then reboots into the new app, or the running one if it failed, does not return
+void tRxOta::Run(uint32_t sx_freq_reg, uint16_t _session_id)
+{
+    Update(sx_freq_reg, _session_id);
 
     // the chip is left in reset, the startup releases it
 #if defined SX_RESET
@@ -452,8 +665,58 @@ void tRxOta::Run(uint32_t sx_freq_reg, uint16_t _session_id)
     ESP.restart();
     while (1) {}
 }
+#endif
 
 
+#else
+//-------------------------------------------------------
+// STM32 app, hands over to the loader
+//-------------------------------------------------------
+
+char mlrs_ota_app; // tells the .ld that the app sits behind the loader
+
+
+class tRxOta
+{
+  public:
+    void Init(void) { enter = false; (void)ota_app_info.magic; } // reading it keeps it in the image
+    void Enter(void) { enter = true; }
+    bool EnterRequested(void) { return enter; }
+    void Run(uint32_t sx_freq_reg, uint16_t session_id); // does not return
+    void Confirm(void);
+
+  private:
+    bool enter;
+    bool confirmed;
+};
+
+
+// asks the loader for the update and reboots into it, does not return
+void tRxOta::Run(uint32_t sx_freq_reg, uint16_t session_id)
+{
+    __disable_irq(); // the isrs do spi
+    sx.SetToIdle();
+    sx2.SetToIdle();
+    ota_state_write(OTA_STATE_LINK, sx_freq_reg,
+                    session_id | ((uint32_t)Config.Sx.FrequencyBand << 16) | ((uint32_t)Config.Mode << 24));
+    NVIC_SystemReset();
+}
+
+
+// the app runs fine, else the loader goes back to waiting for an update after some boots of a new app
+// is called once connected, so it's sure that the app can get another update
+void tRxOta::Confirm(void)
+{
+    if (confirmed) return;
+    confirmed = true;
+
+    tOtaState st;
+    ota_state_read(&st);
+    if (st.last != OTA_STATE_NONE && st.last != OTA_STATE_OK) ota_state_write(OTA_STATE_OK, 0, 0);
+}
+
+
+#endif
 #endif // USE_RX_OTA
 
 #endif // OTA_RX_H
