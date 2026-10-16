@@ -45,7 +45,8 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 32K
-  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 128K
+  /* OTA: loader 14K, its state 2K, app up to the EE pages, see CommonRx/ota_rx.h */
+  FLASH    (rx)    : ORIGIN = DEFINED(mlrs_ota_app) ? 0x8004000 : 0x8000000,   LENGTH = DEFINED(mlrs_ota_app) ? 104K : DEFINED(mlrs_ota_loader) ? 14K : 128K
 }
 
 /* Sections */

@@ -17,9 +17,10 @@
 local FW_DIR = "/FIRMWARE"
 local FW_EXT = "%.ota$"
 
--- image file: header, raw deflate stream, see tools/run_rx_ota_file.py
+-- image file: header, raw deflate stream or the image as it is, see tools/run_rx_ota_file.py
 local FILE_MAGIC = 0x32544F4D
-local FILE_HEADER_LEN = 52
+local FILE_HEADER_LEN = 56
+local FILE_FLAG_RAW = 0x01
 
 -- must match Common/ota/ota_protocol.h and CommonTx/ota_relay_tx.h
 local OTA_PROTOCOL_VERSION = 1
@@ -126,7 +127,7 @@ local function openImage(name)
     end
     image = { name = name, version = u32(s, 5), data_length = u32(s, 9), image_length = u32(s, 13),
               adler32 = u32(s, 17), crc32 = u32(s, 21), zlib_crc = u32(s, 25), gzip_crc = u32(s, 29),
-              device_name = nameOf(string.sub(s, 33, 52)) }
+              device_name = nameOf(string.sub(s, 33, 52)), raw = band(u32(s, 53), FILE_FLAG_RAW) ~= 0 }
     return true
 end
 
@@ -268,6 +269,10 @@ end
 local function info(rx_space, rx_flags, rx_name)
     if rx_name ~= image.device_name then return OTA_STATUS_ERR_TARGET end
     if image.image_length > rx_space then return OTA_STATUS_ERR_LENGTH end
+    if image.raw then -- STM32, goes as it is, both stream crcs are the crc of the image
+        head, tail = "", ""
+        return OTA_STATUS_OK, 0, image.zlib_crc
+    end
     if band(rx_flags, OTA_FLAG_DEFLATE) ~= 0 then -- zlib stream: cmf, flg, deflate stream, adler32 big endian
         head = string.char(0x78, 0xDA)
         tail = string.reverse(u32le(image.adler32))

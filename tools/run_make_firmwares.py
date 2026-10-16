@@ -15,6 +15,7 @@
 import os
 import pathlib
 import shutil
+import copy
 import re
 import sys
 import subprocess
@@ -454,6 +455,18 @@ MLRS_SOURCES_RX = [
     os.path.join('CommonRx','out.cpp'),
     ]
 
+# the rx OTA loader, the rest of the app is not needed
+MLRS_SOURCES_OTA_LOADER = [
+    os.path.join('modules','sx12xx-lib','src','sx126x.cpp'),
+    os.path.join('modules','sx12xx-lib','src','sx127x.cpp'),
+    os.path.join('modules','sx12xx-lib','src','sx128x.cpp'),
+    os.path.join('modules','sx12xx-lib','src','lr11xx.cpp'),
+    os.path.join('modules','sx12xx-lib','src','lr20xx.cpp'),
+    os.path.join('modules','stm32ll-lib','src','stdstm32.c'),
+    os.path.join('Common','libs','utils.cpp'),
+    os.path.join('CommonRx','ota_loader.cpp'),
+    ]
+
 MLRS_SOURCES_TX = [
     os.path.join('CommonTx','tasks.cpp'),
     os.path.join('CommonTx','config_id.cpp'),
@@ -645,7 +658,7 @@ def mlrs_compile_file(target, file):
     subprocess.call(cmd, shell=True) # subprocess, not os.system, so parallel compiles aren't serialized
 
 
-def mlrs_link_target(target):
+def mlrs_link_target(target, use_cube_objlist=True):
     # generate object list from actually created .o files
     objlist = []
     for path, subdirs, files in os.walk(os.path.join(MLRS_BUILD_DIR,target.build_dir)):
@@ -656,7 +669,7 @@ def mlrs_link_target(target):
 
     # check for a STM32CubeIDE object list
     objlist_cube_file = os.path.join(MLRS_DIR,target.target,'Release','objects.list')
-    if not os.path.exists(objlist_cube_file):
+    if not use_cube_objlist or not os.path.exists(objlist_cube_file):
         # generate object list
         printWarning('WARNING: no objects.list found, use generated objects.list')
         F = open(os.path.join(MLRS_BUILD_DIR,target.build_dir,'objects.list'), mode='w')
@@ -785,7 +798,48 @@ def mlrs_build_target(target, cmdline_D_list):
             os.path.join(MLRS_BUILD_DIR,target.build_dir,target.elf_name+'.hex')
         )
 
+    # the app sits behind the OTA loader, see CommonRx/ota_rx.h, the .hex gets both
+    if open(os.path.join(MLRS_BUILD_DIR,target.build_dir,target.target+'.map')).read().find('mlrs_ota_app') >= 0:
+        mlrs_build_ota_loader(target)
+
     print('------------------------------------------------------------')
+
+
+def mlrs_build_ota_loader(target):
+    loader = copy.copy(target)
+    loader.build_dir = target.build_dir+'-ota-loader'
+    loader.elf_name = target.elf_name+'-ota-loader'
+    print('ota loader')
+
+    buildpath = os.path.join(MLRS_BUILD_DIR,loader.build_dir)
+    create_clean_dir(buildpath)
+
+    files = [os.path.join(target.target,'Core','Startup',target.startup_script)]
+    for file in target.MLRS_SOURCES_HAL + target.MLRS_SOURCES_CORE:
+        files.append(os.path.join(target.target,file))
+    files += MLRS_SOURCES_OTA_LOADER
+
+    for file in files:
+        create_dir(os.path.join(buildpath,os.path.dirname(file)))
+    with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
+        pool.map(lambda file: mlrs_compile_file(loader, file), files)
+
+    mlrs_link_target(loader, use_cube_objlist=False)
+    loader_elf = os.path.join(buildpath,loader.elf_name+'.elf')
+    if not os.path.exists(loader_elf):
+        printError('ERROR: ota loader not built')
+        exit(1)
+    os.system(os.path.join(GCC_DIR,'arm-none-eabi-size')+' '+loader_elf)
+
+    # loader + app, the loader's end-of-file record goes
+    loader_hex = os.path.join(buildpath,loader.elf_name+'.ihx') # not .hex, so it's not copied to firmware
+    os.system(os.path.join(GCC_DIR,'arm-none-eabi-objcopy')+' -O ihex '+loader_elf+' '+loader_hex)
+    app_hex = os.path.join(MLRS_BUILD_DIR,target.build_dir,target.elf_name+'.hex')
+    loader_lines = [l for l in open(loader_hex).read().splitlines() if l and l != ':00000001FF']
+    app_lines = open(app_hex).read().splitlines()
+    F = open(app_hex, mode='w')
+    F.write('\n'.join(loader_lines + app_lines)+'\n')
+    F.close()
 
 
 #-- mcu family generic targets

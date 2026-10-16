@@ -1,6 +1,6 @@
-# Receiver OTA Architecture (ESP)
+# Receiver OTA Architecture
 
-This document describes how mLRS updates ESP32 and ESP8285 receivers over the air (`OTA-ESP` branch). The receiver pulls the image, the Tx module relays, and a host answers the receiver's requests. The host is either a tool on the PC or a Lua script on the radio. Both speak the same packets; only the transport to the Tx differs.
+This document describes how mLRS updates ESP32, ESP8285 and STM32 receivers over the air. The receiver pulls the image, the Tx module relays, and a host answers the receiver's requests. The host is either a tool on the PC or a Lua script on the radio. Both speak the same packets; only the transport to the Tx differs.
 
 ```
  Host                         Tx module                      Receiver (ESP32 / ESP8285)
@@ -16,7 +16,8 @@ This document describes how mLRS updates ESP32 and ESP8285 receivers over the ai
 |---|---|
 | `Common/ota/ota_protocol.h` | App info, packet structs, commands |
 | `Common/ota/ota_link.h` | LoRa link settings, shared by Tx and Rx |
-| `CommonRx/ota_rx.h` | `tRxOta`: the request loop and storage for ESP32 / ESP8266 |
+| `CommonRx/ota_rx.h` | `tRxOta`: the request loop and storage for ESP32 / ESP8266 and the STM32 loader, the STM32 loader's state |
+| `CommonRx/ota_loader.cpp` | The STM32 loader, in place of `mlrs-rx.cpp` |
 | `CommonTx/ota_relay_tx.h` | `tTxOtaRelay`: the radio ↔ com bridge |
 | `tools/run_rx_ota.py` | Host tool on the PC |
 | `lua/mLRS-RxUpdate.lua` | Host on the radio, image from the SD card |
@@ -24,13 +25,14 @@ This document describes how mLRS updates ESP32 and ESP8285 receivers over the ai
 
 When OTA isn't built, both classes compile as empty dummies, so `mlrs-tx.cpp` and `mlrs-rx.cpp` need no `#ifdef`s. `USE_RX_OTA` is defined for:
 - all transmitters except the R9M, which lacks the RAM, and STM32WL modules, which have no DIO pin;
-- ESP32 and ESP8266 receivers with an LR11xx, SX128x or SX127x radio.
+- ESP32 and ESP8266 receivers with an LR11xx, SX128x or SX127x radio;
+- STM32 receivers with `DEVICE_HAS_OTA_LOADER`, for now the Matek mR900-30(C) and mR24-30(C).
 
 ## Starting an update
 
 1. The host opens the Tx's com port, checks that the CLI answers `v`, and sends `rxota`.
 2. If the link is up, the Tx repeats `FRAME_CMD_RX_OTA_ENTER` in its command frames. One second later it starts the relay.
-3. When the receiver gets the command, it leaves its main loop and calls `tRxOta::Run()`. This doesn't reboot.
+3. When the receiver gets the command, it leaves its main loop and calls `tRxOta::Run()`. On ESP this doesn't reboot. On STM32 the app hands over to the loader, see below.
 4. The host switches to relay framing and waits for the receiver's first request.
 
 ## Radio link
@@ -90,10 +92,57 @@ Leaving always means a restart. If the update didn't complete, the receiver rest
 |---|---|---|
 | ESP32 / C3 / S3 | `esp_ota_*` writes into the inactive app partition; the bootloader switches over | deflate (zlib), inflated with the ROM miniz |
 | ESP8266 / ESP8285 | Updater writes into the free flash behind the app; eboot unpacks it over the app at the next reset | gzip, stored as received |
+| STM32 | the loader writes the app to its place | none |
 
 - **CRC check:** the receiver checks a CRC over everything transferred before it finalizes. For ESP8266 this is the only check, since eboot doesn't verify the stream. It is CRC-32/MPEG-2, as the platforms have it already: the ESP32 ROM (`esp_rom_crc32_be()`), the ESP8266 core (`crc32()`) and the STM32 CRC unit in its default setup.
-- **Compression:** ESP receivers are always sent a compressed image. Future STM32 receivers will advertise no compression and be sent the raw image.
+- **Compression:** ESP receivers are always sent a compressed image. STM32 receivers advertise no compression and are sent the raw image.
 - **Params are untouched:** they live in NVS, which the update never writes.
+
+## STM32 loader
+
+STM32 receivers can't hold a second app, so a loader in front of the app receives the update. The loader is built from the same sources as the app: the CubeMX `main.cpp`, HAL, the device hal, the sx driver, `ota_link.h` and the request loop of `ota_rx.h`. Only `CommonRx/ota_loader.cpp` takes the place of `mlrs-rx.cpp`. `tools/run_make_firmwares.py` builds it when the app's map has `mlrs_ota_app`, and puts loader and app into the one `.hex`. The host tool takes that `.hex` and sends the app part of it.
+
+| G431, 128 kB | |
+|---|---|
+| `0x08000000` | loader, 14 kB (12.3 kB used) |
+| `0x08003800` | loader state, one 2 kB page |
+| `0x08004000` | app, up to the EE pages, 104 kB |
+| `0x0801E000` | EE pages, powerup counter page, untouched |
+
+The `.ld` has one changed line, in the style of the ELRS bootloader targets: `DEFINED(mlrs_ota_app)` moves the app behind the loader, `DEFINED(mlrs_ota_loader)` limits the loader to 14 kB. The loader sets `VTOR` and starts the app with the clocks and peripherals deinitialized by the HAL, so the app starts as after a reset.
+
+### Loader state
+
+The state page is a list of records (16 bytes, the type word is written last), which are only appended; the last one counts. The app writes two of them, the loader the others.
+
+| Record | Written by | Meaning |
+|---|---|---|
+| LINK | app | please update; frequency, session id, band and mode for the link |
+| ERASE | loader | the app is being written; the page is started over here, with the LINK copied |
+| NEW | loader | a complete new app; its length and crc |
+| BOOT | loader | the new app was started |
+| OK | app | the app runs fine, written when it connects for the first time |
+
+At boot the loader starts the app, unless:
+- the last record is LINK: the app asked for an update;
+- the app is invalid: its first double word holds the stack pointer, and is written last, after the crc check over the flash. A half-written app is never started;
+- the new app was started 3 times and never wrote OK.
+
+In these cases it waits for an update, with the link from the LINK record, until one comes. If the app asked but no update came, it writes OK and starts the app again.
+
+Flashing by wire always wins: the loader compares the app with the crc in NEW, and starts it if it is a different one.
+
+### Measured
+
+Matek mR900-30C (G431, SX1262) from the Nomad (115200 UART), 915 FCC 31 Hz, 77.7 kB raw: 21.6 s, 314 requests, no repeats.
+
+- Update cut off half way, then reset: the loader waits, a second run without a connected receiver completes.
+- An app which hangs before connecting: started 3 times, after the 4th reset the loader waits; an update or a flash by wire brings it back.
+
+### Open
+
+- A power loss right while a record is written can leave an ECC error in the state page, and reading it gives an NMI.
+- Other STM32 families: the state uses double words (G4, L4, WL); F1 needs the word variant and its own crc.
 
 ## Tx relay
 
@@ -142,7 +191,7 @@ EdgeTX up to 2.12.4 leaves each payload byte of `crossfireTelemetryPush()` on th
 
 ### The file
 
-`run_rx_ota_file.py <firmware.bin>` makes it, and it goes into `/FIRMWARE`. It has a 52-byte header (magic, version, lengths, the zlib/gzip trailer values, the CRC of the zlib and of the gzip stream, device name), then the image's raw deflate stream. Lua can't compress, so the script puts the zlib head/tail (ESP32) or the gzip head/tail (ESP8266) around the stored stream, depending on what the receiver advertises. One file serves both. The firmware knows nothing about the file.
+`run_rx_ota_file.py <firmware.bin>` makes it, and it goes into `/FIRMWARE`. It has a 56-byte header (magic, version, lengths, the zlib/gzip trailer values, the CRC of the zlib and of the gzip stream, device name, flags), then the image's raw deflate stream. For STM32 it takes the `.hex`, and the file has the app as it is, with the RAW flag; both CRCs are then the CRC of the app, and the script sends it unchanged. Lua can't compress, so the script puts the zlib head/tail (ESP32) or the gzip head/tail (ESP8266) around the stored stream, depending on what the receiver advertises. One file serves both. The firmware knows nothing about the file.
 
 EdgeTX's Lua has 32-bit integers and single-precision floats, so a crc32 doesn't survive a division. The script splits values into bytes with `bit32`.
 
@@ -204,4 +253,3 @@ All runs used the compressed image (~216–224 kB for ESP32, 247 kB for ESP8285)
 - **Internal Tx modules** are updated through the Lua script, as they have no com port for the CLI. A PC reaching them through the radio's USB passthrough is deferred.
 - **No rollback on ESP.** The receiver checks the CRC and ESP32's `esp_ota_end()` checks the image, so a damaged image is never booted. But a new image which boots and then doesn't work stays active: there is no app-valid marker. ESP8266 has no way back at all once eboot has started.
 - **CLI on some Tx modules.** On the BetaFPV and Bandit, the CLI is only on the USB-UART when the 5-way is held down at boot, or when the serial port setting leaves that UART free (`USE_COM_ON_SERIAL`).
-- **STM32 receivers** are a separate, later step: a loader, the same pull protocol, no compression.
