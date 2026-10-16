@@ -10,8 +10,7 @@
 
 
 //-- SX1
-
-IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
+// DIO is polled in the main loop, so no isr is attached
 
 #ifdef SX_BUSY
 IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
@@ -49,16 +48,15 @@ void sx_init_gpio(void)
 #endif
 }
 
-void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
-void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
+IRAM_ATTR bool sx_dio_read(void) { return (gpio_read_activehigh(SX_DIO)) ? true : false; }
+void sx_dio_init_exti_isroff(void) {}
+void sx_dio_enable_exti_isr(void) {}
+void sx_dio_exti_isr_clearflag(void) {}
 
 
 //-- SX2
 
 #ifdef SX2_DIO
-
-IRQHANDLER(void SX2_DIO_EXTI_IRQHandler(void);)
 
 IRAM_ATTR void spib_select(void) { gpio_low(SX2_CS_IO); }
 IRAM_ATTR void spib_deselect(void) { gpio_high(SX2_CS_IO); }
@@ -89,9 +87,10 @@ void sx2_init_gpio(void)
 #endif
 }
 
-void sx2_dio_init_exti_isroff(void) { detachInterrupt(SX2_DIO); }
-void sx2_dio_enable_exti_isr(void) { attachInterrupt(SX2_DIO, SX2_DIO_EXTI_IRQHandler, RISING); }
-IRAM_ATTR void sx2_dio_exti_isr_clearflag(void) {}
+IRAM_ATTR bool sx2_dio_read(void) { return (gpio_read_activehigh(SX2_DIO)) ? true : false; }
+void sx2_dio_init_exti_isroff(void) {}
+void sx2_dio_enable_exti_isr(void) {}
+void sx2_dio_exti_isr_clearflag(void) {}
 
 #endif // SX2_DIO
 
