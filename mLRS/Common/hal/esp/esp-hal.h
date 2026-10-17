@@ -83,6 +83,12 @@
 #include "rx-hal-bayck-ur1000-lr1121-esp32c3.h"
 #endif
 
+//-- 2.4 GHz & 868/915 MHz DIY Devices (LR2021)
+
+#ifdef RX_DIY_LR2021_ESP32
+#include "rx-hal-diy-lr2021-esp32.h"
+#endif
+
 
 //-- ELRS Selected Devices
 
@@ -172,6 +178,10 @@
 
 #ifdef TX_RADIOMASTER_NOMAD_ESP32
 #include "tx-hal-radiomaster-nomad-esp32.h"
+#endif
+
+#ifdef TX_DIY_LR2021_ESP32
+#include "tx-hal-diy-lr2021-esp32.h"
 #endif
 
 #ifdef TX_FLYSKY_INTERNAL_PA01_2400_ESP32S3

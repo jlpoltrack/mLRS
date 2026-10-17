@@ -143,6 +143,17 @@
   #define FREQUENCY_BAND_915_MHZ_FCC
 #endif
 
+//-- 2.4 GHz & 868/915 MHz DIY Devices (LR2021)
+
+#ifdef RX_DIY_LR2021_ESP32
+  #define DEVICE_NAME "DIY LR2021 ESP32"
+  #define DEVICE_IS_RECEIVER
+  #define DEVICE_HAS_LR20xx
+  #define FREQUENCY_BAND_2P4_GHZ
+  #define FREQUENCY_BAND_868_MHZ
+  #define FREQUENCY_BAND_915_MHZ_FCC
+#endif
+
 
 //-- ESP Selected Receivers
 
@@ -239,6 +250,15 @@
   #define DEVICE_NAME "RM Nomad"
   #define DEVICE_IS_TRANSMITTER
   #define DEVICE_HAS_LR11xx
+  #define FREQUENCY_BAND_2P4_GHZ
+  #define FREQUENCY_BAND_868_MHZ
+  #define FREQUENCY_BAND_915_MHZ_FCC
+#endif
+
+#ifdef TX_DIY_LR2021_ESP32
+  #define DEVICE_NAME "DIY LR2021 ESP32"
+  #define DEVICE_IS_TRANSMITTER
+  #define DEVICE_HAS_LR20xx
   #define FREQUENCY_BAND_2P4_GHZ
   #define FREQUENCY_BAND_868_MHZ
   #define FREQUENCY_BAND_915_MHZ_FCC
