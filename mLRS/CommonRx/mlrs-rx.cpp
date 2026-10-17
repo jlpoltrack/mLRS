@@ -283,7 +283,8 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
     case FRAME_CMD_RX_OTA_ENTER:
-        ota.Enter();
+        // the ota link is not encrypted, so not with privacy on
+        if (Setup.Common[Config.ConfigId].Privacy == PRIVACY_NONE) ota.Enter();
         break;
     }
 }

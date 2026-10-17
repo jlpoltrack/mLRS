@@ -177,7 +177,7 @@ Internal Tx modules have no com port. Through EdgeTX's `serialpassthrough rfmod 
 
 ## Radio as host (SD card)
 
-`mLRS-RxUpdate.lua` is a second host. It works with internal and external Tx modules in CRSF mode, with no PC and no Privacy-off requirement. The receiver side is the same as with the PC.
+`mLRS-RxUpdate.lua` is a second host. It works with internal and external Tx modules in CRSF mode, with no PC. The receiver side is the same as with the PC.
 
 1. The script sends `MBRIDGE_CMD_RX_OTA`. The Tx starts the relay just as for `rxota`, but with `crsf` as the host serial. The script repeats the command every 3 s until the receiver shows up.
 2. The script answers INFO, DATA and RESULT, as `run_rx_ota.py` does, and ends the relay with an empty frame.
@@ -268,5 +268,5 @@ All runs used the compressed image (~216–224 kB for ESP32, 247 kB for ESP8285)
 
 ## Findings and future work
 
-- **Privacy must be off** for updates from the PC, by design. With Privacy on, a receiver doesn't rejoin a Tx that has been reset. The host tool opens the com port, which resets ESP32 Tx modules that have an auto-reset circuit (Nomad, Bandit, BetaFPV), and the enter command then can't reach the receiver.
+- **Privacy must be off**, by design. The OTA link isn't encrypted, so the receiver ignores the enter command when Privacy is on.
 - **CLI on some Tx modules.** On the BetaFPV and Bandit, the CLI is only on the USB-UART when the 5-way is held down at boot, or when the serial port setting leaves that UART free (`USE_COM_ON_SERIAL`).
