@@ -8,6 +8,7 @@
 // Configuration defines:
 // #define POWER_USE_DEFAULT_RFPOWER_CALC
 // #define SX_USE_TCXO_VOLTAGE
+// #define SX_USE_REGULATOR_MODE_DCDC
 // #define SX_USE_IRQ_DIO_NO
 // #define SX_USE_RFSW_DIO_NOS - deprecated
 // #define SX_USE_RFSW_DIO_CONFIGS - deprecated
@@ -290,7 +291,9 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
 
         SetStandby(LR20XX_STANDBY_MODE_RC);
 
-//??        SetRegMode(LR20XX_SIMO_USAGE_NORMAL); // Attention: requires DCDC workaround
+#ifdef SX_USE_REGULATOR_MODE_DCDC
+        SetRegMode(LR20XX_SIMO_USAGE_NORMAL); // requires PRAM to be loaded, done in Init()
+#endif
 
 #ifdef SX_USE_TCXO_VOLTAGE
         SetTcxoMode(SX_USE_TCXO_VOLTAGE, 64000); // 2 ms // functions correctly only when chip is in Standby RC mode
@@ -631,6 +634,9 @@ class Lr20xxDriver : public Lr20xxDriverCommon
 
         spi_init();
         spi_setnop(0x00); // 0x00 = NOP
+#ifdef DEVICE_HAS_DIVERSITY_SINGLE_SPI
+        gpio_init(SX2_CS_IO, IO_MODE_OUTPUT_PP_HIGH); // SX2 shares the SPI, must be deselected before SX1 is used
+#endif
         sx_init_gpio();
         sx_dio_exti_isr_clearflag();
         sx_dio_init_exti_isroff();

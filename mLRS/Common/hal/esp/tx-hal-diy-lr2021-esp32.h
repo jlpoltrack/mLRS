@@ -1,0 +1,212 @@
+//*******************************************************
+// Copyright (c) MLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.de.html
+//*******************************************************
+// hal
+//*******************************************************
+
+//-------------------------------------------------------
+// ESP32, DIY Tx LR2021 2400 & 900
+//-------------------------------------------------------
+// LR2021 DIOs as ELRS default: DIO5 = 2.4 TX, DIO6 = 2.4 RX, DIO7 = 900 TX, DIO8 = 900 RX, DIO9 = IRQ, DIO10/11 = low
+
+#define DEVICE_HAS_JRPIN5
+#define DEVICE_HAS_IN
+#define DEVICE_HAS_DIVERSITY_SINGLE_SPI
+#define DEVICE_HAS_SINGLE_LED_RGB
+#define DEVICE_HAS_FAN_ONOFF
+#define DEVICE_HAS_COM_ON_SERIAL
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_BUTTON_FLASH
+#define DEVICE_HAS_NO_DEBUG
+
+
+//-- UARTS
+// UARTB = serial port
+// UARTC (or USB) = com (CLI) port
+// UARTD = serial2 port or wireless bridge port
+// UART  = JR bay pin5
+// UARTE = in port, SBus or whatever
+// UARTF or SWUART = debug port
+
+#define UARTB_USE_SERIAL // serial or com, is connected to USB-C via USB<>UART
+#define UARTB_BAUD                TX_SERIAL_BAUDRATE
+#define UARTB_USE_TX_IO           IO_P1
+#define UARTB_USE_RX_IO           IO_P3
+#define UARTB_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
+#define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
+
+/* #define UARTC_USE_SERIAL // com, is connected to USB-C via USB<>UART
+#define UARTC_BAUD                115200
+#define UARTC_USE_TX_IO           IO_P1
+#define UARTC_USE_RX_IO           IO_P3
+#define UARTC_TXBUFSIZE           0  // TX FIFO = 128
+#define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE */
+
+#define UARTD_USE_SERIAL2 // serial2 or wireless bridge, connected to ESP32C3 backpack
+#define UARTD_BAUD                TX_SERIAL_BAUDRATE
+#define UARTD_USE_TX_IO           IO_P5
+#define UARTD_USE_RX_IO           IO_P18
+#define UARTD_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
+#define UARTD_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
+
+#define UART_USE_SERIAL1 // JR bay pin5
+#define UART_BAUD                 400000
+#define UART_USE_TX_IO            IO_P4
+#define UART_USE_RX_IO            IO_P4
+#define UART_TXBUFSIZE            0  // TX FIFO = 128
+#define UART_RXBUFSIZE            0  // RX FIFO = 128 + 1
+
+#define UARTE_USE_SERIAL1 // in port, uses JRPin5
+#define UARTE_BAUD                 100000
+#define UARTE_USE_TX_IO            -1
+#define UARTE_USE_RX_IO            IO_P4
+#define UARTE_RXBUFSIZE            0  // RX FIFO = 128 + 1
+
+
+//-- SX1: LR20xx & SPI
+
+#define SPI_CS_IO                 IO_P27
+#define SPI_MISO                  IO_P33
+#define SPI_MOSI                  IO_P32
+#define SPI_SCK                   IO_P25
+#define SPI_FREQUENCY             16000000L
+#define SX_RESET                  IO_P15
+#define SX_DIO                    IO_P37
+#define SX_BUSY                   IO_P36
+
+#define SX_USE_IRQ_DIO_NO         LR20XX_DIO_9 // also used by SX2
+#define SX_USE_REGULATOR_MODE_DCDC // also used by SX2
+#define SX_USE_RFSW_DIO_CONFIG    { \
+    { LR20XX_DIO_5, LR20XX_DIO_RF_SWITCH_CONFIG_TX_HF }, \
+    { LR20XX_DIO_6, LR20XX_DIO_RF_SWITCH_CONFIG_RX_HF }, \
+    { LR20XX_DIO_7, LR20XX_DIO_RF_SWITCH_CONFIG_TX_LF }, \
+    { LR20XX_DIO_8, LR20XX_DIO_RF_SWITCH_CONFIG_RX_LF }, \
+    { LR20XX_DIO_10, 0 }, \
+    { LR20XX_DIO_11, 0 }, \
+}
+
+void sx_band(bool high_band) {}
+
+
+//-- SX2: LR20xx & SPI
+
+#define SX2_CS_IO                 IO_P13
+#define SX2_RESET                 IO_P21
+#define SX2_DIO                   IO_P34
+#define SX2_BUSY                  IO_P39
+
+void sx2_band(bool high_band) {}
+
+
+//-- Button
+
+#define BUTTON                    IO_P14
+#define BUTTON2                   IO_P12
+
+
+//-- LEDs
+
+#define LED_RGB                   IO_P22
+#define LED_RGB_PIXEL_NUM         2
+#include "esp-hal-led-rgb.h"
+
+
+//-- Serial or Com Switch
+
+#ifdef DEVICE_HAS_COM_ON_SERIAL
+bool ser_or_com_init(void) // return true if is_serial
+{
+    gpio_init(BUTTON, IO_MODE_INPUT_PU);
+    gpio_init(BUTTON2, IO_MODE_INPUT_PU);
+    uint8_t cnt = 0;
+    for (uint8_t i = 0; i < 16; i++) {
+        if (gpio_read_activelow(BUTTON) || gpio_read_activelow(BUTTON2)) cnt++;
+    }
+    return !(cnt > 8);
+}
+#endif
+
+
+//-- Cooling Fan
+
+#define FAN_IO                    IO_P2
+
+
+//-- ESP32 Wifi Bridge
+
+#define ESP_RESET                 IO_P19 // backpack_en
+#define ESP_GPIO0                 IO_P23 // backpack_boot
+
+
+//-- POWER
+
+#include "../../setup_types.h" // needed for frequency band condition in rfpower calc
+#define SX_PA_DAC_IO  IO_P26
+
+// values taken from ELRS hardware config, LR20xx power unit is 0.5 dBm
+void lr20xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, const uint8_t frequency_band)
+{
+    if (frequency_band == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {
+        if (power_dbm >= POWER_30_DBM) { // -> 30
+            *sx_power = 12;
+            *actual_power_dbm = 30;
+        } else if (power_dbm >= POWER_27_DBM) { // -> 27
+            *sx_power = 11;
+            *actual_power_dbm = 27;
+        } else if (power_dbm >= POWER_24_DBM) { // -> 24
+            *sx_power = 0;
+            *actual_power_dbm = 24;
+        } else if (power_dbm >= POWER_20_DBM) { // -> 20
+            *sx_power = -8;
+            *actual_power_dbm = 20;
+        } else if (power_dbm >= POWER_17_DBM) { // -> 17
+            *sx_power = -14;
+            *actual_power_dbm = 17;
+        } else if (power_dbm >= POWER_14_DBM) { // -> 14
+            *sx_power = -19;
+            *actual_power_dbm = 14;
+        } else {
+            *sx_power = -27;
+            *actual_power_dbm = 10;
+        }
+    } else {
+        if (power_dbm >= POWER_30_DBM) { // -> 30
+            *sx_power = 15;
+            *actual_power_dbm = 30;
+        } else if (power_dbm >= POWER_27_DBM) { // -> 27
+            *sx_power = 6;
+            *actual_power_dbm = 27;
+        } else if (power_dbm >= POWER_24_DBM) { // -> 24
+            *sx_power = -3;
+            *actual_power_dbm = 24;
+        } else if (power_dbm >= POWER_20_DBM) { // -> 20
+            *sx_power = -12;
+            *actual_power_dbm = 20;
+        } else if (power_dbm >= POWER_17_DBM) { // -> 17
+            *sx_power = -18;
+            *actual_power_dbm = 17;
+        } else if (power_dbm >= POWER_14_DBM) { // -> 14, results in 17 dBm
+            *sx_power = -19;
+            *actual_power_dbm = 14;
+        } else { // -> 10, results in 8.5 dBm
+            *sx_power = -20; // values below -19 all give one extra low step
+            *actual_power_dbm = 10;
+        }
+        dacWrite(SX_PA_DAC_IO, (power_dbm >= POWER_30_DBM) ? 95 : 123);
+    }
+}
+
+#define RFPOWER_DEFAULT           0 // index into rfpower_list array
+
+const rfpower_t rfpower_list[] = {
+    { .dbm = POWER_10_DBM, .mW = 10 },
+    { .dbm = POWER_14_DBM, .mW = 25 },
+    { .dbm = POWER_17_DBM, .mW = 50 },
+    { .dbm = POWER_20_DBM, .mW = 100 },
+    { .dbm = POWER_24_DBM, .mW = 250 },
+    { .dbm = POWER_27_DBM, .mW = 500 },
+    { .dbm = POWER_30_DBM, .mW = 1000 },
+};
