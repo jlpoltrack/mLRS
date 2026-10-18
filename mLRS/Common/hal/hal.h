@@ -302,12 +302,6 @@ extern "C" { void delay_ms(uint16_t ms); }
 #endif
 #endif // DEVICE_IS_TRANSMITTER
 
-#if defined USE_COM_ON_SERIAL && defined USE_WIRELESS_BRIDGE
-  #define TX_SERIAL_PORT_DEFAULT  1 // wbridge, this leaves the serial pins to the com (CLI)
-#else
-  #define TX_SERIAL_PORT_DEFAULT  0 // serial
-#endif
-
 #if defined DEBUG_ENABLED && !defined DEVICE_HAS_NO_DEBUG
   #define USE_DEBUG
 #endif
@@ -368,18 +362,6 @@ extern "C" { void delay_ms(uint16_t ms); }
   #define USE_HC04_MODULE
 #endif
 
-
-// tx: relays the update to the receiver, rx: can be updated over the air, see Common/ota/ota_protocol.h
-#if defined DEVICE_IS_TRANSMITTER
-  #define USE_RX_OTA
-#endif
-#if defined DEVICE_IS_RECEIVER && (defined ESP32 || defined ESP8266) && \
-    (defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_SX128x || defined DEVICE_HAS_SX127x)
-  #define USE_RX_OTA
-#endif
-#if defined DEVICE_IS_RECEIVER && defined DEVICE_HAS_OTA_LOADER // STM32, the app sits behind the OTA loader
-  #define USE_RX_OTA
-#endif
 
 #if defined DEVICE_HAS_SX126x || defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
   #define SX_DRIVER Sx126xDriver

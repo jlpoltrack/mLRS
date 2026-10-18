@@ -15,6 +15,7 @@
 #include <ctype.h>
 #include <string.h>
 #include "../Common/hal/hal.h"
+#include "../Common/ota/ota_protocol.h"
 #include "tasks.h"
 #include "setup_tx.h"
 

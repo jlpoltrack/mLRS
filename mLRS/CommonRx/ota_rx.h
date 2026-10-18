@@ -12,6 +12,8 @@
 #define OTA_RX_H
 #pragma once
 
+#include "../Common/ota/ota_protocol.h"
+
 
 #ifndef USE_RX_OTA
 

@@ -21,6 +21,8 @@
 #define OTA_RELAY_TX_H
 #pragma once
 
+#include "../Common/ota/ota_protocol.h"
+
 
 #if defined USE_RX_OTA && defined ESP32 && defined JR_PIN5_FULL_DUPLEX
   #define USE_RX_OTA_VIA_JRPIN5

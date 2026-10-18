@@ -13,6 +13,19 @@
 #include <inttypes.h>
 
 
+// tx: relays the update to the receiver, rx: can be updated over the air
+#if defined DEVICE_IS_TRANSMITTER
+  #define USE_RX_OTA
+#endif
+#if defined DEVICE_IS_RECEIVER && (defined ESP32 || defined ESP8266) && \
+    (defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_SX128x || defined DEVICE_HAS_SX127x)
+  #define USE_RX_OTA
+#endif
+#if defined DEVICE_IS_RECEIVER && defined DEVICE_HAS_OTA_LOADER // STM32, the app sits behind the OTA loader
+  #define USE_RX_OTA
+#endif
+
+
 #define OTA_PROTOCOL_VERSION      1
 
 
