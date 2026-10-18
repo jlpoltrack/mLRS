@@ -1133,7 +1133,7 @@ IF_SX2(
         if (ota_relay.Ready()) {
             sx.SetToIdle();
             sx2.SetToIdle();
-            ota_relay.Run(fhss.GetBindFreq(), Config.FrameSyncWord);
+            ota_relay.Run(Config.FrameSyncWord);
             GOTO_RESTARTCONTROLLER;
         }
 

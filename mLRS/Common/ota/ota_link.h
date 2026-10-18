@@ -5,7 +5,7 @@
 //*******************************************************
 // OTA, the radio link, as tx relay and rx do it with the sx driver, see ota_protocol.h
 //*******************************************************
-// LoRa, explicit header, radio crc on, on the bind frequency of the band
+// LoRa, explicit header, radio crc on, on a fixed frequency per band, see ota_link_freq_reg()
 // 2.4 GHz: SF5 BW800
 // sub-GHz: SF5 BW500, but SF7 BW500 if a SX127x can be on the other side, i.e. in 19 Hz 7x mode
 //   a SX127x can do SF6 only with implicit header, SF7 is the lowest it can do with explicit header
@@ -75,6 +75,50 @@ const tSxLoraConfiguration* ota_link_lora_configuration(void)
 #else
     return &ota_lora_configuration[0];
 #endif
+}
+
+
+// the frequency of the band, the same as fhss' bind channel, 0 if sx can't be on the band
+// sx is the sub-GHz chip on dual band devices, and only for 868/915 MHz on dual SX126x
+#if defined DEVICE_HAS_SX128x
+  #define OTA_FREQ_GHZ_TO_REG(f)    SX1280_FREQ_GHZ_TO_REG(f)
+#elif defined DEVICE_HAS_LR11xx
+  #define OTA_FREQ_GHZ_TO_REG(f)    LR11XX_FREQ_GHZ_TO_REG(f)
+  #define OTA_FREQ_MHZ_TO_REG(f)    LR11XX_FREQ_MHZ_TO_REG(f)
+#elif defined DEVICE_HAS_LR20xx
+  #define OTA_FREQ_GHZ_TO_REG(f)    LR20XX_FREQ_GHZ_TO_REG(f)
+  #define OTA_FREQ_MHZ_TO_REG(f)    LR20XX_FREQ_MHZ_TO_REG(f)
+#elif defined DEVICE_HAS_SX127x
+  #define OTA_FREQ_MHZ_TO_REG(f)    SX127X_FREQ_MHZ_TO_REG(f)
+#else
+  #define OTA_FREQ_MHZ_TO_REG(f)    SX126X_FREQ_MHZ_TO_REG(f)
+#endif
+
+uint32_t ota_link_freq_reg(uint8_t band)
+{
+    switch (band) {
+#if defined FREQUENCY_BAND_2P4_GHZ && defined OTA_FREQ_GHZ_TO_REG
+    case SX_FHSS_FREQUENCY_BAND_2P4_GHZ: return OTA_FREQ_GHZ_TO_REG(2.447);
+#endif
+#if defined OTA_FREQ_MHZ_TO_REG
+  #if defined FREQUENCY_BAND_915_MHZ_FCC
+    case SX_FHSS_FREQUENCY_BAND_915_MHZ_FCC: return OTA_FREQ_MHZ_TO_REG(913.8);
+  #endif
+  #if defined FREQUENCY_BAND_868_MHZ
+    case SX_FHSS_FREQUENCY_BAND_868_MHZ: return OTA_FREQ_MHZ_TO_REG(863.275);
+  #endif
+  #if defined FREQUENCY_BAND_866_MHZ_IN
+    case SX_FHSS_FREQUENCY_BAND_866_MHZ_IN: return OTA_FREQ_MHZ_TO_REG(865.375);
+  #endif
+  #if defined FREQUENCY_BAND_433_MHZ && !defined DEVICE_HAS_DUAL_SX126x_SX126x
+    case SX_FHSS_FREQUENCY_BAND_433_MHZ: return OTA_FREQ_MHZ_TO_REG(433.360);
+  #endif
+  #if defined FREQUENCY_BAND_70_CM_HAM && !defined DEVICE_HAS_DUAL_SX126x_SX126x
+    case SX_FHSS_FREQUENCY_BAND_70_CM_HAM: return OTA_FREQ_MHZ_TO_REG(436.4);
+  #endif
+#endif
+    }
+    return 0;
 }
 
 

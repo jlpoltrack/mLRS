@@ -39,7 +39,7 @@ class tTxOtaRelay
     void Tick_ms(void) {}
     void Start(tSerialBase* const _com) {}
     bool Ready(void) { return false; }
-    void Run(uint32_t sx_freq_reg, uint16_t session_id) {}
+    void Run(uint16_t session_id) {}
 };
 
 #else
@@ -59,7 +59,7 @@ class tTxOtaRelay
     void Tick_ms(void);
     void Start(tSerialBase* const _com) { com = _com; start_delay_ms = OTA_RELAY_START_DELAY_MS; }
     bool Ready(void) { return ready; }
-    void Run(uint32_t sx_freq_reg, uint16_t _session_id); // the caller has to restart the controller afterwards
+    void Run(uint16_t _session_id); // the caller has to restart the controller afterwards
 
   private:
     bool host_receive(uint8_t* const buf);
@@ -191,7 +191,7 @@ void tTxOtaRelay::crsf_do(void)
 // blocks until the host ends it or goes silent
 // the dio isr is off, dio is polled, the restart turns the isr on again
 // the buffers are on the stack, the main loop is blocked meanwhile, so it costs no RAM otherwise
-void tTxOtaRelay::Run(uint32_t sx_freq_reg, uint16_t _session_id)
+void tTxOtaRelay::Run(uint16_t _session_id)
 {
 uint8_t buf[OTA_PACKET_LEN_MAX + 8]; // what comes from the host, goes to the receiver
 uint8_t rx_buf[OTA_PACKET_LEN_MAX + 8]; // what comes from the receiver, separate as a host frame may be half in
@@ -211,7 +211,7 @@ uint8_t rx_buf[OTA_PACKET_LEN_MAX + 8]; // what comes from the receiver, separat
 #endif
 
     state = 0;
-    ota_link_start(sx_freq_reg);
+    ota_link_start(ota_link_freq_reg(Config.Sx.FrequencyBand));
     sx.SetRfPower_dbm(rfpower_list[0].dbm); // tx and rx sit next to each other, and long frames come back to back
     radio_receive();
 

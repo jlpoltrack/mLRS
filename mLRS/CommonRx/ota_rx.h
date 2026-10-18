@@ -21,7 +21,7 @@ class tRxOta
     void Init(void) {}
     void Enter(void) {}
     bool EnterRequested(void) { return false; }
-    void Run(uint32_t sx_freq_reg, uint16_t session_id) {}
+    void Run(uint16_t session_id) {}
     void Confirm(void) {}
 };
 
@@ -435,7 +435,7 @@ class tRxOta
     void Init(void) { enter = false; }
     void Enter(void) { enter = true; }
     bool EnterRequested(void) { return enter; }
-    void Run(uint32_t sx_freq_reg, uint16_t _session_id); // does not return
+    void Run(uint16_t _session_id); // does not return
     void Confirm(void) {}
     void Update(uint32_t sx_freq_reg, uint16_t _session_id); // returns when done or failed
 
@@ -651,9 +651,9 @@ void tRxOta::Update(uint32_t sx_freq_reg, uint16_t _session_id)
 
 #if defined ESP32 || defined ESP8266
 // runs the update, then reboots into the new app, or the running one if it failed, does not return
-void tRxOta::Run(uint32_t sx_freq_reg, uint16_t _session_id)
+void tRxOta::Run(uint16_t _session_id)
 {
-    Update(sx_freq_reg, _session_id);
+    Update(ota_link_freq_reg(Config.Sx.FrequencyBand), _session_id);
 
     // the chip is left in reset, the startup releases it
 #if defined SX_RESET
@@ -685,7 +685,7 @@ class tRxOta
     void Init(void) { enter = false; (void)ota_app_info.magic; } // reading it keeps it in the image
     void Enter(void) { enter = true; }
     bool EnterRequested(void) { return enter; }
-    void Run(uint32_t sx_freq_reg, uint16_t session_id); // does not return
+    void Run(uint16_t session_id); // does not return
     void Confirm(void);
 
   private:
@@ -695,12 +695,12 @@ class tRxOta
 
 
 // asks the loader for the update and reboots into it, does not return
-void tRxOta::Run(uint32_t sx_freq_reg, uint16_t session_id)
+void tRxOta::Run(uint16_t session_id)
 {
     __disable_irq(); // the isrs do spi
     sx.SetToIdle();
     sx2.SetToIdle();
-    ota_state_write(OTA_STATE_LINK, sx_freq_reg,
+    ota_state_write(OTA_STATE_LINK, ota_link_freq_reg(Config.Sx.FrequencyBand),
                     session_id | ((uint32_t)Config.Sx.FrequencyBand << 16) | ((uint32_t)Config.Mode << 24));
     NVIC_SystemReset();
 }

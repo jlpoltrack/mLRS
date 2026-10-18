@@ -1017,7 +1017,7 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
     //-- OTA update
 
     if (ota.EnterRequested()) {
-        ota.Run(fhss.GetBindFreq(), Config.FrameSyncWord); // does not return
+        ota.Run(Config.FrameSyncWord); // does not return
     }
 
 }//end of main_loop

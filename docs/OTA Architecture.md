@@ -40,7 +40,7 @@ Internal Tx modules start differently, see [PC via the radio](#pc-via-the-radio-
 
 ## Radio link
 
-The update uses LoRa with explicit header and the radio CRC on, at the bind frequency of the band. Both sides derive the settings from the band and mode they were connected in. The settings are `tSxLoraConfiguration` entries in `ota_link.h`, applied with the drivers' own `SetLoraConfiguration()`.
+The update uses LoRa with explicit header and the radio CRC on, on a fixed frequency per band, `ota_link_freq_reg()` in `ota_link.h`. These are the bind channels of `fhss.h`: 2447, 913.8, 863.275, 865.375, 433.36 and 436.4 MHz. Both sides derive the settings from the band and mode they were connected in. The settings are `tSxLoraConfiguration` entries in `ota_link.h`, applied with the drivers' own `SetLoraConfiguration()`.
 
 | Band / mode | Settings |
 |---|---|
