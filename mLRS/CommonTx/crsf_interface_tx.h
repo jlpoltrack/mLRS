@@ -16,7 +16,7 @@
 
 #ifdef DEVICE_HAS_JRPIN5
 
-#if defined STM32G4 || defined ESP32
+#if defined STM32G4 || defined ESP32 || defined ARDUINO_ARCH_RP2350
   // some devices are too slow for high baudrates, or don't support non-inverted pin5 (e.g. R9M)
   #define CRSF_AUTOBAUD
 #endif
