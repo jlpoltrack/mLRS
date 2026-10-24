@@ -1,11 +1,13 @@
 # Receiver OTA Architecture
 
-This document describes how mLRS updates ESP32, ESP8285 and STM32 receivers over the air. The receiver pulls the image, the Tx module relays, and a host tool on the PC answers the receiver's requests.
+This document describes how mLRS updates ESP32, ESP8285 and STM32 receivers over the air. The receiver pulls the image, the Tx module relays, and a host answers the receiver's requests. The host is either a tool on the PC or a Lua script on the radio. Both speak the same packets; only the transport to the Tx differs.
 
 ```
- Host (PC)                  Tx module                      Receiver (ESP32 / ESP8285 / STM32)
- tools/run_rx_ota.py ─USB── ota_relay_tx.h ───LoRa──────── ota_rx.h
- answers requests           bridge, no protocol state      asks, owns all timing
+ Host                         Tx module                      Receiver (ESP32 / ESP8285 / STM32)
+ tools/run_rx_ota.py ─USB──┐
+                           ├─ ota_relay_tx.h ───LoRa──────── ota_rx.h
+ mLRS-RxUpdate.lua ─CRSF───┘  bridge, no protocol state      asks, owns all timing
+ answers requests
 ```
 
 ## Files
@@ -17,7 +19,9 @@ This document describes how mLRS updates ESP32, ESP8285 and STM32 receivers over
 | `CommonRx/ota_rx.h` | `tRxOta`: the request loop and storage for ESP32 / ESP8266 and the STM32 loader, the STM32 loader's state |
 | `CommonRx/ota_loader.cpp` | The STM32 loader, in place of `mlrs-rx.cpp` |
 | `CommonTx/ota_relay_tx.h` | `tTxOtaRelay`: the radio ↔ com bridge |
-| `tools/run_rx_ota.py` | Host tool |
+| `tools/run_rx_ota.py` | Host tool on the PC |
+| `lua/mLRS-RxUpdate.lua` | Host on the radio, image from the SD card |
+| `tools/run_rx_ota_file.py` | Makes the image file for the SD card |
 
 When OTA isn't built, both classes compile as empty dummies, so `mlrs-tx.cpp` and `mlrs-rx.cpp` need no `#ifdef`s. `USE_RX_OTA` is defined for:
 - all transmitters;
@@ -150,7 +154,67 @@ host -> tx / tx -> host: 0xA5, len, packet[len], crc16     (len = 0 from the hos
 - **Ending:** the relay ends when the host sends an empty frame, or after 10 s of silence from the host.
 - **Power:** the Tx sends at its lowest power level, as Tx and receiver usually sit next to each other.
 - **RAM:** the relay's buffers are on the stack of `Run()`, so OTA costs no RAM outside of an update (R9M: 16 instead of 544 bytes).
-- **Transport:** the relay talks to a `tSerialBase`, the com port.
+- **Transport:** the relay talks to a `tSerialBase`. For the PC this is the com port. For the radio it is `crsf`: the frames go as a byte stream in crsfbridge envelopes, both ways, see below. The relay enables the bridge for the update and keeps the CRSF telemetry slots going itself, since the main loop is blocked.
+
+## Radio as host (SD card)
+
+`mLRS-RxUpdate.lua` is a second host. It works with internal and external Tx modules in CRSF mode, with no PC. The receiver side is the same as with the PC.
+
+1. The script sends `MBRIDGE_CMD_RX_OTA`. The Tx starts the relay just as for `rxota`, but with `crsf` as the host serial. The script repeats the command every 3 s until the receiver shows up.
+2. The script answers INFO, DATA and RESULT, as `run_rx_ota.py` does, and ends the relay with an empty frame.
+
+```
+radio -> tx: 0xEE, len, 0x81, 0x66, seq, n, data[n], crc8     (crsfbridge envelope)
+tx -> radio: 0xEA, len, 0x82, 0x66, seq, n, data[n], crc8
+data:        the byte stream of 0xA5, len, packet[len], crc16, as with the PC
+```
+
+The relay is the same as with the PC. A 259-byte answer takes 5 envelopes, and the Tx puts it together in the bridge's receive FIFO and the relay's frame buffer. The crc16 protects it: if an envelope gets lost, the frame is dropped, and the receiver asks again after 300 ms.
+
+### Why the script answers each request
+
+A first version also answered each request, but with answers of one frame, 43 bytes. It reached less than 1 kB/s, and on the TX15 EdgeTX went into Emergency Mode, see below. A second version streamed the data ahead into a 512-byte window in the Tx, which answered the requests itself; it reached ~5 kB/s, but needed its own framing, flow control and go-back logic in the script and the Tx.
+
+The current version keeps the request-response of the PC, with full answers:
+
+- **An answer spans envelopes.** EdgeTX sends a Lua frame of at most 64 bytes (`TELEMETRY_OUTPUT_BUFFER_SIZE`), one per mixer cycle. The relay's byte stream doesn't care where the envelopes split it, so the receiver gets 248-byte answers as from the PC.
+- **The script waits for requests.** EdgeTX runs it every 50 ms. The script stays 30–40 ms of it (`BURST_TICKS`) and answers what comes in meanwhile, so most requests don't wait for its next turn. Returning as soon as nothing was to be sent gave 2.25 kB/s on the TX15.
+- **The script reads ahead 1 kB from the file.** The receiver asks in order, so the file is read in chunks instead of a seek and read per request.
+
+### Finding: crossfireTelemetryPush() overwrites the heap
+
+EdgeTX up to 2.12.4 leaves each payload byte of `crossfireTelemetryPush()` on the Lua stack (`lua_rawgeti()` without `lua_pop()`). A C function gets 20 free slots (`LUA_MINSTACK`), so a frame with more than about 20 payload bytes writes past the Lua stack once the garbage collector has shrunk it, into the next heap blocks. The radio crashes later, in `free()` or in the garbage collector, and the watchdog puts it into Emergency Mode, after 2 to 9 requests or right away. This was the Emergency Mode of the first version and of the first versions of the current one. EdgeTX #7773 fixes it on main; it is not in the 2.12 branch.
+
+- **Found:** with SWD on the TX15 (pyocd attached to the running radio, PC sampling, a walk of newlib's free list). The overwritten block was the Lua stack, freshly shrunk to 68 slots, followed by the envelope's bytes.
+- **Why the stream-ahead version got away with it:** it built each frame with `string.byte(s, 1, n)`, which grows the stack for 47 values just before each push.
+- **Workaround:** the script pushes through `telemetryPush()`, whose unused locals make Lua reserve 67 slots for its frame, so the bytes left on the stack stay in that frame. `mLRS.lua` pushes up to 27 bytes and is exposed as well.
+
+### The file
+
+`run_rx_ota_file.py <firmware.bin>` makes it, and it goes into `/FIRMWARE`. It has a 56-byte header (magic, version, lengths, the zlib/gzip trailer values, the CRC of the zlib and of the gzip stream, device name, flags), then the image's raw deflate stream. For STM32 it takes the `.hex`, and the file has the app as it is, with the RAW flag; both CRCs are then the CRC of the app, and the script sends it unchanged. Lua can't compress, so the script puts the zlib head/tail (ESP32) or the gzip head/tail (ESP8266) around the stored stream, depending on what the receiver advertises. One file serves both. The firmware knows nothing about the file.
+
+EdgeTX's Lua has 32-bit integers and single-precision floats, so a crc32 doesn't survive a division. The script splits values into bytes with `bit32`.
+
+### Finding: CRSF frames split on ESP32 Tx modules
+
+ESP32 Tx modules lost about 3–4% of the script's 61-byte frames. The script then went back in the file: ~190 times per image, at 3.6 kB/s.
+
+- **Mechanism:** the ESP32 Tx gets the radio's bytes in an `onReceive()` callback, which the UART's receive timeout triggers after one symbol of silence (`setRxTimeout(1)`, ~11 bit times). `pin5_rx_callback()` took each callback for a whole frame and reset the parser at its end. Now and then the timeout comes in the middle of a frame. The rest comes with the next callback, but the frame was dropped.
+- **Measured:** the cut is at a random place in the frame (byte 10 to 54), the bytes are intact, and the time between the two parts is 0–13 µs more than the bytes need, so at most a symbol or two. This is right at the one-symbol threshold.
+- **Not the cause:** the Tx's own CRSF replies, its LoRa transmissions, the script's SD reads, the UART driver's buffers (no errors), or the rate (3 frames per turn gave the same 4%). The radio had EdgeTX 2.12.4, which already has the TX DMA FIFO fix for byte starvation (EdgeTX #7490).
+- **Fix:** the parser keeps a frame over two callbacks once its len byte is in. The crc8 still decides, and the parser's 500 µs character timeout still ends a frame that really broke off. A lone begin byte is dropped as before, since on half-duplex it could be the ghost byte of the line switch. This is what STM32 Tx modules do anyway, as they parse each byte in the UART interrupt.
+- **Normal operation:** channel frames (26 bytes) get split the same way, just less often, and are now kept too.
+
+### Measured
+
+With the second version (stream ahead), before the new version:
+
+| Tx | Rx | Rate | Went back |
+|---|---|---|---|
+| TX15 internal (ESP32, full duplex, 1.87 MBaud, 500 Hz) | XR4 | ~5 kB/s | 0 |
+| BetaFPV Micro 1W (ESP32, half duplex) | XR4 | 5.5 kB/s | 0 |
+
+Before the fix: TX15 3.6 kB/s with 191 go-backs. EdgeTX didn't go into Emergency Mode with this design.
 
 ## Host tool
 
@@ -177,6 +241,7 @@ All runs used the compressed image (~216–224 kB for ESP32, 247 kB for ESP8285)
 | Generic 900 | Bandit 900 (SX1276) | 915 19 Hz 7x → SF7 | 141.3 s | 1004 |
 | XR4 | Matek mR900-30C (G431, SX1262), native USB | 915 31 Hz → SF5 | 39.9 s | 901 |
 | Matek mR900-22 (WLE5CC), 63.4 kB raw | Nomad | 915 31 Hz → SF5 | 18.2 s | 262 |
+| Generic 900 | R9M (F103, SX1276), from the radio's SD card, CRSF 400k | 19 Hz 7x → SF7 | 157 s | – |
 
 - **Repeated requests:** 0–7 per run.
 - **Cross-chip pairs:** SX1281 ↔ LR1121 at 2.4 GHz and LR1121 ↔ SX1276 at SF7 work with explicit header.
