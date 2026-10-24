@@ -4,7 +4,7 @@
 // https://www.gnu.org/licenses/gpl-3.0.de.html
 //*******************************************************
 // OTA, Tx side
-// bridges between the receiver and a host on the com port, see ota_protocol.h
+// bridges between the receiver and a host, see ota_protocol.h
 //*******************************************************
 // knows only the session id, passes packets between receiver and host, the receiver repeats lost ones
 // frames both ways: STX, len, packet[len], crc16 over len and packet, len = 0 ends the relay
@@ -52,6 +52,7 @@ class tTxOtaRelay
     uint16_t host_crc(uint8_t* const data, uint8_t data_len);
     void radio_receive(void);
     void radio_transmit(uint8_t* const data, uint8_t data_len);
+    void crsf_do(void);
 
     uint16_t start_delay_ms;
     bool ready;
@@ -156,12 +157,22 @@ void tTxOtaRelay::radio_transmit(uint8_t* const data, uint8_t data_len)
 
     uint32_t tstart_ms = millis32();
     while (!ota_link_dio_is_set()) {
+        if (com == &crsf) crsf_do(); // the radio sends on, and waits for what is in the bridge
         if (millis32() - tstart_ms > OTA_RELAY_TRANSMIT_TMO_MS) break;
     }
     ota_link_get_and_clear_irq_status();
     sx_dio_exti_isr_clearflag();
 
     radio_receive();
+}
+
+
+// the radio as host, the crsf main loop handling is not running, so do what it does
+void tTxOtaRelay::crsf_do(void)
+{
+    crsf.Do();
+    uint8_t task;
+    if (crsf.TelemetryUpdate(&task, Config.frame_rate_ms)) crsf.SendTelemetryFrame(); // sends what is in the bridge
 }
 
 
@@ -176,6 +187,7 @@ uint8_t rx_buf[OTA_PACKET_LEN_MAX + 8]; // what comes from the receiver, separat
     ready = false;
     session_id = _session_id;
     if (!com) return;
+    if (com == &crsf) crsf.BridgeEnable();
 
     ota_link_sx_only();
 
@@ -187,6 +199,8 @@ uint8_t rx_buf[OTA_PACKET_LEN_MAX + 8]; // what comes from the receiver, separat
     uint32_t tlast_ms = millis32();
 
     while (1) {
+        if (com == &crsf) crsf_do();
+
         if (ota_link_dio_is_set()) {
             uint8_t rx_len = ota_link_read(ota_link_get_and_clear_irq_status(), rx_buf);
             sx_dio_exti_isr_clearflag();

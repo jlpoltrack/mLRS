@@ -1200,6 +1200,7 @@ IF_CRSF(
         case MBRIDGE_CMD_BIND_STOP: tasks.SetCrsfTask(TASK_BIND_STOP); break;
         case MBRIDGE_CMD_SYSTEM_BOOTLOADER: tasks.SetCrsfTask(TASK_SYSTEM_BOOT); break;
         case MBRIDGE_CMD_FLASH_ESPBRIDGE: tasks.SetCrsfTask(TASK_ESPBRIDGE_FLASH); break;
+        case MBRIDGE_CMD_RX_OTA: tasks.SetCrsfTask(TASK_RX_OTA_RADIO); break;
         case MBRIDGE_CMD_MODELID_SET:
 //dbg.puts("\nmbridge model id "); dbg.puts(u8toBCD_s(mbridge.GetModelId()));
             config_id.Change(mbridge.GetModelId());
@@ -1258,7 +1259,8 @@ IF_IN(
     case TASK_BIND_STOP: bind.StopBind(); break;
     case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
     case TASK_RX_OTA:
-        if (!ota_relay.Start(Serials.com)) break;
+    case TASK_RX_OTA_RADIO:
+        if (!ota_relay.Start((tx_task == TASK_RX_OTA_RADIO) ? &crsf : Serials.com)) break;
         // a receiver which is in its ota update already isn't connected, so go ahead in any case
         if (connected()) {
             link_task_reset();

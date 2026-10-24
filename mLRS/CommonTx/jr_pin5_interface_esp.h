@@ -252,8 +252,10 @@ IRAM_ATTR void tPin5BridgeBase::pin5_rx_callback(uint8_t c)
         xTaskNotifyGive(tx_done_task_handle);
 #endif
     }
-    
-    state = STATE_IDLE;
+
+    // the rx timeout can come in the middle of a frame, its rest then comes with the next callback
+    // a frame is kept once its len is in, a lone begin is dropped as it could be the ghost byte of the half-duplex switch
+    if (state != STATE_RECEIVE_CRSF_PAYLOAD && state != STATE_RECEIVE_CRSF_CRC) state = STATE_IDLE;
 }
 
 
