@@ -16,6 +16,15 @@
 #include "../Common/ota/ota_protocol.h"
 
 
+#if defined USE_RX_OTA && defined ESP32 && defined JR_PIN5_FULL_DUPLEX
+  #define USE_RX_OTA_VIA_JRPIN5
+  #define OTA_RELAY_JRPIN5_BAUDRATE   115200 // the radio follows the host
+  #define OTA_RELAY_JRPIN5_SERIAL     &jrpin5serial
+#else
+  #define OTA_RELAY_JRPIN5_SERIAL     nullptr
+#endif
+
+
 #ifndef USE_RX_OTA
 
 class tTxOtaRelay
@@ -188,6 +197,9 @@ uint8_t rx_buf[OTA_PACKET_LEN_MAX + 8]; // what comes from the receiver, separat
     session_id = _session_id;
     if (!com) return;
     if (com == &crsf) crsf.BridgeEnable();
+#ifdef USE_RX_OTA_VIA_JRPIN5
+    if (com == &jrpin5serial) { com->SetBaudRate(OTA_RELAY_JRPIN5_BAUDRATE); com->flush(); } // ends crsf on it, the restart gives it back
+#endif
 
     ota_link_sx_only();
 
