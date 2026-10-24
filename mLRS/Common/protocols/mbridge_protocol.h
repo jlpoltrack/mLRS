@@ -77,6 +77,7 @@ typedef enum {
     MBRIDGE_CMD_SYSTEM_BOOTLOADER     = 17, // len = 0
     MBRIDGE_CMD_FLASH_ESPBRIDGE       = 18, // len = 0
     MBRIDGE_CMD_RX_OTA                = 19, // len = 0, the radio is the host of the receiver's ota update, see ota_relay_tx.h
+    MBRIDGE_CMD_RX_OTA_JRPIN5         = 20, // len = 0, the host then talks to the ota relay on the JR pin5 uart
     MBRIDGE_CMD_MAX                   = 99, // to enforce that mbridge cmds are smaller than TXCRSF_CMD_xxx
 } MBRIDGE_CMD_ENUM;
 
@@ -110,6 +111,7 @@ uint8_t mbridge_cmd_payload_len(uint8_t cmd)
     case MBRIDGE_CMD_SYSTEM_BOOTLOADER: return 0;
     case MBRIDGE_CMD_FLASH_ESPBRIDGE: return 0;
     case MBRIDGE_CMD_RX_OTA: return 0;
+    case MBRIDGE_CMD_RX_OTA_JRPIN5: return 0;
     }
     return 0;
 }

@@ -5,7 +5,8 @@ This document describes how mLRS updates ESP32, ESP8285 and STM32 receivers over
 ```
  Host                         Tx module                      Receiver (ESP32 / ESP8285 / STM32)
  tools/run_rx_ota.py ─USB──┐
-                           ├─ ota_relay_tx.h ───LoRa──────── ota_rx.h
+ ...  ────────radio USB, ──┤
+              JR pin5      ├─ ota_relay_tx.h ───LoRa──────── ota_rx.h
  mLRS-RxUpdate.lua ─CRSF───┘  bridge, no protocol state      asks, owns all timing
  answers requests
 ```
@@ -34,6 +35,8 @@ When OTA isn't built, both classes compile as empty dummies, so `mlrs-tx.cpp` an
 2. If the link is up, the Tx repeats `FRAME_CMD_RX_OTA_ENTER` in its command frames. One second later it starts the relay.
 3. When the receiver gets the command, it leaves its main loop and calls `tRxOta::Run()`. On ESP this doesn't reboot. On STM32 the app hands over to the loader, see below.
 4. The host switches to relay framing and waits for the receiver's first request.
+
+Internal Tx modules start differently, see [PC via the radio](#pc-via-the-radio-internal-tx-modules).
 
 ## Radio link
 
@@ -154,7 +157,20 @@ host -> tx / tx -> host: 0xA5, len, packet[len], crc16     (len = 0 from the hos
 - **Ending:** the relay ends when the host sends an empty frame, or after 10 s of silence from the host.
 - **Power:** the Tx sends at its lowest power level, as Tx and receiver usually sit next to each other.
 - **RAM:** the relay's buffers are on the stack of `Run()`, so OTA costs no RAM outside of an update (R9M: 16 instead of 544 bytes).
-- **Transport:** the relay talks to a `tSerialBase`. For the PC this is the com port. For the radio it is `crsf`: the frames go as a byte stream in crsfbridge envelopes, both ways, see below. The relay enables the bridge for the update and keeps the CRSF telemetry slots going itself, since the main loop is blocked.
+- **Transport:** the relay talks to a `tSerialBase`. For the PC this is the com port, or `jrpin5serial` for an internal Tx module. For the radio it is `crsf`: the frames go as a byte stream in crsfbridge envelopes, both ways, see below. The relay enables the bridge for the update and keeps the CRSF telemetry slots going itself, since the main loop is blocked.
+
+## PC via the radio (internal Tx modules)
+
+Internal Tx modules have no com port. Through EdgeTX's `serialpassthrough rfmod 0` the PC reaches only the JR pin5 UART, which belongs to the Tx's CRSF driver. `run_rx_ota.py <radio's USB serial> <image>`, the tool finds the radio by itself: the Tx CLI answers `v;` within 1 s, the radio doesn't. Then it:
+
+1. Stops the pulses, powers the module on, and starts the passthrough. Stopping the pulses powers the module off, so it boots anew.
+2. Plays the radio: sends channel frames (ch3 at -100%, the rest mid) until the link statistics show the receiver connected. The module only replies to frames, and only sends telemetry after channel frames. It autobauds; the radio follows the PC's baud, so the tool scans the module's rates.
+3. Sends `MBRIDGE_CMD_RX_OTA_JRPIN5` (20) in a CRSF frame, three times. The Tx starts the relay with `jrpin5serial`. Its `SetBaudRate(115200)` restarts the UART without the CRSF `onReceive()` callback, as the ESP passthrough does. From here it's the same framing as on a com port.
+4. The controller restart after the relay gives the UART back to CRSF. The radio must be power cycled, so that it and the module redo the CRSF autobaud and the radio sends the model ID again.
+
+- **Only ESP32 Tx modules with a full-duplex pin5** (`USE_RX_OTA_VIA_JRPIN5`).
+- **Buffer:** with `UART_RXBUFSIZE 0` (TX15) the plain UART has only the 128-byte FIFO, half of a 259-byte answer. The relay loop polls it often enough.
+- **Measured:** TX15 → Matek mR900-30C, 24.5 s, 314 requests, 0 repeated. The same receiver through a Nomad's CLI took 21.6 s.
 
 ## Radio as host (SD card)
 
