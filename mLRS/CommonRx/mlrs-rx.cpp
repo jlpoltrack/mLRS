@@ -52,6 +52,7 @@
 #include "../Common/hal/esp-timer.h"
 #include "../Common/hal/esp-powerup.h"
 #include "../Common/hal/esp-rxclock.h"
+#include "../Common/hal/esp-wifi-update.h"
 
 #else
 
@@ -594,6 +595,7 @@ INITCONTROLLER_END
         DECc(tick_1hz, SYSTICK_DELAY_MS(1000));
 
         if (!connect_occured_once) bind.AutoBind();
+        if (!connect_occured_once && !bind.IsInBind()) wifi_update_tick();
         bind.Tick_ms();
         fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
         fan.Tick_ms();
