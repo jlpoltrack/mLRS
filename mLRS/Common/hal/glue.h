@@ -113,6 +113,8 @@ uint8_t restart_controller = 0;
 void main_loop(void);
 int main_main(void) { while(1) main_loop(); }
 
+void wifi_update_tick(void) {} // ESP only
+
 #define INITCONTROLLER_ONCE \
     if(restart_controller <= 1){ \
     if(restart_controller == 0){
