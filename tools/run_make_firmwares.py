@@ -1037,6 +1037,9 @@ TLIST = [
         'target' : 'rx-diy-e28dual-board02-f103cb',     'target_D' : 'RX_DIY_E28DUAL_BOARD02_F103CB',
         'extra_D_list' : [], 'appendix' : ''
     },{
+        'target' : 'rx-diy-e28dual-can-f103cb',         'target_D' : 'RX_DIY_E28DUAL_CAN_F103CB',
+        'extra_D_list' : [], 'appendix' : ''
+    },{
         'target' : 'rx-diy-e28-g441kb',                 'target_D' : 'RX_DIY_E28_G441KB',
         'extra_D_list' : [], 'appendix' : ''
     },{

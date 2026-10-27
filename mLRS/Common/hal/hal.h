@@ -185,6 +185,9 @@ extern "C" { void delay_ms(uint16_t ms); }
 #ifdef RX_DIY_E28DUAL_BOARD02_F103CB
 #include "stm32/rx-hal-diy-e28dual-board02-f103cb.h"
 #endif
+#ifdef RX_DIY_E28DUAL_CAN_F103CB
+#include "stm32/rx-hal-diy-e28dual-can-f103cb.h"
+#endif
 #ifdef RX_DIY_E28_G441KB
 #include "stm32/rx-hal-diy-e28-g441kb.h"
 #endif
