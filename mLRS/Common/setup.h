@@ -270,6 +270,13 @@ void setup_configure_metadata(void)
     SetupMetaData.Rx_SerialPort_allowed_mask |= 0b110; // add can, canfd
 #endif
 
+    // Rx SerialLinkMode: "transp.,mavlink,mavlinkX,mspX"
+#ifdef RX_DISABLE_MSP
+    SetupMetaData.Rx_SerialLinkMode_allowed_mask = 0b0111; // no mspX
+#else
+    SetupMetaData.Rx_SerialLinkMode_allowed_mask = 0b1111; // all
+#endif
+
     //-- Tx: Receiver setup meta data
 
     SetupMetaData.rx_available = false;
@@ -581,6 +588,7 @@ if (!only_rx) {
     SANITIZE(Rx.SerialBaudrate, SERIAL_BAUDRATE_NUM, SETUP_RX_SERIAL_BAUDRATE, SERIAL_BAUDRATE_57600);
 
     SANITIZE(Rx.SerialLinkMode, SERIAL_LINK_MODE_NUM, SETUP_RX_SERIAL_LINK_MODE, SERIAL_LINK_MODE_TRANSPARENT);
+    TST_NOTALLOWED(Rx_SerialLinkMode_allowed_mask, Rx.SerialLinkMode, SERIAL_LINK_MODE_TRANSPARENT);
     if (SERIAL_LINK_MODE_IS_MSP(Setup.Rx.SerialLinkMode)) Setup.Rx.SerialPort = RX_SERIAL_PORT_SERIAL; // don't do CAN when MSPX
 
     SANITIZE(Rx.SendRadioStatus, RX_SEND_RADIO_STATUS_NUM, SETUP_RX_SEND_RADIO_STATUS, RX_SEND_RADIO_STATUS_OFF);

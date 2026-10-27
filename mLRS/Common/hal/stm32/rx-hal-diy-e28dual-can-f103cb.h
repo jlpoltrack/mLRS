@@ -19,6 +19,7 @@
 #define DEVICE_HAS_OUT_NORMAL
 #define DEVICE_HAS_DRONECAN
 #define DEVICE_HAS_DEBUG_SWUART
+#define RX_DISABLE_MSP // 20 kB RAM is too tight for MSP and DroneCAN
 
 
 #ifdef MLRS_FEATURE_DIVERSITY
