@@ -84,7 +84,7 @@ class tUsbPort : public tSerialBase
 // tx: serial2 or wireless bridge
 class tUartDPort : public tSerialBase
 {
-#ifdef USE_SERIAL2 // DEVICE_HAS_SERIAL2 || USE_WIRELESS_BRIDGE
+#ifdef USE_SERIAL2 // DEVICE_HAS_SERIAL2 or uart wireless bridge (the on-chip CYW wifi bridge does not use uartd)
   public:
     void Init(void) override { uartd_init(); }
     void SetBaudRate(uint32_t baud) override { uartd_setprotocol(baud, XUART_PARITY_NO, UART_STOPBIT_1); }
@@ -217,8 +217,16 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2
 #endif
 
     switch (serial_port) {
+#ifdef DEVICE_HAS_CYW_WIFI
+    case TX_SERIAL_PORT_WIRELESS_BRIDGE:
+        serial = &wifi;
+        com = com_port();
+        break;
+    case TX_SERIAL_PORT_SERIAL2:
+#else
     case TX_SERIAL_PORT_SERIAL2:
     case TX_SERIAL_PORT_WIRELESS_BRIDGE:
+#endif
         serial = &uartd_port;
         com = com_port();
         break;
@@ -235,8 +243,15 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2
     case TX_SERIAL_PORT2_SERIAL:
         serial2 = &uartb_port;
         break;
+#ifdef DEVICE_HAS_CYW_WIFI
+    case TX_SERIAL_PORT2_WIRELESS_BRIDGE:
+        serial2 = &wifi;
+        break;
+    case TX_SERIAL_PORT2_SERIAL2:
+#else
     case TX_SERIAL_PORT2_SERIAL2:
     case TX_SERIAL_PORT2_WIRELESS_BRIDGE:
+#endif
         serial2 = &uartd_port;
         break;
     default:
