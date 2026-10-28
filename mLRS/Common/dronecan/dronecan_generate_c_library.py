@@ -67,12 +67,20 @@ desired_dsdl_list = [
     'uavcan.protocol.HardwareVersion',
     'uavcan.protocol.SoftwareVersion',
 
-    'uavcan.protocol.dynamic_node_id.Allocation',
 
     'uavcan.tunnel.Targetted',
     'uavcan.tunnel.Protocol',
 
     'dronecan.protocol.FlexDebug',
+
+    'uavcan.protocol.file.BeginFirmwareUpdate',
+    'uavcan.protocol.file.BeginFirmwareUpdate_req',
+    'uavcan.protocol.file.BeginFirmwareUpdate_res',
+    'uavcan.protocol.file.Read',
+    'uavcan.protocol.file.Read_req',
+    'uavcan.protocol.file.Read_res',
+    'uavcan.protocol.file.Error',
+    'uavcan.protocol.file.Path',
 ]
 
 
