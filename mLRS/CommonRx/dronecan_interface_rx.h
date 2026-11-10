@@ -61,13 +61,28 @@ void dc_hal_rx_flush(void) {}
 #ifdef STM32G4
 #define CANARD_POOL_SIZE  4096
 #elif defined STM32F1
-#define CANARD_POOL_SIZE  1024
+#define CANARD_POOL_SIZE  2048
 #endif
 
 #define DRONECAN_BUF_SIZE  512 // needs to be larger than the largest DroneCAN frame size
 
 CanardInstance canard;
 uint8_t canard_memory_pool[CANARD_POOL_SIZE] ALIGNED8_ATTR; // uses uint64_t and _Alignof(uint64_t) is 8
+
+#if !CANARD_ENABLE_CANFD
+// libcanard built for classic CAN only, so accept and drop the canfd arg
+int16_t canardBroadcast(CanardInstance* ins, uint64_t data_type_signature, uint16_t data_type_id, uint8_t* inout_transfer_id,
+    uint8_t priority, const void* payload, uint16_t payload_len, bool canfd)
+{
+    return canardBroadcast(ins, data_type_signature, data_type_id, inout_transfer_id, priority, payload, payload_len);
+}
+
+int16_t canardRequestOrRespond(CanardInstance* ins, uint8_t destination_node_id, uint64_t data_type_signature, uint8_t data_type_id,
+    uint8_t* inout_transfer_id, uint8_t priority, CanardRequestResponse kind, const void* payload, uint16_t payload_len, bool canfd)
+{
+    return canardRequestOrRespond(ins, destination_node_id, data_type_signature, data_type_id, inout_transfer_id, priority, kind, payload, payload_len);
+}
+#endif
 
 
 void dronecan_uid(uint8_t uid[DC_UNIQUE_ID_LEN])
@@ -117,10 +132,8 @@ const CanardCANFrame* frame;
         frame = canardPeekTxQueue(&canard);
         if (!frame) break; // no frame in tx queue
         int16_t res = dc_hal_transmit(frame, millis32());
-        if (res != 0) { // successfully submitted or error, so drop the frame
-            canardPopTxQueue(&canard);
-        }
-        return; // only do one frame
+        if (res == 0) break; // hw tx queue full, so postpone
+        canardPopTxQueue(&canard); // successfully submitted or error, so drop the frame
     }
 }
 
@@ -335,6 +348,15 @@ DBG_DC(
     dbg.puts("\n   err dc sum: ");dbg.puts(u16toBCD_s(dc_stats.error_sum_count));
     dbg.puts(" tec: ");dbg.puts(utoBCD_s(dc_stats.tec_count));
     dbg.puts(" rec: ");dbg.puts(utoBCD_s(dc_stats.rec_count));
+    dbg.puts(" lec: ");dbg.puts(utoBCD_s(dc_stats.lec_count));
+    dbg.puts(" bo: ");dbg.puts(utoBCD_s(dc_stats.bo_count));
+    dbg.puts("\n   frames rx: ");dbg.puts(utoBCD_s(dc_stats.received_frame_count));
+    dbg.puts(" tx: ");dbg.puts(utoBCD_s(dc_stats.transmitted_frame_count));
+    dbg.puts("\n   rxbuf peak: ");dbg.puts(utoBCD_s(dc_stats.rx_fifo_peak));
+    dbg.puts(" ovf: ");dbg.puts(utoBCD_s(dc_stats.rx_overflow_count));
+    dbg.puts(" rf0l: ");dbg.puts(utoBCD_s(dc_stats.isr_rf0l_count));
+    dbg.puts(" rf1l: ");dbg.puts(utoBCD_s(dc_stats.isr_rf1l_count));
+    dbg.puts(" tffl: ");dbg.puts(utoBCD_s(dc_stats.tffl_count));
 )
 }
 
@@ -644,8 +666,7 @@ void tRxDroneCan::send_dynamic_node_id_allocation_request(void)
 
     // Structure of the request is documented in the DSDL definition
     // See http://uavcan.org/Specification/6._Application_level_functions/#dynamic-node-id-allocation
-    // we send as classic CAN frame, so CANARD_CAN_FRAME_MAX_DATA_LEN should be ok, but play it safe
-    uint8_t allocation_request[CANARD_CANFD_FRAME_MAX_DATA_LEN - 1];
+    uint8_t allocation_request[1 + UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_MAX_LENGTH_OF_UNIQUE_ID_IN_REQUEST];
     allocation_request[0] = DRONECAN_PREFERRED_NODE_ID << 1;
 
     if (node_id_allocation.unique_id_offset == 0) {
@@ -769,7 +790,7 @@ void tRxDroneCan::send_tunnel_targetted(void)
     bool canfd = dc_hal_is_canfd();
     uint16_t len = uavcan_tunnel_Targetted_encode(&_p.tunnel_targetted, _buf, !canfd);
 
-    canardBroadcast(
+    int16_t res = canardBroadcast(
         &canard,
         UAVCAN_TUNNEL_TARGETTED_SIGNATURE,
         UAVCAN_TUNNEL_TARGETTED_ID,
@@ -778,6 +799,10 @@ void tRxDroneCan::send_tunnel_targetted(void)
         _buf,
         len,
         canfd);
+    if (res < 0) { // e.g. pool out of memory, data is lost
+        tunnel_targetted_stats.error_cnt++;
+        return;
+    }
 
     tunnel_targetted_stats.send_rate += _p.tunnel_targetted.buffer.len;
 }

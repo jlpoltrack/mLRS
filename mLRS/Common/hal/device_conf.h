@@ -201,6 +201,13 @@ The default selection of frequency bands can be overruled by feature defines.
   #define FREQUENCY_BAND_2P4_GHZ
 #endif
 
+#ifdef RX_DIY_E28DUAL_CAN_F103CB
+  #define DEVICE_NAME "DIY DualE28 CAN F103"
+  #define DEVICE_IS_RECEIVER
+  #define DEVICE_HAS_SX128x
+  #define FREQUENCY_BAND_2P4_GHZ
+#endif
+
 #ifdef RX_DIY_E28_G441KB
   #define DEVICE_NAME "DIY E28 G441KB"
   #define DEVICE_IS_RECEIVER

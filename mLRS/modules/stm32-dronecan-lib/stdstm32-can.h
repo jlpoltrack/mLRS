@@ -58,8 +58,6 @@ extern "C" {
 #ifdef STM32F1
 //-- STM32F1
 
-// This code has once worked, but may not anymore today, hasn't been tested/used for a while
-
 #ifndef HAL_CAN_MODULE_ENABLED
   #error HAL_CAN_MODULE_ENABLED not defined, enable it in Core\Inc\stm32f1xx_hal_conf.h!
 #endif

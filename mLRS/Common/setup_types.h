@@ -500,6 +500,7 @@ typedef struct
     uint16_t Rx_Diversity_allowed_mask;
     uint16_t Rx_OutMode_allowed_mask;
     uint16_t Rx_SerialPort_allowed_mask;
+    uint16_t Rx_SerialLinkMode_allowed_mask;
 
     bool rx_available;
 

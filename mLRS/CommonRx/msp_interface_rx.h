@@ -10,6 +10,21 @@
 #define MSP_INTERFACE_RX_H
 #pragma once
 
+#ifdef RX_DISABLE_MSP // stub, so no RAM or flash is spent on MSP
+class tRxMsp
+{
+  public:
+    void Init(void) {}
+    void Do(void) {}
+    void SendRcData(tRcData* const rc_out, bool frame_missed, bool failsafe) {}
+    void FrameLost(void) {}
+    void putc(char c) {}
+    bool available(void) { return false; }
+    uint8_t getc(void) { return 0; }
+    void flush(void) {}
+};
+#else
+
 
 // TODO: share fixed buffers with mavlink interface
 
@@ -546,5 +561,7 @@ tMspCommonSetMspRcInfo payload;
     serial->putbuf(_buf, len);
 }
 
+
+#endif // RX_DISABLE_MSP
 
 #endif // MSP_INTERFACE_RX_H

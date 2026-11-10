@@ -48,8 +48,15 @@ extern "C" {
 
 // Enabling CAN FD must be done here, not higher up, as e.g. in stm32-dronecan-driver.h.
 // This is because generated DSDL files include canard.h, so needs to be defined here.
+// STM32F1 bxCAN is classic only, CAN FD off gives 32 instead of 128 byte pool blocks.
+// TAO option is kept on so that the generated encode/decode signatures stay the same.
 #ifndef CANARD_ENABLE_CANFD
+#ifdef STM32F103xB
+#define CANARD_ENABLE_CANFD                         0
+#define CANARD_ENABLE_TAO_OPTION                    1
+#else
 #define CANARD_ENABLE_CANFD                         1
+#endif
 #endif
 
 #ifndef CANARD_MULTI_IFACE
