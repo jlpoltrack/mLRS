@@ -56,3 +56,6 @@ mLRS/*/Drivers/STM32_USB_Device_Library/*
 # Platformio
 .pio/
 .vscode/
+
+# Markdown versions of datasheets, ST ships them as a folder per document
+docs/datasheets/*/

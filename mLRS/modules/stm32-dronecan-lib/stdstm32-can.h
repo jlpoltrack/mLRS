@@ -9,6 +9,7 @@
 // Interface:
 // CAN_USE_FDCAN1_PA11PA12
 // CAN_USE_FDCAN2_PB5PB6
+// CAN_USE_FDCAN1_PB8PB7 (STM32H5)
 // CAN_USE_FDCAN_CLOCK_PCLK1
 // CAN_USE_FDCAN_CLOCK_PLL
 //*******************************************************
@@ -25,11 +26,18 @@ extern "C" {
 
 //#include "stdstm32-peripherals.h"
 
-#ifdef STM32G4
+#if defined STM32G4 || defined STM32H5
 #if defined CAN_USE_FDCAN1_PA11PA12
     #define CAN_DC_HAL_INTFC    DC_HAL_CAN1 // TODO: this is currently defined in stm32-dronecan-driver.h
     #define CAN_RX_IO           IO_PA11
     #define CAN_TX_IO           IO_PA12
+#elif defined CAN_USE_FDCAN1_PB8PB7 // STM32H56x up to LQFP64: FDCAN1 is on PA11/PA12 or PB8/PB7, AF9, the driver supports FDCAN1 only
+    #ifndef STM32H5
+      #error CAN_USE_FDCAN1_PB8PB7 only available on STM32H5!
+    #endif
+    #define CAN_DC_HAL_INTFC    DC_HAL_CAN1
+    #define CAN_RX_IO           IO_PB8
+    #define CAN_TX_IO           IO_PB7
 #elif defined CAN_USE_FDCAN2_PB5PB6
     #define CAN_DC_HAL_INTFC    DC_HAL_CAN2
     #define CAN_RX_IO           IO_PB5
@@ -187,7 +195,87 @@ void can_init(uint8_t canfd_enable)
     }
 }
 
-#endif // STM32G4
+#elif defined STM32H5
+//-- STM32H5
+// The FDCAN kernel clock can be sourced from HSE, PLL1Q or PLL2Q only, and it must not
+// exceed 80 MHz. On the H56x targets PLL1Q is 250 MHz and is the SPI1 kernel clock, so it
+// cannot be used here, and HSE would give only 8 tq per bit. PLL2 is otherwise unused and
+// is set up here to give exactly the 80 MHz which dc_hal_compute_timings() expects (and
+// which ArduPilot uses, see the comments for the G4 above):
+//   HSE 8 MHz / M=2 = 4 MHz -> x N=120 -> VCO 480 MHz -> /Q=6 = 80 MHz
+
+#ifndef HAL_FDCAN_MODULE_ENABLED
+  #error HAL_FDCAN_MODULE_ENABLED not defined, enable it in Core\Inc\stm32h5xx_hal_conf.h!
+#endif
+
+
+void can_init(uint8_t canfd_enable)
+{
+    // GPIO initialization
+    gpio_init_af(CAN_RX_IO, IO_MODE_OUTPUT_ALTERNATE_PP, IO_AF_9, IO_SPEED_VERYFAST);
+    gpio_init_af(CAN_TX_IO, IO_MODE_OUTPUT_ALTERNATE_PP, IO_AF_9, IO_SPEED_VERYFAST);
+
+    // FDCAN kernel clock initialization
+    // HAL_RCCEx_PeriphCLKConfig() configures and enables PLL2 and selects it for FDCAN
+
+    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {};
+
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FDCAN;
+    PeriphClkInitStruct.FdcanClockSelection = RCC_FDCANCLKSOURCE_PLL2Q;
+    PeriphClkInitStruct.PLL2.PLL2Source = RCC_PLL2_SOURCE_HSE;
+    PeriphClkInitStruct.PLL2.PLL2M = 2; // 8 MHz / 2 = 4 MHz VCO input
+    PeriphClkInitStruct.PLL2.PLL2N = 120; // 4 MHz * 120 = 480 MHz VCO output
+    PeriphClkInitStruct.PLL2.PLL2P = 2; // not used, but must be a valid value
+    PeriphClkInitStruct.PLL2.PLL2Q = 6; // 480 MHz / 6 = 80 MHz
+    PeriphClkInitStruct.PLL2.PLL2R = 2; // not used, but must be a valid value
+    PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2_VCIRANGE_2; // VCO input is in 4 .. 8 MHz
+    PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2_VCORANGE_WIDE; // VCO output is in 192 .. 836 MHz
+    PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
+    PeriphClkInitStruct.PLL2.PLL2ClockOut = RCC_PLL2_DIVQ; // enable the PLL2Q output
+
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK) {
+        DBG_DC(dbg.puts("\nERROR: Failed to configure the FDCAN kernel clock");)
+        return;
+    }
+
+    uint32_t peripheral_clock_rate = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_FDCAN);
+
+    LL_APB1_GRP2_EnableClock(LL_APB1_GRP2_PERIPH_FDCAN); // FDCAN is on APB1H on the H5
+
+    // DroneCAN HAL initialization
+
+    tDcHalCanTimings timings;
+    int16_t res = dc_hal_compute_timings(peripheral_clock_rate, CAN_BITRATE, &timings);
+    if (res < 0) {
+        DBG_DC(dbg.puts("\nERROR: Solution for CAN timings could not be found");)
+        return;
+    }
+
+    DBG_DC(dbg.puts("\n  FDCAN CLK: ");dbg.puts(u32toBCD_s(peripheral_clock_rate));
+    dbg.puts("\n  Prescaler: ");dbg.puts(u16toBCD_s(timings.bit_rate_prescaler));
+    dbg.puts("\n  BS1: ");dbg.puts(u8toBCD_s(timings.bit_segment_1));
+    dbg.puts("\n  BS2: ");dbg.puts(u8toBCD_s(timings.bit_segment_2));
+    dbg.puts("\n  SJW: ");dbg.puts(u8toBCD_s(timings.sync_jump_width));)
+
+    tDcHalCanDataTimings data_timings;
+    if (canfd_enable) {
+        res = dc_hal_compute_data_timings(peripheral_clock_rate, CAN_FD_DATA_BITRATE, &data_timings);
+        if (res < 0) {
+            DBG_DC(dbg.puts("\nERROR: Solution for CAN FD data timings could not be found");)
+            return;
+        }
+    }
+
+    tDcHalCanDataTimings* data_timings_ptr = (canfd_enable) ? &data_timings : NULL;
+
+    res = dc_hal_init(CAN_DC_HAL_INTFC, &timings, data_timings_ptr, DC_HAL_IFACE_MODE_AUTOMATIC_TX_ABORT_ON_ERROR);
+    if (res < 0) {
+        DBG_DC(dbg.puts("\nERROR: Failed to open CAN iface ");dbg.puts(s16toBCD_s(res));)
+        return;
+    }
+}
+
+#endif // STM32H5
 
 
 //-------------------------------------------------------

@@ -392,7 +392,46 @@ MLRS_SOURCES_HAL_STM32F3 = [
     os.path.join('Drivers','STM32F3xx_HAL_Driver','Src','stm32f3xx_ll_utils.c'),
     ]
 
-MLRS_SOURCES_CORE = [ # the ?? are going to be replaced with mcu_family label, f1, g4, wl, l4
+MLRS_SOURCES_HAL_STM32H5 = [
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_cortex.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_dma.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_dma_ex.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_exti.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_fdcan.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_flash.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_flash_ex.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_gpio.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_i2c.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_i2c_ex.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_icache.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_pcd.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_pcd_ex.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_pwr.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_pwr_ex.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_rcc.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_hal_rcc_ex.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_adc.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_crc.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_dac.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_dma.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_exti.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_gpio.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_i2c.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_icache.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_lptim.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_lpuart.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_pwr.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_rcc.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_rtc.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_spi.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_tim.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_usart.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_usb.c'),
+    os.path.join('Drivers','STM32H5xx_HAL_Driver','Src','stm32h5xx_ll_utils.c'),
+    ]
+
+MLRS_SOURCES_CORE = [ # the ?? are going to be replaced with mcu_family label, f1, g4, wl, l4, h5
     os.path.join('Core','Src','main.cpp'),
     os.path.join('Core','Src','stm32??xx_hal_msp.c'),
     os.path.join('Core','Src','stm32??xx_it.c'),
@@ -415,7 +454,7 @@ MLRS_INCLUDES = [ # the ?? are going to be replaced with mcu_HAL label, STM32F1x
 MLRS_SOURCES_MODULES = [
     os.path.join('modules','stm32-dronecan-lib','libcanard','canard.c'),
     os.path.join('modules','stm32-dronecan-lib','stm32-dronecan-driver-f1.c'),
-    os.path.join('modules','stm32-dronecan-lib','stm32-dronecan-driver-g4.c'),
+    os.path.join('modules','stm32-dronecan-lib','stm32-dronecan-driver-fdcan.c'),
     os.path.join('modules','sx12xx-lib','src','sx126x.cpp'),
     os.path.join('modules','sx12xx-lib','src','sx127x.cpp'),
     os.path.join('modules','sx12xx-lib','src','sx128x.cpp'),
@@ -524,6 +563,8 @@ class cTarget:
             self.mcu_family = 'wl'
         elif 'F3' in self.mcu_D and 'F3' in self.mcu_HAL:
             self.mcu_family = 'f3'
+        elif 'H5' in self.mcu_D and 'H5' in self.mcu_HAL:
+            self.mcu_family = 'h5'
         else:
             printError('SHSHHSKHSKHSKHKSHKSHKH')
             print('mcu_D',self.mcu_D)
@@ -558,6 +599,8 @@ class cTarget:
             self.MLRS_SOURCES_HAL = MLRS_SOURCES_HAL_STM32L4
         elif self.mcu_family == 'f3':
             self.MLRS_SOURCES_HAL = MLRS_SOURCES_HAL_STM32F3
+        elif self.mcu_family == 'h5':
+            self.MLRS_SOURCES_HAL = MLRS_SOURCES_HAL_STM32H5
 
         self.MLRS_SOURCES_CORE = []
         for file in MLRS_SOURCES_CORE:
@@ -888,6 +931,15 @@ class cTargetF3(cTarget):
             ['-mcpu=cortex-m4', '-mfpu=fpv4-sp-d16', '-mfloat-abi=hard'],
             extra_D_list, build_dir, elf_name)
 
+class cTargetH5(cTarget):
+    def __init__(self, target, target_D, mcu_D, startup_script, linker_script, extra_D_list, build_dir, elf_name):
+        super().__init__(
+            target, target_D,
+            mcu_D, 'STM32H5xx',
+            startup_script, linker_script,
+            ['-mcpu=cortex-m33', '-mfpu=fpv5-sp-d16', '-mfloat-abi=hard'],
+            extra_D_list, build_dir, elf_name)
+
 
 #-- mcu specific targets
 
@@ -988,6 +1040,24 @@ class cTargetF303CC(cTargetF3):
         super().__init__(
             target, target_D,
             'STM32F303xC', 'startup_stm32f303cc'+package.lower()+'.s', 'STM32F303CC'+package.upper()+'_FLASH.ld',
+            extra_D_list, build_dir, elf_name)
+
+
+
+class cTargetH562RG(cTargetH5):
+    def __init__(self, target, target_D, extra_D_list, build_dir, elf_name, package):
+        if package == '': package = 'tx' # WeAct 64pin core board is a STM32H562RGT6, LQFP64
+        super().__init__(
+            target, target_D,
+            'STM32H562xx', 'startup_stm32h562rg'+package.lower()+'.s', 'STM32H562RG'+package.upper()+'_FLASH.ld',
+            extra_D_list, build_dir, elf_name)
+
+class cTargetH523RE(cTargetH5):
+    def __init__(self, target, target_D, extra_D_list, build_dir, elf_name, package):
+        if package == '': package = 'tx' # STM32H523RET6, LQFP64
+        super().__init__(
+            target, target_D,
+            'STM32H523xx', 'startup_stm32h523re'+package.lower()+'.s', 'STM32H523RE'+package.upper()+'_FLASH.ld',
             extra_D_list, build_dir, elf_name)
 
 
@@ -1099,6 +1169,9 @@ TLIST = [
         'target' : 'rx-diy-NiceRF-LR2021-g431kb',       'target_D' : 'RX_DIY_NICERF_LR2021_G431KB',
         'extra_D_list' : [], 'appendix' : ''
     },{
+        'target' : 'rx-diy-WeAct-E22-h562rg',           'target_D' : 'RX_DIY_WEACT_E22_H562RG',
+        'extra_D_list' : [], 'appendix' : ''
+    },{
 #-- rx WioE5 Mini, Grove
         'target' : 'rx-Wio-E5-Mini-wle5jc',             'target_D' : 'RX_WIO_E5_MINI_WLE5JC',
         'extra_D_list' : [], 'appendix' : '',
@@ -1140,6 +1213,9 @@ TLIST = [
     },{
         'target' : 'tx-diy-NiceRF-LR2021-g431kb',       'target_D' : 'TX_DIY_NICERF_LR2021_G431KB',
         'extra_D_list' : [], 'appendix' : ''
+    },{
+        'target' : 'tx-diy-WeAct-E22-h562rg',           'target_D' : 'TX_DIY_WEACT_E22_H562RG',
+        'extra_D_list' : ['STDSTM32_USE_USB'], 'appendix' : ''
     },{
 #-- tx WioE5 Mini
         'target' : 'tx-Wio-E5-Mini-wle5jc',             'target_D' : 'TX_WIO_E5_MINI_WLE5JC',
@@ -1267,6 +1343,10 @@ def mlrs_create_targetlist(appendix, extra_D_list):
             tlist.append( cTargetL433CB(t['target'], t['target_D'], t['extra_D_list'], build_dir, elf_name, package) )
         elif 'f303cc' in t['target']:
             tlist.append( cTargetF303CC(t['target'], t['target_D'], t['extra_D_list'], build_dir, elf_name, package) )
+        elif 'h562rg' in t['target']:
+            tlist.append( cTargetH562RG(t['target'], t['target_D'], t['extra_D_list'], build_dir, elf_name, package) )
+        elif 'h523re' in t['target']:
+            tlist.append( cTargetH523RE(t['target'], t['target_D'], t['extra_D_list'], build_dir, elf_name, package) )
         else:
             print('<ljfl<iasdjfljsdfljlsdjfljsdlfjlsdjf')
             exit(1)

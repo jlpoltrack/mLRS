@@ -33,6 +33,13 @@ extern "C" {
 #define USB_SIZ_STRING_SERIAL   0x1AU
 
 
+#if defined STM32H5
+void USBD_ReadSerialNum(void);
+#else
+#define USBD_ReadSerialNum()
+#endif
+
+
 
 #ifdef __cplusplus
 }

@@ -179,6 +179,26 @@ uint8_t *USBD_FS_InterfaceStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *lengt
 }
 
 
+// H5: the UID is read with mcu_uid() of stm32ll-lib, which handles the non-cacheable OTP area. It
+// is cached here since Get_SerialNum() runs in isr context, where mcu_uid() would hang on HAL_GetTick().
+#if defined STM32H5
+extern void mcu_uid(uint8_t uid[12]); // stm32ll-lib/src/stdstm32-mcu.h, compiled in the main TU
+
+static uint32_t usbd_uid[3];
+#undef DEVICE_ID1
+#undef DEVICE_ID2
+#undef DEVICE_ID3
+#define DEVICE_ID1  (&usbd_uid[0])
+#define DEVICE_ID2  (&usbd_uid[1])
+#define DEVICE_ID3  (&usbd_uid[2])
+
+void USBD_ReadSerialNum(void) // must be called once, from thread context, before USBD_Start()
+{
+    mcu_uid((uint8_t*)usbd_uid);
+}
+#endif
+
+
 static void Get_SerialNum(void)
 {
     uint32_t deviceserial0;

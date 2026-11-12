@@ -6,10 +6,16 @@
 //*******************************************************
 // DroneCAN Driver Library for STM32 using HAL
 // for use with libcanard
+// for the FDCAN peripheral, which is the same on the STM32G4 and STM32H5
 //*******************************************************
-#if defined STM32G431xx ||defined STM32G441xx || defined STM32G491xx || defined STM32G473xx || defined STM32G474xx
+#if defined STM32G431xx || defined STM32G441xx || defined STM32G491xx || defined STM32G473xx || defined STM32G474xx || \
+    defined STM32H562xx || defined STM32H523xx
 
+#if defined STM32H562xx || defined STM32H523xx
+#include "stm32h5xx_hal.h"
+#else
 #include "stm32g4xx_hal.h"
+#endif
 
 #ifdef HAL_FDCAN_MODULE_ENABLED
 #include "stm32-dronecan-driver.h"
@@ -58,6 +64,8 @@ static uint8_t fd_frame_detected; // set once a FD frame has been seen
 
 static void _process_error_status(void)
 {
+    if (hfdcan.Instance == NULL) return; // iface was never opened, dc_hal_init() failed or was not called
+
 //    FDCAN_ProtocolStatusTypeDef protocolStatus;
 //    HAL_FDCAN_GetProtocolStatus(&hfdcan, &protocolStatus);
 //    if (protocolStatus.BusOff) {
@@ -275,6 +283,8 @@ int16_t dc_hal_init(
 
 int16_t dc_hal_start(void)
 {
+    if (hfdcan.Instance == NULL) { return -DC_HAL_ERROR_CAN_START; } // iface was never opened
+
     HAL_StatusTypeDef hres = HAL_FDCAN_Start(&hfdcan);
     if (hres != HAL_OK) { return -DC_HAL_ERROR_CAN_START; }
 
@@ -298,6 +308,8 @@ int16_t dc_hal_transmit(const CanardCANFrame* const frame, uint32_t tnow_ms)
         return -DC_HAL_ERROR_INVALID_ARGUMENT;
     }
 
+    if (hfdcan.Instance == NULL) { return -DC_HAL_ERROR_CAN_ADD_TX_MESSAGE; } // iface was never opened
+
     if (frame->id & CANARD_CAN_FRAME_ERR) {
         return -DC_HAL_ERROR_UNSUPPORTED_FRAME_FORMAT;
     }
@@ -314,7 +326,7 @@ int16_t dc_hal_transmit(const CanardCANFrame* const frame, uint32_t tnow_ms)
 
     _process_error_status();
 
-    // thx to the TxFiFo in the G4 we can do the crude method and just put the message into the fifo if there is space
+    // thx to the TxFiFo in the FDCAN we can do the crude method and just put the message into the fifo if there is space
     // check for space in fifo
     if (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan) == 0) {
         if (tx_tlast_ms > 0 && (tnow_ms - tx_tlast_ms) > 10) {
@@ -346,7 +358,13 @@ int16_t dc_hal_transmit(const CanardCANFrame* const frame, uint32_t tnow_ms)
     pTxHeader.IdType = FDCAN_EXTENDED_ID;
     pTxHeader.TxFrameType = FDCAN_DATA_FRAME;
 
+    // the H5 HAL wants the plain DLC code and shifts it into the T1 word itself (FDCAN_DLC_BYTES_8 = 8), the older
+    // G4 HAL wants it pre-shifted into the register position (FDCAN_DLC_BYTES_8 = 0x00080000)
+#ifdef STM32H5
+    pTxHeader.DataLength = (uint32_t)_dlc_from_data_len(frame->data_len);
+#else
     pTxHeader.DataLength = (uint32_t)_dlc_from_data_len(frame->data_len) << 16;
+#endif
 
     HAL_StatusTypeDef hres = HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan, &pTxHeader, frame->data);
     if (hres != HAL_OK) {
@@ -431,7 +449,8 @@ void _dc_hal_receive_isr(uint32_t* RxAddress)
     }
 
     // for classic CAN, reject frames with DLC > 8
-    if (!is_fd_frame && ((r1 & DC_RX_FIFO_R1_DLC_MASK) > FDCAN_DLC_BYTES_8)) { // this is somewhat dirty, but ok
+    // compare the extracted DLC, not the register field against FDCAN_DLC_BYTES_8, its meaning differs between the HALs
+    if (!is_fd_frame && (((r1 & DC_RX_FIFO_R1_DLC_MASK) >> 16) > 8)) {
         dc_hal_stats.isr_dlc_count++;
         return;
     }
@@ -574,6 +593,8 @@ int16_t dc_hal_enable_isr(void)
 {
 HAL_StatusTypeDef hres;
 
+    if (hfdcan.Instance == NULL) { return -DC_HAL_ERROR_ISR_CONFIG; } // iface was never opened
+
     dronecan_rxwritepos = 0;
     dronecan_rxreadpos = 0;
     memset(&dc_hal_stats, 0, sizeof(dc_hal_stats));
@@ -624,6 +645,8 @@ int16_t dc_hal_receive(CanardCANFrame* const frame)
         return -DC_HAL_ERROR_INVALID_ARGUMENT;
     }
 
+    if (hfdcan.Instance == NULL) { return 0; } // iface was never opened
+
     _process_error_status();
 
     if (dronecan_rxwritepos == dronecan_rxreadpos) {
@@ -658,6 +681,8 @@ int16_t dc_hal_receive(CanardCANFrame* const frame)
 
 void dc_hal_rx_flush(void)
 {
+    if (hfdcan.Instance == NULL) return; // iface was never opened
+
     dronecan_rxwritepos = 0;
     dronecan_rxreadpos = 0;
     dc_hal_stats.rx_overflow_count = 0;
@@ -679,6 +704,8 @@ int16_t dc_hal_config_acceptance_filters(
     if ((filter_configs == NULL) || (num_filter_configs > DC_HAL_ACCEPTANCE_FILTERS_NUM_MAX)) {
         return -DC_HAL_ERROR_INVALID_ARGUMENT;
     }
+
+    if (hfdcan.Instance == NULL) { return -DC_HAL_ERROR_CAN_CONFIG_FILTER; } // iface was never opened
 
     FDCAN_FilterTypeDef sFilterConfig = {};
     sFilterConfig.IdType = FDCAN_EXTENDED_ID;
@@ -931,7 +958,7 @@ int16_t dc_hal_compute_data_timings(
     }
 
     // transceiver delay compensation (TDC) is only needed for fast data prescalers
-    // RM0440: TDC is intended for data prescaler 1 or 2, slower ones (prescaler > 2) do not need it
+    // RM0440, RM0481: TDC is intended for data prescaler 1 or 2, slower ones (prescaler > 2) do not need it
     // TDC offset is in FDCAN clock cycles (= 125 ns @ 80 MHz)
     // ArduPilot's value is 10 (tuned for a 120 ns MCP2557FD-class transceiver)
     data_timings->tdco = (data_timings->bit_rate_prescaler <= 2) ? 10 : 0;
@@ -974,4 +1001,4 @@ https://www.csselectronics.com/pages/can-bus-errors-intro-tutorial
 
 
 #endif // HAL_PCD_MODULE_ENABLED
-#endif // STM32G4
+#endif // STM32G4 || STM32H5

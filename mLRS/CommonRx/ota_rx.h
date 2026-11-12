@@ -58,6 +58,8 @@ extern "C" const volatile tOtaAppInfo ota_app_info = { OTA_APP_INFO_MAGIC, VERSI
 
 #if defined STM32G4 || defined STM32WL
   #define OTA_APP_BASE            (FLASH_BASE + 0x4000) // must match the .ld
+#elif defined STM32H5
+  #define OTA_APP_BASE            (FLASH_BASE + 0x8000) // must match the .ld, 8 kB sectors
 #else
   #error OTA loader: mcu not supported!
 #endif
@@ -105,7 +107,10 @@ void ota_state_read(tOtaState* const st)
 
 bool ota_state_program(uint32_t adr, uint32_t type, uint32_t a, uint32_t b)
 {
-#ifdef EE_USE_DOUBLEWORD
+#if defined EE_USE_QUADWORD // the H5 programs a quad word at once
+    const uint32_t qw[4] = { a, b, 0xFFFFFFFF, type };
+    return ee_hal_programquadword(adr, qw);
+#elif defined EE_USE_DOUBLEWORD
     if (!ee_hal_programdoubleword(adr, ((uint64_t)b << 32) | a)) return false;
     return ee_hal_programdoubleword(adr + 8, ((uint64_t)type << 32) | 0xFFFFFFFF);
 #else
@@ -321,9 +326,15 @@ void ota_storage_init(tOtaStorage* st)
 // STM32 loader, where the app goes
 //-------------------------------------------------------
 // The image is sent as it is and goes to its place behind the loader, a page is erased when the writing gets to
-// it. The first double word, with the stack pointer, is written last, so the app is invalid until all is in.
+// it. The first flash word, with the stack pointer, is written last, so the app is invalid until all is in.
 
 #define OTA_STORAGE_FLAGS         0
+
+#ifdef EE_USE_QUADWORD
+  #define OTA_FLASH_WORD_LEN      16 // what the flash programs at once
+#else
+  #define OTA_FLASH_WORD_LEN      8
+#endif
 
 
 // CRC-32/MPEG-2, is what the crc unit does in its default setup
@@ -341,64 +352,77 @@ typedef struct
 {
     uint32_t space;
     uint32_t length;
-    uint32_t adr; // where the next double word goes
-    uint8_t dw[8];
-    uint8_t dw_len;
-    uint64_t first_dw;
+    uint32_t adr; // where the next flash word goes
+    uint32_t w[OTA_FLASH_WORD_LEN / 4];
+    uint8_t w_len;
+    uint32_t first_w[OTA_FLASH_WORD_LEN / 4];
 } tOtaStorage;
 
 
-bool ota_program_dw(tOtaStorage* st)
+bool ota_flash_program(uint32_t adr, const uint32_t* w)
+{
+#ifdef EE_USE_QUADWORD
+    if (!ee_hal_programquadword(adr, w)) return false;
+#else
+    if (!ee_hal_programdoubleword(adr, ((uint64_t)w[1] << 32) | w[0])) return false;
+#endif
+    return !memcmp((const void*)adr, w, OTA_FLASH_WORD_LEN);
+}
+
+
+bool ota_program_w(tOtaStorage* st)
 {
     uint32_t adr = st->adr;
-    uint64_t dw;
-    memcpy(&dw, st->dw, 8);
-    st->adr += 8;
-    st->dw_len = 0;
+    st->adr += OTA_FLASH_WORD_LEN;
+    st->w_len = 0;
 
     if (!(adr % EE_PAGE_SIZE) && !ee_hal_erasepage(adr, (adr - FLASH_BASE) / EE_PAGE_SIZE)) return false;
-    if (adr == OTA_APP_BASE) { st->first_dw = dw; return true; }
-    return ee_hal_programdoubleword(adr, dw) && *(volatile uint64_t*)adr == dw;
+    if (adr == OTA_APP_BASE) { memcpy(st->first_w, st->w, OTA_FLASH_WORD_LEN); return true; }
+    return ota_flash_program(adr, st->w);
 }
 
 
 uint8_t ota_storage_begin(tOtaStorage* st, uint32_t length, uint8_t flags, uint32_t image_length)
 {
-    if (flags || image_length != length || length < 8 || length > st->space) return OTA_STATUS_ERR_LENGTH;
+    if (flags || image_length != length || length < OTA_FLASH_WORD_LEN || length > st->space) return OTA_STATUS_ERR_LENGTH;
 
     ee_hal_unlock();
     st->length = length;
     st->adr = OTA_APP_BASE;
-    st->dw_len = 0;
+    st->w_len = 0;
     return OTA_STATUS_OK;
 }
 
 
 uint8_t ota_storage_write(tOtaStorage* st, const uint8_t* data, uint8_t len, bool more)
 {
+#ifdef DEVICE_HAS_SINGLE_LED
+    led_red_toggle();
+#else
     led_green_toggle();
+#endif
     while (len--) {
-        st->dw[st->dw_len++] = *data++;
-        if (st->dw_len == 8 && !ota_program_dw(st)) return OTA_STATUS_ERR_FLASH;
+        ((uint8_t*)st->w)[st->w_len++] = *data++;
+        if (st->w_len == OTA_FLASH_WORD_LEN && !ota_program_w(st)) return OTA_STATUS_ERR_FLASH;
     }
     return OTA_STATUS_OK;
 }
 
 
 // the crc of what was transferred was checked before, it's checked again on what is in flash
-// only then the first double word goes in, which makes the app valid
+// only then the first flash word goes in, which makes the app valid
 uint8_t ota_storage_end(tOtaStorage* st, uint32_t crc)
 {
-    if (st->dw_len) {
-        memset(st->dw + st->dw_len, 0xFF, 8 - st->dw_len);
-        if (!ota_program_dw(st)) { ee_hal_lock(); return OTA_STATUS_ERR_FLASH; }
+    if (st->w_len) {
+        memset((uint8_t*)st->w + st->w_len, 0xFF, OTA_FLASH_WORD_LEN - st->w_len);
+        if (!ota_program_w(st)) { ee_hal_lock(); return OTA_STATUS_ERR_FLASH; }
     }
 
-    uint32_t flash_crc = ota_crc(OTA_CRC_INIT, (const uint8_t*)&st->first_dw, 8);
-    flash_crc = ota_crc(flash_crc, (const uint8_t*)(OTA_APP_BASE + 8), st->length - 8);
+    uint32_t flash_crc = ota_crc(OTA_CRC_INIT, (const uint8_t*)st->first_w, OTA_FLASH_WORD_LEN);
+    flash_crc = ota_crc(flash_crc, (const uint8_t*)(OTA_APP_BASE + OTA_FLASH_WORD_LEN), st->length - OTA_FLASH_WORD_LEN);
     if (flash_crc != crc) { ee_hal_lock(); return OTA_STATUS_ERR_IMAGE; }
 
-    bool ok = ee_hal_programdoubleword(OTA_APP_BASE, st->first_dw) && *(volatile uint64_t*)OTA_APP_BASE == st->first_dw;
+    bool ok = ota_flash_program(OTA_APP_BASE, st->first_w);
     ee_hal_lock();
     return (ok) ? OTA_STATUS_OK : OTA_STATUS_ERR_FLASH;
 }

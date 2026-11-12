@@ -32,6 +32,7 @@ asm(".section .ota_loader,\"a\"\n.incbin \"ota_loader.bin\"\n.previous");
 #include "../Common/hal/glue.h"
 #include "../modules/stm32ll-lib/src/stdstm32.h"
 #include "../modules/stm32ll-lib/src/stdstm32-peripherals.h"
+#include "../Common/thirdparty/stdstm32-exti.h"
 #ifdef STM32WL
 #include "../modules/stm32ll-lib/src/stdstm32-subghz.h"
 #endif
@@ -45,6 +46,8 @@ asm(".section .ota_loader,\"a\"\n.incbin \"ota_loader.bin\"\n.previous");
 #include "stm32g4xx_ll_crc.h"
 #elif defined STM32WL
 #include "stm32wlxx_ll_crc.h"
+#elif defined STM32H5
+#include "stm32h5xx_ll_crc.h"
 #endif
 
 
@@ -84,11 +87,14 @@ bool app_valid(void)
 void start_app(void)
 {
     // the app expects things as after a reset
+#ifdef ICACHE
+    HAL_ICACHE_Disable();
+#endif
     HAL_RCC_DeInit();
     HAL_DeInit();
     __disable_irq();
     SysTick->CTRL = 0;
-    for (uint8_t i = 0; i < 8; i++) {
+    for (uint8_t i = 0; i < sizeof(NVIC->ICER) / sizeof(*NVIC->ICER); i++) {
         NVIC->ICER[i] = 0xFFFFFFFF;
         NVIC->ICPR[i] = 0xFFFFFFFF;
     }
